@@ -1,0 +1,19 @@
++++++++++++++ Các bước pull + push (trong terminal)+++++++++++++++++++++
+Điều kiện:Đã kết nối repo trên github
+1. Luôn luôn pull trước khi code
+    git pull origin main
+        {Lấy code mới nhất (phòng trường hợp người khác push)}
+2. Code bình thường
+3. Check trạng thái
+    git status
+        {check các file đã sửa chữa,code,.....}
+4. Add code
+    git add .
+        {add tất cả các file đã sửa chữa(các file không .ignore)}
+5. Commit file
+    git commit -m "......"
+6. Pull code lần nữa
+    git pull --rebase origin main
+        {Đề phòng khi đang code có người push lên code mới,pull về để git tự merge code mới lẫn code của bản thân}
+7. Push lên git
+    git push origin main

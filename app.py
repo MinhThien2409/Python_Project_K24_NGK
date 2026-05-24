@@ -1,63 +1,33 @@
-from flask import Flask, request, render_template_string
+# app.py
+from flask import Flask, request, jsonify
+from flask_cors import CORS
+from BUS.UserBus import UserBus
 
 app = Flask(__name__)
+# BẬT CORS: Cho phép mọi frontend gửi dữ liệu vào API này
+CORS(app)
 
-# 1. LỚP GIAO DIỆN (Frontend - HTML & CSS cơ bản)
-# Giao diện này tạo ra 2 ô nhập số và 1 nút bấm.
-GIAO_DIEN_HTML = """
-<!DOCTYPE html>
-<html lang="vi">
-<head>
-    <meta charset="UTF-8">
-    <title>Máy Tính Mini</title>
-    <style>
-        body { font-family: Arial, sans-serif; text-align: center; margin-top: 50px; }
-        .box { border: 2px solid #ccc; padding: 20px; width: 300px; margin: 0 auto; border-radius: 10px; box-shadow: 2px 2px 10px #aaa; }
-        input { padding: 10px; width: 80px; font-size: 16px; margin: 5px; text-align: center; }
-        button { padding: 10px 20px; font-size: 16px; background-color: #007bff; color: white; border: none; cursor: pointer; border-radius: 5px; }
-        button:hover { background-color: #0056b3; }
-        .ketqua { color: red; font-size: 24px; font-weight: bold; margin-top: 20px; }
-    </style>
-</head>
-<body>
-    <div class="box">
-        <h2>Phép Tính Cộng</h2>
-
-        <form method="POST">
-            <input type="number" name="so_a" placeholder="Số a" required>
-            <b>+</b>
-            <input type="number" name="so_b" placeholder="Số b" required>
-            <br><br>
-            <button type="submit">Tính Tổng</button>
-        </form>
-
-        {% if ket_qua is not none %}
-            <div class="ketqua">Đáp án: {{ ket_qua }}</div>
-        {% endif %}
-    </div>
-</body>
-</html>
-"""
+# Khởi tạo bộ não BUS
+user_bus = UserBus()
 
 
-# 2. LỚP XỬ LÝ (Backend - Python)
-# Đường dẫn '/' này cho phép cả 2 hành động: GET (Vào xem trang) và POST (Bấm nút gửi dữ liệu)
-@app.route('/', methods=['GET', 'POST'])
-def may_tinh():
-    ket_qua_tinh = None
+@app.route('/api/register', methods=['POST'])
+def register_api():
+    # Lấy dữ liệu JSON từ Frontend gửi lên
+    data = request.json
 
-    # Nếu người dùng bấm nút "Tính Tổng" (Phương thức POST được gọi)
-    if request.method == 'POST':
-        # Lấy dữ liệu từ các ô input (dựa vào thuộc tính name="so_a" và name="so_b")
-        a = int(request.form.get('so_a', 0))
-        b = int(request.form.get('so_b', 0))
+    # Ném vào tầng BUS để kiểm tra và lưu
+    ket_qua = user_bus.dang_ky_khach_hang(
+        ten_user=data.get('ten_user'),
+        dia_chi=data.get('dia_chi'),
+        sdt=data.get('sdt'),
+        tendangnhap=data.get('tendangnhap'),
+        mat_khau=data.get('mat_khau')
+    )
 
-        # Xử lý tính toán
-        ket_qua_tinh = a + b
-
-    # Trả giao diện HTML ra màn hình, đồng thời "bơm" biến ket_qua_tinh vào HTML
-    return render_template_string(GIAO_DIEN_HTML, ket_qua=ket_qua_tinh)
+    # Trả kết quả về lại cho trình duyệt (status và message)
+    return jsonify(ket_qua)
 
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    app.run(debug=True, port=5000)

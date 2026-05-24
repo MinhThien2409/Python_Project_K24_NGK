@@ -1,13 +1,13 @@
 from Model.User import Khach
-from DAO.UserDao import UserDao
+from back_end.DAO.UserDao import UserDao
 class UserBus:
     def __init__(self):
-        self.userdao = UserDao()
-    def dangkykhachhang(self,ten_user,dia_chi,sdt,tendangnhap,mat_khau):
+        self.dao = UserDao()
+    def dang_ky_khach_hang(self,ten_user,dia_chi,sdt,tendangnhap,mat_khau):
 
         if not ten_user or not sdt or not tendangnhap or not mat_khau:
             return {"status": False, "message": "Vui lòng điền đầy đủ Tên, SĐT, Tên đăng nhập và Mật khẩu!"}
-        if len(mat_khau<6):
+        if len(mat_khau)<6:
                 return {"status": False, "message": "Mật khẩu phải có ít nhất 6 ký tự!"}
         if self.dao.kiem_tra_tendangnhap_ton_tai(tendangnhap):
             return {"status": False, "message": f"Tên đăng nhập '{tendangnhap}' đã có người sử dụng!"}

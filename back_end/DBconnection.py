@@ -1,7 +1,7 @@
 # config/db_config.py
 import pyodbc
 
-class DBConnection:
+class DBconnection:
 
     @staticmethod
     def get_connection():

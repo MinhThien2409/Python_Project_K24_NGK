@@ -2,14 +2,13 @@
 import pyodbc
 
 class DBconnection:
-
     @staticmethod
     def get_connection():
         try:
             conn_str = (
                 "DRIVER={ODBC Driver 17 for SQL Server};"
                 "SERVER=localhost\\SQLEXPRESS;" 
-                "DATABASE=Cho_online;"
+                "DATABASE=PobbyDB;"
                 "UID=sa;"
                 "PWD=123"
             )

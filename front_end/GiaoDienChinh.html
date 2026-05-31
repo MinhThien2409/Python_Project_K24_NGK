@@ -1,0 +1,931 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pobby – Hệ Thống Mua Sắm & Quản Trị Toàn Diện</title>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&family=Be+Vietnam+Pro:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --primary: #9116d4;
+    --primary-dark: #730fac;
+    --primary-light: #f5ecfd;
+    --accent: #F5A623;
+    --accent-light: #FFF8EC;
+    --green: #27AE60;
+    --green-light: #E8F8EF;
+    --red: #E8472A;
+    --red-light: #FDECEA;
+    --bg: #F5F3EE;
+    --white: #FFFFFF;
+    --border: #E8E4DC;
+    --text: #1A1714;
+    --text-secondary: #6B6560;
+    --text-muted: #9E9993;
+    --shadow: 0 2px 12px rgba(0,0,0,0.08);
+    --radius: 12px;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: 'Be Vietnam Pro', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+
+  /* Tab View Navigation (User vs Admin toggle for demo) */
+  .view-switcher {
+    background: #1A1714; color: #fff; padding: 8px 24px; display: flex; justify-content: space-between; align-items: center; font-size: 13px;
+  }
+  .view-switcher .btns { display: flex; gap: 10px; }
+  .view-switcher button {
+    background: rgba(255,255,255,0.2); border: none; color: #fff; padding: 4px 12px; border-radius: 6px; cursor: pointer; font-weight: 600;
+  }
+  .view-switcher button.active { background: var(--accent); color: #1A1714; }
+
+  /* HEADER & TOPBAR */
+  .topbar { background: var(--primary-dark); color: #fff; font-size: 12px; padding: 6px 0; text-align: center; }
+  .topbar span { margin: 0 16px; opacity: 0.9; }
+  header { background: var(--primary); padding: 14px 0; position: sticky; top: 0; z-index: 100; box-shadow: 0 2px 16px rgba(145, 22, 212, 0.3); }
+  .header-inner { max-width: 1280px; margin: 0 auto; padding: 0 24px; display: flex; align-items: center; gap: 20px; }
+  .logo { font-family: 'Nunito', sans-serif; font-weight: 900; font-size: 28px; color: #fff; text-decoration: none; }
+  .search-bar { flex: 1; display: flex; max-width: 580px; }
+  .search-bar select { border: none; background: #fff; border-radius: 10px 0 0 10px; padding: 0 12px; font-size: 13px; color: var(--text-secondary); border-right: 1px solid var(--border); height: 44px; outline: none;}
+  .search-bar input { flex: 1; border: none; background: #fff; padding: 0 16px; font-size: 14px; height: 44px; outline: none; }
+  .search-btn { background: var(--accent); border: none; padding: 0 20px; border-radius: 0 10px 10px 0; cursor: pointer; font-size: 18px; height: 44px; }
+  .header-actions { display: flex; align-items: center; gap: 8px; margin-left: auto; }
+  .hdr-btn { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 8px 14px; border-radius: 10px; cursor: pointer; color: #fff; border: none; background: rgba(255,255,255,0.12); font-family: inherit; position: relative; }
+  .hdr-btn:hover { background: rgba(255,255,255,0.22); }
+  .badge { position: absolute; top: 4px; right: 8px; background: var(--accent); color: #fff; font-size: 10px; font-weight: 700; border-radius: 99px; min-width: 18px; height: 18px; display: flex; align-items: center; justify-content: center; padding: 0 4px; }
+
+  /* NAV */
+  nav { background: var(--white); border-bottom: 1px solid var(--border); }
+  .nav-inner { max-width: 1280px; margin: 0 auto; padding: 0 24px; display: flex; align-items: center; gap: 4px; overflow-x: auto; }
+  .nav-item { display: flex; align-items: center; gap: 6px; padding: 12px 16px; font-size: 13.5px; font-weight: 600; color: var(--text-secondary); cursor: pointer; white-space: nowrap; border-bottom: 3px solid transparent; text-decoration: none; }
+  .nav-item.active { color: var(--primary); border-bottom-color: var(--primary); }
+
+  /* LAYOUTS */
+  .page { max-width: 1280px; margin: 0 auto; padding: 24px; }
+  .layout { display: flex; gap: 24px; align-items: flex-start; }
+  .sidebar { width: 240px; flex-shrink: 0; display: flex; flex-direction: column; gap: 16px; }
+  .main { flex: 1; min-width: 0; }
+
+  /* CARDS & FILTERS */
+  .filter-card { background: var(--white); border-radius: var(--radius); border: 1px solid var(--border); overflow: hidden; }
+  .filter-header { padding: 14px 16px; font-weight: 700; font-size: 14px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; }
+  .filter-body { padding: 12px 16px; display: flex; flex-direction: column; gap: 8px; }
+  .filter-label { font-size: 11px; font-weight: 700; text-transform: uppercase; color: var(--text-muted); margin-top: 8px; }
+  .filter-option { display: flex; align-items: center; gap: 10px; cursor: pointer; font-size: 13.5px; padding: 4px 0; }
+  .price-range { display: flex; gap: 8px; align-items: center; }
+  .price-range input { flex: 1; border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; font-size: 13px; outline: none; width: 45%; }
+  .apply-btn { background: var(--primary); color: #fff; border: none; border-radius: 10px; padding: 10px; font-size: 14px; font-weight: 700; width: 100%; cursor: pointer; margin-top: 8px; }
+
+  /* PRODUCT GRID */
+  .products-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 16px; margin-bottom: 32px; }
+  .product-card { background: var(--white); border-radius: var(--radius); border: 1px solid var(--border); overflow: hidden; cursor: pointer; transition: all 0.2s; position: relative; display: flex; flex-direction: column; }
+  .product-card:hover { transform: translateY(-3px); box-shadow: var(--shadow); }
+  .card-img { width: 100%; height: 180px; object-fit: contain; background: #F9F7F4; display: flex; align-items: center; justify-content: center; font-size: 64px; }
+  .card-body { padding: 12px; flex: 1; display: flex; flex-direction: column; }
+  .card-title { font-size: 14px; font-weight: 600; line-height: 1.4; margin-bottom: 8px; height: 40px; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+  .card-price { font-family: 'Nunito', sans-serif; font-weight: 900; font-size: 17px; color: var(--red); margin-bottom: 8px; }
+  .card-footer { display: flex; align-items: center; justify-content: space-between; margin-top: auto; padding-top: 8px; border-top: 1px solid var(--border); }
+  .add-cart-btn { background: var(--primary); color: #fff; border: none; border-radius: 6px; padding: 4px 10px; font-size: 12px; font-weight: 700; cursor: pointer; }
+
+  /* OVERLAYS & MODALS */
+  .overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 200; justify-content: flex-end; }
+  .overlay.show { display: flex; }
+  .cart-panel { background: var(--white); width: 440px; height: 100%; display: flex; flex-direction: column; pading: 20px; }
+  .cart-header { padding: 20px 24px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
+  .cart-items { flex: 1; overflow-y: auto; padding: 16px 24px; }
+  .cart-item { display: flex; gap: 12px; padding: 14px 0; border-bottom: 1px solid var(--border); align-items: center; }
+  .qty-ctrl { display: flex; align-items: center; gap: 8px; margin-top: 6px; }
+  .qty-btn { width: 26px; height: 26px; border-radius: 6px; border: 1px solid var(--border); background: var(--bg); cursor: pointer; font-weight: 700; }
+  .cart-footer { padding: 20px 24px; border-top: 1px solid var(--border); display: flex; flex-direction: column; gap: 12px; }
+  .checkout-btn { background: var(--green); color: #fff; border: none; border-radius: 10px; padding: 12px; font-size: 15px; font-weight: 700; cursor: pointer; text-align: center; }
+
+  .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.55); z-index: 250; align-items: center; justify-content: center; }
+  .modal-overlay.show { display: flex; }
+  .modal-box { background: var(--white); border-radius: var(--radius); width: 540px; max-width: 95vw; padding: 28px; position: relative; max-height: 90vh; overflow-y: auto; }
+  .modal-close { position: absolute; top: 16px; right: 16px; background: var(--bg); border: none; border-radius: 6px; width: 32px; height: 32px; cursor: pointer; }
+
+  /* FORMS & TABLES */
+  .form-group { display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px; }
+  .form-group label { font-size: 13px; font-weight: 600; color: var(--text-secondary); }
+  .form-group input, .form-group select, .form-group textarea { border: 1px solid var(--border); border-radius: 8px; padding: 10px 14px; font-size: 14px; font-family: inherit; outline: none; }
+  .form-group input:focus, .form-group select:focus { border-color: var(--primary); }
+  .auth-tabs { display: flex; border-bottom: 2px solid var(--border); margin-bottom: 20px; }
+  .auth-tab { flex: 1; text-align: center; padding: 10px 0; font-size: 15px; font-weight: 700; color: var(--text-secondary); cursor: pointer; }
+  .auth-tab.active { color: var(--primary); border-bottom: 3px solid var(--primary); }
+  .auth-form { display: none; }
+  .auth-form.active { display: flex; flex-direction: column; }
+  .btn-submit { background: var(--primary); color: #fff; border: none; padding: 12px; border-radius: 8px; font-weight: 700; cursor: pointer; font-family: inherit; }
+
+  /* ADMIN DASHBOARD STYLES */
+  .admin-layout { display: grid; grid-template-columns: 240px 1fr; gap: 24px; max-width: 1280px; margin: 0 auto; padding: 24px; }
+  .admin-menu { background: var(--white); border-radius: var(--radius); border: 1px solid var(--border); padding: 12px; display: flex; flex-direction: column; gap: 4px; }
+  .admin-menu-item { padding: 10px 14px; border-radius: 8px; font-size: 14px; font-weight: 600; color: var(--text-secondary); cursor: pointer; }
+  .admin-menu-item.active { background: var(--primary-light); color: var(--primary); }
+  .admin-card { background: var(--white); border-radius: var(--radius); border: 1px solid var(--border); padding: 24px; margin-bottom: 24px; }
+  .stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 24px; }
+  .stat-box { background: var(--white); border-radius: var(--radius); border: 1px solid var(--border); padding: 16px; text-align: center; }
+  .stat-val { font-size: 24px; font-weight: 800; color: var(--primary); margin-top: 4px; }
+
+  table { width: 100%; border-collapse: collapse; margin-top: 12px; font-size: 13.5px; }
+  th, td { padding: 12px; text-align: left; border-bottom: 1px solid var(--border); }
+  th { background: #F9F7F4; font-weight: 700; }
+
+  .badge-status { padding: 4px 8px; border-radius: 99px; font-size: 11px; font-weight: 700; display: inline-block; }
+  .status-pending { background: var(--accent-light); color: var(--accent); }
+  .status-confirmed { background: #E8F8EF; color: var(--green); }
+  .status-cancelled { background: var(--red-light); color: var(--red); }
+
+  .toast { position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%) translateY(80px); background: #1A1714; color: #fff; padding: 12px 24px; border-radius: 99px; font-size: 14px; font-weight: 600; z-index: 300; transition: transform 0.3s ease; }
+  .toast.show { transform: translateX(-50%) translateY(0); }
+
+  /* ======= FOOTER ======= */
+  footer {
+    background: #1A1714;
+    color: #fff;
+    padding: 40px 0 20px;
+    margin-top: 40px;
+  }
+  .footer-inner {
+    max-width: 1280px;
+    margin: 0 auto;
+    padding: 0 24px;
+  }
+  .footer-grid {
+    display: grid;
+    grid-template-columns: 2fr 1fr 1fr 1fr;
+    gap: 40px;
+    margin-bottom: 32px;
+  }
+  .footer-brand .logo { font-size: 24px; display: inline-block; margin-bottom: 12px; }
+  .footer-brand p { font-size: 13px; opacity: 0.6; line-height: 1.7; }
+  .footer-socials { display: flex; gap: 8px; margin-top: 16px; }
+  .social-btn {
+    width: 36px;
+    height: 36px;
+    background: rgba(255,255,255,0.1);
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+    cursor: pointer;
+    transition: background 0.2s;
+  }
+  .social-btn:hover { background: var(--primary); }
+  .footer-col h4 { font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.6px; opacity: 0.5; margin-bottom: 14px; }
+  .footer-links { list-style: none; display: flex; flex-direction: column; gap: 8px; }
+  .footer-links li a { font-size: 13px; opacity: 0.7; text-decoration: none; color: #fff; transition: opacity 0.15s; }
+  .footer-links li a:hover { opacity: 1; }
+  .footer-bottom {
+    border-top: 1px solid rgba(255,255,255,0.1);
+    padding-top: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 12px;
+    opacity: 0.5;
+  }
+
+</style>
+</head>
+<body>
+
+<div class="view-switcher">
+  <span>💡 Chuyển đổi góc nhìn để xem đầy đủ tính năng:</span>
+  <div class="btns">
+    <button id="btnViewUser" class="active" onclick="switchViewMode('user')">Giao diện USER (Khách hàng)</button>
+    <button id="btnViewAdmin" onclick="switchViewMode('admin')">Giao diện ADMIN (Quản trị viên)</button>
+  </div>
+</div>
+
+<div id="userInterface">
+  <div class="topbar">
+    <span>🎉 Chào mừng đến với Pobby – Mua sắm thông minh & Tiện lợi</span>
+    <span id="topbarUserText">👤 Chưa đăng nhập</span>
+  </div>
+
+  <header>
+    <div class="header-inner">
+      <a href="#" class="logo" onclick="resetUserHome()">Pobby</a>
+      <div class="search-bar">
+        <select id="searchCategorySelect" onchange="applyUserFilters()">
+          <option value="all">Tất cả danh mục</option>
+          <option value="electronics">Điện tử</option>
+          <option value="food">Thực phẩm</option>
+          <option value="fashion">Thời trang</option>
+          <option value="home">Nhà cửa</option>
+        </select>
+        <input type="text" id="userSearchInput" placeholder="Tìm kiếm sản phẩm theo tên..." oninput="applyUserFilters()"/>
+        <button class="search-btn" onclick="applyUserFilters()">🔍</button>
+      </div>
+      <div class="header-actions">
+        <button class="hdr-btn" id="hdrAuthBtn" onclick="openAuthModal()">
+          <span class="icon">👤</span>
+          <span class="label" id="authBtnLabel">Đăng nhập</span>
+        </button>
+        <button class="hdr-btn" id="hdrHistoryBtn" onclick="openOrderHistoryModal()" style="display:none;">
+          <span class="icon">📋</span>
+          <span class="label">Lịch sử đơn</span>
+        </button>
+        <button class="hdr-btn" id="hdrSellerBtn" onclick="openSellerRegisterModal()" style="display:none;">
+          <span class="icon">🏪</span>
+          <span class="label">Đăng ký bán</span>
+        </button>
+        <button class="hdr-btn" onclick="openCart()">
+          <span class="icon">🛒</span>
+          <span class="label">Giỏ hàng</span>
+          <span class="badge" id="cartBadge">0</span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <nav>
+    <div class="nav-inner">
+      <a class="nav-item active" id="nav-cat-all" onclick="filterUserCategory('all')">🏠 Tất cả</a>
+      <a class="nav-item" id="nav-cat-electronics" onclick="filterUserCategory('electronics')">📱 Điện tử</a>
+      <a class="nav-item" id="nav-cat-food" onclick="filterUserCategory('food')">🥦 Thực phẩm</a>
+      <a class="nav-item" id="nav-cat-fashion" onclick="filterUserCategory('fashion')">👗 Thời trang</a>
+      <a class="nav-item" id="nav-cat-home" onclick="filterUserCategory('home')">🏡 Nhà cửa</a>
+    </div>
+  </nav>
+
+  <div class="page">
+    <div class="layout">
+      <aside class="sidebar">
+        <div class="filter-card">
+          <div class="filter-header">📊 Lọc giá cả</div>
+          <div class="filter-body">
+          <div class="filter-label">Danh mục</div>
+          <label class="filter-option"><input type="checkbox" onchange="applyFilters()"> Thực phẩm & Đồ uống</label>
+          <label class="filter-option"><input type="checkbox" onchange="applyFilters()"> Điện tử & Công nghệ</label>
+          <label class="filter-option"><input type="checkbox" onchange="applyFilters()"> Thời trang & Phụ kiện</label>
+          <label class="filter-option"><input type="checkbox" onchange="applyFilters()"> Nhà cửa & Đời sống</label>
+          <label class="filter-option"><input type="checkbox" onchange="applyFilters()"> Làm đẹp & Sức khỏe</label>
+
+          <div class="filter-label">Khoảng giá</div>
+          <div class="price-range">
+            <input type="text" id="priceMin" placeholder="Từ" />
+            <span>—</span>
+            <input type="text" id="priceMax" placeholder="Đến" />
+          </div>
+
+          <div class="filter-label">Đánh giá</div>
+          <div class="rating-row" onclick="setRating(5)">
+            <div class="rating-stars">
+              <span class="star on">★</span><span class="star on">★</span><span class="star on">★</span><span class="star on">★</span><span class="star on">★</span>
+            </div>
+            <span>5 sao</span>
+          </div>
+          <div class="rating-row" onclick="setRating(4)">
+            <div class="rating-stars">
+              <span class="star on">★</span><span class="star on">★</span><span class="star on">★</span><span class="star on">★</span><span class="star">★</span>
+            </div>
+            <span>từ 4 sao</span>
+          </div>
+          <div class="rating-row" onclick="setRating(3)">
+            <div class="rating-stars">
+              <span class="star on">★</span><span class="star on">★</span><span class="star on">★</span><span class="star">★</span><span class="star">★</span>
+            </div>
+            <span>từ 3 sao</span>
+          </div>
+
+          <div class="filter-label">Tình trạng</div>
+          <label class="filter-option"><input type="checkbox" onchange="applyFilters()"> Còn hàng</label>
+          <label class="filter-option"><input type="checkbox" onchange="applyFilters()"> Miễn phí vận chuyển</label>
+          <label class="filter-option"><input type="checkbox" onchange="applyFilters()"> Đang giảm giá</label>
+
+          <button class="apply-btn" onclick="applyFilters()">Áp dụng bộ lọc</button>
+        </div>
+        </div>
+      </aside>
+
+      <main class="main">
+        <h2 style="margin-bottom: 16px;" id="userDisplayTitle">Sản phẩm nổi bật</h2>
+        <div class="products-grid" id="userProductsGrid"></div>
+      </main>
+    </div>
+  </div>
+</div>
+
+<div id="adminInterface" style="display:none;">
+  <div class="topbar" style="background:#3D1F1A;">
+    <span>🛠️ HỆ THỐNG QUẢN TRỊ VIÊN POOBY ADMIN v2.5</span>
+  </div>
+
+  <div class="admin-layout">
+    <aside class="admin-menu">
+        <div class="admin-menu-item" id="menu-permissions" onclick="switchAdminTab('permissions')">🔐 Quản lý phân quyền</div>
+      <div class="admin-menu-item active" id="menu-dashboard" onclick="switchAdminTab('dashboard')">📈 Thống kê doanh thu</div>
+      <div class="admin-menu-item" id="menu-products" onclick="switchAdminTab('products')">📦 Quản lý sản phẩm</div>
+      <div class="admin-menu-item" id="menu-categories" onclick="switchAdminTab('categories')">📁 Quản lý danh mục</div>
+      <div class="admin-menu-item" id="menu-orders" onclick="switchAdminTab('orders')">📋 Quản lý đơn hàng</div>
+      <div class="admin-menu-item" id="menu-sellers" onclick="switchAdminTab('sellers')">🏪 Duyệt người bán hàng <span id="sellerPendingBadge" style="color:red; font-weight:bold;"></span></div>
+    </aside>
+
+    <main class="main">
+      <div id="pane-dashboard" class="admin-pane">
+        <div class="admin-card">
+          <h3>Tổng quan hệ thống</h3>
+          <div class="stats-grid" style="margin-top:14px;">
+            <div class="stat-box"><div>Doanh thu hệ thống</div><div class="stat-val" id="statRevenue">0đ</div></div>
+            <div class="stat-box"><div>Tổng đơn hàng</div><div class="stat-val" id="statOrders">0</div></div>
+            <div class="stat-box"><div>Tổng sản phẩm</div><div class="stat-val" id="statProducts">0</div></div>
+            <div class="stat-box"><div>Đối tác kinh doanh</div><div class="stat-val" id="statSellers">1</div></div>
+          </div>
+        </div>
+        <div class="admin-card">
+          <h3>🔥 Sản phẩm bán chạy nhất</h3>
+          <table id="tblBestSellers">
+            <thead><tr><th>Sản phẩm</th><th>Danh mục</th><th>Giá thành</th><th>Số lượng đã bán</th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div id="pane-products" class="admin-pane" style="display:none;">
+        <div class="admin-card" style="display:flex; justify-content:space-between; align-items:center;">
+          <h3>Danh sách sản phẩm hệ thống</h3>
+          <button class="checkout-btn" style="background:var(--primary);" onclick="openAddProductModal()">+ Thêm sản phẩm mới</button>
+        </div>
+        <div class="admin-card">
+          <table>
+            <thead><tr><th>Hình</th><th>Tên sản phẩm</th><th>Danh mục</th><th>Giá cả</th><th>Thao tác</th></tr></thead>
+            <tbody id="tblAdminProductsBody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div id="pane-categories" class="admin-pane" style="display:none;">
+        <div class="admin-card">
+          <h3>Quản lý danh mục sản phẩm</h3>
+          <div style="display:flex; gap:10px; margin-top:12px;">
+            <input type="text" id="newCatName" placeholder="Tên danh mục mới" style="padding:10px; border:1px solid var(--border); border-radius:8px; flex:1;" />
+            <input type="text" id="newCatSlug" placeholder="Mã định danh (Slug)" style="padding:10px; border:1px solid var(--border); border-radius:8px; width:200px;" />
+            <button class="checkout-btn" style="background:var(--primary); padding:0 20px;" onclick="addCategory()">Thêm danh mục</button>
+          </div>
+          <table style="margin-top:20px;">
+            <thead><tr><th>Tên danh mục</th><th>Mã định danh</th><th>Số lượng SP</th><th>Hành động</th></tr></thead>
+            <tbody id="tblCategoriesBody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div id="pane-orders" class="admin-pane" style="display:none;">
+        <div class="admin-card">
+          <h3>Quản lý danh sách đơn hàng</h3>
+          <table>
+            <thead><tr><th>Mã đơn</th><th>Khách hàng</th><th>Sản phẩm</th><th>Tổng tiền</th><th>Trạng thái</th><th>Thao tác quản lý</th></tr></thead>
+            <tbody id="tblAdminOrdersBody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div id="pane-sellers" class="admin-pane" style="display:none;">
+        <div class="admin-card">
+          <h3>Danh sách yêu cầu đăng ký làm người bán hàng</h3>
+          <table>
+            <thead><tr><th>Tên cửa hàng</th><th>Chủ sở hữu</th><th>Số điện thoại</th><th>Mặt hàng kinh doanh</th><th>Trạng thái</th><th>Thao tác</th></tr></thead>
+            <tbody id="tblAdminSellersBody"></tbody>
+          </table>
+        </div>
+      </div>
+        <div id="pane-permissions" class="admin-pane" style="display:none;">
+        <div class="admin-card">
+          <h3 style="margin-bottom: 20px;">Cấu hình Phân quyền hệ thống</h3>
+
+          <div style="display: flex; gap: 16px; margin-bottom: 20px; align-items: center; border-bottom: 1px solid var(--border); padding-bottom: 16px;">
+            <span style="font-weight: 700; font-size: 14px;">Phân quyền theo:</span>
+            <button id="btnRoleTypeUser" class="checkout-btn" style="background: var(--primary); color: white; padding: 6px 16px; border-radius: 6px; border: 1px solid var(--primary);">Cá nhân (Tài khoản)</button>
+            <button id="btnRoleTypeGroup" class="checkout-btn" style="background: white; color: var(--text); padding: 6px 16px; border-radius: 6px; border: 1px solid var(--border);">Nhóm quyền</button>
+          </div>
+
+          <div style="display: flex; gap: 10px; margin-bottom: 20px; align-items: center;">
+             <input type="text" id="searchModule" placeholder="Tìm tên chức năng..." style="padding: 10px; border: 1px solid var(--border); border-radius: 6px; flex: 1; font-family: inherit;">
+             <button class="checkout-btn" style="background: var(--bg); color: var(--text); padding: 10px 16px;" onclick="renderPermissionsTable()">Làm mới</button>
+             <button class="checkout-btn" style="background: #E8F8EF; color: var(--green); padding: 10px 16px;" onclick="toggleAllPermissions(true)">Cấp tất cả</button>
+             <button class="checkout-btn" style="background: #FDECEA; color: var(--red); padding: 10px 16px;" onclick="toggleAllPermissions(false)">Thu hồi tất cả</button>
+             <span style="color: var(--text-muted); font-size: 13px; margin-left: 10px;" id="moduleCountText">0 chức năng</span>
+          </div>
+
+          <div style="margin-bottom: 16px; display: flex; align-items: center; gap: 10px;">
+              <label style="font-weight: 700; font-size: 14px;">Tài khoản cần phân quyền:</label>
+              <select id="permUserSelect" style="padding: 10px; border: 1px solid var(--border); border-radius: 6px; width: 250px; font-family: inherit;">
+                  </select>
+              <button class="checkout-btn" style="background: #e2e8f0; color: #1e293b; padding: 10px 20px;" onclick="loadUserPermissions()">Xem quyền</button>
+              <button class="checkout-btn" style="background: var(--primary); padding: 10px 24px; margin-left: auto; box-shadow: 0 4px 12px rgba(145,22,212,0.3);" onclick="savePermissions()">💾 Lưu cấu hình phân quyền</button>
+          </div>
+
+          <table style="border: 1px solid var(--border);">
+            <thead>
+              <tr style="background: #f1f5f9; color: #334155;">
+                <th style="border-right: 1px solid var(--border);">Tên chức năng</th>
+                <th style="text-align: center; width: 120px;">Xem</th>
+                <th style="text-align: center; width: 120px;">Thêm</th>
+                <th style="text-align: center; width: 120px;">Sửa</th>
+                <th style="text-align: center; width: 120px;">Xóa</th>
+              </tr>
+            </thead>
+            <tbody id="tblPermissionsBody">
+              </tbody>
+          </table>
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+
+
+
+<div class="overlay" id="cartOverlay">
+  <div class="cart-panel">
+    <div class="cart-header">
+      <h2>🛒 Giỏ hàng của bạn</h2>
+      <button class="close-btn" onclick="closeCart()">✕</button>
+    </div>
+    <div class="cart-items" id="cartItemsList"></div>
+    <div class="cart-footer">
+      <div style="display:flex; justify-content:space-between; font-weight:bold; font-size:16px;">
+        <span>Tổng cộng tiền:</span><span id="cartTotalText" style="color:var(--red);">0đ</span>
+      </div>
+      <button class="checkout-btn" id="btnCheckoutTrigger" onclick="openCheckoutModal()">Tiến hành đặt hàng & Thanh toán →</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="productDetailModal">
+  <div class="modal-box" style="width:650px;">
+    <button class="modal-close" onclick="closeModal('productDetailModal')">✕</button>
+    <div id="productDetailContent"></div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="authModal">
+  <div class="modal-box" style="width:400px;">
+    <button class="modal-close" onclick="closeModal('authModal')">✕</button>
+    <div class="auth-tabs">
+      <div class="auth-tab active" id="tabLogin" onclick="switchAuthForm('login')">Đăng nhập</div>
+      <div class="auth-tab" id="tabRegister" onclick="switchAuthForm('register')">Đăng ký</div>
+    </div>
+    <form id="formLogin" class="auth-form active" onsubmit="handleLogin(event)">
+      <div class="form-group"><label>Tên đăng nhập</label><input type="text" id="loginUsername" required placeholder="Nhập tên đăng nhập"></div>
+      <div class="form-group"><label>Mật khẩu</label><input type="password" id="loginPass" required placeholder="Nhập mật khẩu"></div>
+      <button type="submit" class="btn-submit">Đăng nhập hệ thống</button>
+    </form>
+    <form id="formRegister" class="auth-form" onsubmit="handleRegister(event)">
+      <div class="form-group"><label>Họ và tên</label><input type="text" id="regName" required></div>
+      <div class="form-group"><label>Tên đăng nhập</label><input type="text" id="regUsername" required></div>
+      <div class="form-group"><label>Số điện thoại</label><input type="tel" id="regPhone" required></div>
+      <div class="form-group"><label>Địa chỉ</label><input type="text" id="regAddress" required></div>
+      <div class="form-group"><label>Mật khẩu</label><input type="password" id="regPass" required></div>
+      <button type="submit" class="btn-submit" style="background:var(--green);">Đăng ký tài khoản</button>
+    </form>
+  </div>
+</div>
+
+<div class="modal-overlay" id="checkoutModal">
+  <div class="modal-box" style="width:500px;">
+    <button class="modal-close" onclick="closeModal('checkoutModal')">✕</button>
+    <h3 style="margin-bottom:16px;">💳 Thông tin đặt hàng & Thanh toán</h3>
+    <form onsubmit="handlePlaceOrder(event)">
+      <div class="form-group"><label>Người nhận hàng</label><input type="text" id="chkName" required></div>
+      <div class="form-group"><label>Số điện thoại liên hệ</label><input type="tel" id="chkPhone" required></div>
+      <div class="form-group"><label>Địa chỉ giao hàng cụ thể</label><textarea id="chkAddress" rows="2" required></textarea></div>
+      <div class="form-group">
+        <label>Phương thức thanh toán</label>
+        <select id="chkPayment" onchange="togglePaymentDetails(this.value)">
+          <option value="COD">Thanh toán khi nhận hàng (COD)</option>
+          <option value="BANK">Chuyển khoản ngân hàng điện tử (QR)</option>
+        </select>
+      </div>
+      <div id="bankDetailsBlock" style="display:none; background:#FFF8EC; border:1px solid #FFD4A8; padding:12px; border-radius:8px; font-size:12px; margin-bottom:14px; line-height:1.6;">
+        <strong>🏦 THÔNG TIN CHUYỂN KHOẢN:</strong><br>
+        Ngân hàng: MB Bank (Ngân hàng Quân Đội)<br>
+        Số tài khoản: <b>0987654321999</b><br>
+        Chủ tài khoản: ĐẶNG HOÀNG POBBY<br>
+        Nội dung CK: <span style="color:red; font-weight:bold;">POBBYPAY</span>
+      </div>
+      <div style="font-size:15px; font-weight:bold; margin-bottom:16px; text-align:right;">
+        Tổng số tiền phải trả: <span id="checkoutTotalText" style="color:var(--red); font-size:18px;">0đ</span>
+      </div>
+      <button type="submit" class="btn-submit" style="background:var(--green); width:100%;">Xác nhận Đặt hàng ngay</button>
+    </form>
+  </div>
+</div>
+
+<div class="modal-overlay" id="orderHistoryModal">
+  <div class="modal-box" style="width:700px;">
+    <button class="modal-close" onclick="closeModal('orderHistoryModal')">✕</button>
+    <h3 style="margin-bottom:14px;">📋 Lịch sử đơn hàng cá nhân</h3>
+    <div id="orderHistoryContent"></div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="sellerModal">
+  <div class="modal-box" style="width:450px;">
+    <button class="modal-close" onclick="closeModal('sellerModal')">✕</button>
+    <h3 style="margin-bottom:14px;">🏪 Đăng ký mở gian hàng kinh doanh</h3>
+    <form onsubmit="handleSellerRegister(event)">
+      <div class="form-group"><label>Tên thương hiệu / Cửa hàng</label><input type="text" id="selShopName" required></div>
+      <div class="form-group"><label>Số điện thoại kinh doanh</label><input type="tel" id="selPhone" required></div>
+      <div class="form-group">
+        <label>Danh mục hàng hóa chủ yếu</label>
+        <select id="selCat"><option value="electronics">Thiết bị điện tử</option><option value="food">Thực phẩm ăn uống</option><option value="fashion">Quần áo thời trang</option></select>
+      </div>
+      <button type="submit" class="btn-submit" style="width:100%;">Gửi yêu cầu xét duyệt</button>
+    </form>
+  </div>
+</div>
+
+<div class="modal-overlay" id="adminProductModal">
+  <div class="modal-box" style="width:460px;">
+    <button class="modal-close" onclick="closeModal('adminProductModal')">✕</button>
+    <h3 id="adminProductModalTitle" style="margin-bottom:14px;">Thêm sản phẩm</h3>
+    <form onsubmit="handleSaveProduct(event)">
+      <input type="hidden" id="editProductId">
+      <div class="form-group"><label>Tên sản phẩm</label><input type="text" id="prodName" required></div>
+      <div class="form-group">
+        <label>Danh mục</label>
+        <select id="prodCategory"></select>
+      </div>
+      <div class="form-group"><label>Giá thành (đ)</label><input type="number" id="prodPrice" required></div>
+      <div class="form-group"><label>Biểu tượng sản phẩm (Emoji đại diện)</label><input type="text" id="prodEmoji" placeholder="Ví dụ: 🍏, 💻, 🎒" required></div>
+      <div class="form-group"><label>Nhà bán hàng (Thương hiệu)</label><input type="text" id="prodShop" value="Chính hãng Pobby" required></div>
+      <button type="submit" class="btn-submit" style="width:100%;">Lưu thông tin sản phẩm</button>
+    </form>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+<footer>
+  <div class="footer-inner">
+    <div class="footer-grid">
+      <div class="footer-brand">
+        <a href="#" class="logo">Pobby<span></span></a>
+        <p>Sàn thương mại điện tử uy tín số 1 Việt Nam. Kết nối hàng triệu người mua và người bán trên toàn quốc.</p>
+        <div class="footer-socials">
+          <div class="social-btn">📘</div>
+          <div class="social-btn">📸</div>
+          <div class="social-btn">🐦</div>
+          <div class="social-btn">▶️</div>
+        </div>
+      </div>
+      <div class="footer-col">
+        <h4>Về Pobby </h4>
+        <ul class="footer-links">
+          <li><a href="#">Giới thiệu</a></li>
+          <li><a href="#">Tuyển dụng</a></li>
+          <li><a href="#">Tin tức</a></li>
+          <li><a href="#">Đối tác</a></li>
+          <li><a href="#">Liên hệ</a></li>
+        </ul>
+      </div>
+      <div class="footer-col">
+        <h4>Hỗ trợ</h4>
+        <ul class="footer-links">
+          <li><a href="#">Trung tâm trợ giúp</a></li>
+          <li><a href="#">Hướng dẫn mua hàng</a></li>
+          <li><a href="#">Chính sách đổi trả</a></li>
+          <li><a href="#">Bảo mật thông tin</a></li>
+          <li><a href="#">Điều khoản dịch vụ</a></li>
+        </ul>
+      </div>
+      <div class="footer-col">
+        <h4>Bán hàng</h4>
+        <ul class="footer-links">
+          <li><a href="#">Đăng ký bán hàng</a></li>
+          <li><a href="#">Hướng dẫn bán hàng</a></li>
+          <li><a href="#">Quảng cáo</a></li>
+          <li><a href="#">Chính sách hoa hồng</a></li>
+          <li><a href="#">Flash sale cho shop</a></li>
+        </ul>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <span>© 2025 Pobby . Bảo lưu mọi quyền.</span>
+      <span>Giấy phép ĐKKD: 0123456789 – Sở KHĐT TP.HCM</span>
+    </div>
+  </div>
+</footer>
+
+<script>
+// --- GIẢ LẬP DỮ LIỆU SẢN PHẨM & GIỎ HÀNG BAN ĐẦU ---
+let categories = [{ slug: 'electronics', name: 'Điện tử' }, { slug: 'food', name: 'Thực phẩm' }, { slug: 'fashion', name: 'Thời trang' }, { slug: 'home', name: 'Nhà cửa' }];
+let products = [
+  { id: 1, name: 'Điện thoại thông minh Samsung Galaxy S26', category: 'electronics', price: 19900000, emoji: '📱', shop: 'Samsung Official', sold: 45 },
+  { id: 2, name: 'Tai nghe chụp tai chống ồn Sony WH-1000XM5', category: 'electronics', price: 6500000, emoji: '🎧', shop: 'Sony Store', sold: 28 },
+  { id: 3, name: 'Combo Rau củ quả hữu cơ xanh sạch 3kg', category: 'food', price: 120000, emoji: '🥦', shop: 'Nông trại Đà Lạt', sold: 154 }
+];
+let cart = [];
+let currentUser = null;
+let orders = [];
+let sellers = [];
+
+// ==========================================
+// 1. CHUYỂN ĐỔI VIEW & ĐIỀU HƯỚNG
+// ==========================================
+function switchViewMode(mode) {
+  document.getElementById('btnViewUser').classList.toggle('active', mode === 'user');
+  document.getElementById('btnViewAdmin').classList.toggle('active', mode === 'admin');
+  document.getElementById('userInterface').style.display = (mode === 'user') ? 'block' : 'none';
+  document.getElementById('adminInterface').style.display = (mode === 'admin') ? 'block' : 'none';
+  if(mode === 'admin') initAdminDashboard();
+}
+
+function switchAdminTab(tabName) {
+  document.querySelectorAll('.admin-menu-item').forEach(el => el.classList.remove('active'));
+  document.querySelectorAll('.admin-pane').forEach(el => el.style.display = 'none');
+
+  document.getElementById(`menu-${tabName}`).classList.add('active');
+  document.getElementById(`pane-${tabName}`).style.display = 'block';
+
+  if(tabName === 'dashboard') initAdminDashboard();
+  if(tabName === 'products') renderAdminProducts();
+  if(tabName === 'categories') renderAdminCategories();
+  if(tabName === 'permissions') {
+      renderPermissionsTable();
+      // Thêm setTimeout để đảm bảo UI đã render xong trước khi đổ dữ liệu
+      setTimeout(() => {
+          loadUsersToDropdown();
+      }, 100);
+  }
+}
+
+// ==========================================
+// 2. API: ĐĂNG NHẬP & ĐĂNG KÝ
+// ==========================================
+function switchAuthForm(form) {
+  document.getElementById('tabLogin').classList.toggle('active', form === 'login');
+  document.getElementById('tabRegister').classList.toggle('active', form === 'register');
+  document.getElementById('formLogin').classList.toggle('active', form === 'login');
+  document.getElementById('formRegister').classList.toggle('active', form === 'register');
+}
+function openAuthModal() { document.getElementById('authModal').classList.add('show'); }
+function closeModal(id) { document.getElementById(id).classList.remove('show'); }
+
+async function handleLogin(e) {
+  e.preventDefault();
+  const tendangnhap = document.getElementById('loginUsername').value.trim();
+  const mat_khau = document.getElementById('loginPass').value;
+
+  try {
+    const response = await fetch('http://localhost:5000/api/dang-nhap', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tendangnhap: tendangnhap, mat_khau: mat_khau })
+    });
+
+    const result = await response.json();
+    if(result.status === true) {
+      currentUser = result.data;
+      let ma_user = currentUser.ma_user || currentUser.UserId;
+      let ten_user = currentUser.ten_user || currentUser.FullName;
+      let ma_nhom_quyen = currentUser.ma_nhom_quyen || currentUser.Role_id;
+
+      document.getElementById('topbarUserText').innerHTML = `🟢 Xin chào: <b>${ten_user}</b>`;
+      document.getElementById('authBtnLabel').textContent = 'Đăng xuất';
+      document.getElementById('hdrAuthBtn').onclick = handleLogout;
+      document.getElementById('hdrHistoryBtn').style.display = 'flex';
+
+      // Điều hướng gom nhóm quyền
+      if(ma_nhom_quyen === 14 || ma_nhom_quyen === 15) {
+          switchViewMode('user');
+      } else if (ma_nhom_quyen === 13) {
+          document.getElementById('hdrSellerBtn').style.display = 'flex';
+          switchViewMode('user');
+      } else {
+          switchViewMode('admin');
+          await loadAndApplyAdminPermissions(ma_user);
+      }
+      closeModal('authModal');
+      showToast(result.message);
+    } else {
+      showToast('❌ ' + result.message);
+    }
+  } catch (error) {
+    showToast('❌ Lỗi kết nối đến máy chủ Backend!');
+  }
+}
+// --- HÀM TẢI DANH SÁCH USER VÀO DROPDOWN ---
+async function loadUsersToDropdown() {
+  const selectBox = document.getElementById('permUserSelect');
+  if (!selectBox) return; // Kiểm tra nếu không tìm thấy thẻ select thì thoát
+
+  try {
+    const response = await fetch('http://localhost:5000/api/users');
+    const result = await response.json();
+
+    // Kiểm tra xem dữ liệu có trả về đúng cấu trúc không
+    if(result.status === true && Array.isArray(result.data)) {
+      // Xóa các option cũ (trừ option mặc định)
+      selectBox.innerHTML = '<option value="">-- Chọn tài khoản --</option>';
+
+      // Đổ dữ liệu mới
+      result.data.forEach(u => {
+        let id = u.ma_user || u.UserId;
+        let name = u.ten_user || u.FullName;
+        let role = u.ten_nhom_quyen || u.RoleName || "Chưa cấp quyền";
+
+        let opt = document.createElement('option');
+        opt.value = id;
+        opt.textContent = `${name} - [${role}]`;
+        selectBox.appendChild(opt);
+      });
+      console.log("Đã nạp thành công " + result.data.length + " người dùng.");
+    } else {
+      console.warn("API trả về dữ liệu rỗng hoặc sai cấu trúc:", result);
+    }
+  } catch(e) {
+    console.error("Lỗi khi gọi API danh sách User:", e);
+    showToast("❌ Không thể tải danh sách tài khoản!");
+  }
+}
+async function handleRegister(e) {
+  e.preventDefault();
+  const ten_user = document.getElementById('regName').value.trim();
+  const tendangnhap = document.getElementById('regUsername').value.trim();
+  const sdt = document.getElementById('regPhone').value.trim();
+  const dia_chi = document.getElementById('regAddress').value.trim();
+  const mat_khau = document.getElementById('regPass').value;
+
+  try {
+    const response = await fetch('http://localhost:5000/api/dang-ky', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ten_user, tendangnhap, sdt, dia_chi, mat_khau })
+    });
+    const result = await response.json();
+    if(result.status === true) {
+      showToast('🎉 ' + result.message);
+      document.getElementById('formRegister').reset();
+      switchAuthForm('login');
+    } else {
+      showToast('❌ ' + result.message);
+    }
+  } catch (error) {
+    showToast('❌ Lỗi kết nối đến máy chủ Backend!');
+  }
+}
+
+function handleLogout() {
+  currentUser = null;
+  document.getElementById('topbarUserText').textContent = '👤 Chưa đăng nhập';
+  document.getElementById('authBtnLabel').textContent = 'Đăng nhập';
+  document.getElementById('hdrAuthBtn').onclick = openAuthModal;
+  document.getElementById('hdrHistoryBtn').style.display = 'none';
+  document.getElementById('hdrSellerBtn').style.display = 'none';
+  switchViewMode('user');
+  cart = []; updateCartBadge();
+  showToast('Đã đăng xuất tài khoản.');
+}
+
+// ==========================================
+// 3. API: QUẢN LÝ PHÂN QUYỀN & MENU ĐỘNG
+// ==========================================
+const sysModules = [
+  { id: 1, name: 'Quản lý Sản phẩm' }, { id: 2, name: 'Quản lý Đơn hàng' },
+  { id: 3, name: 'Quản lý Người dùng' }, { id: 4, name: 'Quản lý Danh mục' },
+  { id: 5, name: 'Quản lý Cấu hình hệ thống' }, { id: 6, name: 'Quản lý Đối tác kinh doanh' }
+];
+
+async function loadAndApplyAdminPermissions(ma_user) {
+  try {
+    const res = await fetch(`http://localhost:5000/api/quyen-cua-user/${ma_user}`);
+    const result = await res.json();
+    if(result.status === true) {
+      const menuMap = { 1: 'menu-products', 2: 'menu-orders', 3: 'menu-permissions', 4: 'menu-categories', 6: 'menu-sellers' };
+      // Ẩn hết đi trước
+      Object.values(menuMap).forEach(menuId => { const el = document.getElementById(menuId); if(el) el.style.display = 'none'; });
+      // Hiện lại các menu có quyền xem
+      result.data.forEach(quyen => {
+        if(quyen.xem === true && menuMap[quyen.ma_chuc_nang]) {
+           const el = document.getElementById(menuMap[quyen.ma_chuc_nang]);
+           if(el) el.style.display = 'block';
+        }
+      });
+    }
+  } catch(e) { console.error("Lỗi tải menu phân quyền:", e); }
+}
+
+async function loadUserPermissions() {
+  const ma_user = document.getElementById('permUserSelect').value;
+
+  if(!ma_user) {
+      showToast("⚠️ Vui lòng chọn một tài khoản từ danh sách để xem quyền!");
+      return;
+  }
+
+  try {
+    // Tận dụng luôn API lấy quyền mà chúng ta đã viết cho việc ẩn/hiện menu
+    const res = await fetch(`http://localhost:5000/api/quyen-cua-user/${ma_user}`);
+    const result = await res.json();
+
+    if(result.status === true) {
+      // 1. Xóa trắng (Bỏ tick) toàn bộ bảng trước khi nạp dữ liệu mới
+      toggleAllPermissions(false);
+
+      // 2. Lặp qua các quyền trả về từ CSDL và tự động Tick vào ô tương ứng
+      result.data.forEach(q => {
+         let cbView = document.querySelector(`.cb-view[data-mod="${q.ma_chuc_nang}"]`);
+         let cbAdd = document.querySelector(`.cb-add[data-mod="${q.ma_chuc_nang}"]`);
+         let cbEdit = document.querySelector(`.cb-edit[data-mod="${q.ma_chuc_nang}"]`);
+         let cbDelete = document.querySelector(`.cb-delete[data-mod="${q.ma_chuc_nang}"]`);
+
+         if(cbView) cbView.checked = q.xem;
+         if(cbAdd) cbAdd.checked = q.them;
+         if(cbEdit) cbEdit.checked = q.sua;
+         if(cbDelete) cbDelete.checked = q.xoa;
+      });
+
+      showToast('✅ Đã tải cấu hình quyền hiện tại của tài khoản từ Database!');
+    } else {
+      showToast('❌ ' + result.message);
+    }
+  } catch(e) {
+      console.error("Lỗi nạp quyền của User:", e);
+      showToast("❌ Không thể kết nối tới Server để lấy quyền!");
+  }
+}
+async function savePermissions() {
+  const ma_user = document.getElementById('permUserSelect').value;
+  if(!ma_user) { showToast("⚠️ Vui lòng chọn một tài khoản trước khi lưu!"); return; }
+
+  let permissionsData = [];
+  sysModules.forEach(m => {
+    permissionsData.push({
+      ma_chuc_nang: m.id,
+      xem: document.querySelector(`.cb-view[data-mod="${m.id}"]`)?.checked || false,
+      them: document.querySelector(`.cb-add[data-mod="${m.id}"]`)?.checked || false,
+      sua: document.querySelector(`.cb-edit[data-mod="${m.id}"]`)?.checked || false,
+      xoa: document.querySelector(`.cb-delete[data-mod="${m.id}"]`)?.checked || false
+    });
+  });
+
+  try {
+    const response = await fetch('http://localhost:5000/api/cap-quyen-ngoai-le', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ma_user: ma_user, permissions: permissionsData })
+    });
+    const result = await response.json();
+    showToast((result.status ? '💾 ' : '❌ ') + result.message);
+  } catch(e) { showToast("❌ Lỗi kết nối lưu phân quyền!"); }
+}
+
+function renderPermissionsTable() {
+  const tbody = document.getElementById('tblPermissionsBody');
+  const searchTxt = document.getElementById('searchModule')?.value.toLowerCase() || '';
+  const filteredModules = sysModules.filter(m => m.name.toLowerCase().includes(searchTxt));
+  if(document.getElementById('moduleCountText')) document.getElementById('moduleCountText').textContent = `${filteredModules.length} chức năng`;
+
+  tbody.innerHTML = filteredModules.map(m => `
+    <tr style="border-bottom: 1px solid var(--border);">
+      <td style="border-right: 1px solid var(--border); font-weight: 500;">${m.name}</td>
+      <td style="text-align: center;"><input type="checkbox" style="transform: scale(1.3); cursor: pointer;" class="cb-view" data-mod="${m.id}"></td>
+      <td style="text-align: center;"><input type="checkbox" style="transform: scale(1.3); cursor: pointer;" class="cb-add" data-mod="${m.id}"></td>
+      <td style="text-align: center;"><input type="checkbox" style="transform: scale(1.3); cursor: pointer;" class="cb-edit" data-mod="${m.id}"></td>
+      <td style="text-align: center;"><input type="checkbox" style="transform: scale(1.3); cursor: pointer;" class="cb-delete" data-mod="${m.id}"></td>
+    </tr>
+  `).join('');
+}
+
+function toggleAllPermissions(status) {
+  document.querySelectorAll('#tblPermissionsBody input[type="checkbox"]').forEach(cb => cb.checked = status);
+  showToast(status ? '✅ Đã chọn Cấp tất cả quyền!' : '❌ Đã Thu hồi tất cả quyền!');
+}
+if(document.getElementById('searchModule')) {
+    document.getElementById('searchModule').addEventListener('input', renderPermissionsTable);
+}
+
+// ==========================================
+// 4. CÁC HÀM XỬ LÝ GIAO DIỆN (UI) KHÁC
+// ==========================================
+function updateCartBadge() { document.getElementById('cartBadge').textContent = cart.reduce((a, c) => a + c.qty, 0); }
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  clearTimeout(t._timeoutId);
+  t._timeoutId = setTimeout(() => t.classList.remove('show'), 2500);
+}
+function initAdminDashboard() {
+  document.getElementById('statRevenue').textContent = '240.000đ';
+  document.getElementById('statOrders').textContent = '1';
+  document.getElementById('statProducts').textContent = products.length;
+}
+function applyUserFilters() { renderUserProducts(products); }
+function renderUserProducts(arr) {
+  const container = document.getElementById('userProductsGrid');
+  container.innerHTML = arr.map(p => `
+    <div class="product-card">
+      <div class="card-img">${p.emoji}</div>
+      <div class="card-body">
+        <div class="card-title">${p.name}</div>
+        <div class="card-price">${p.price.toLocaleString('vi-VN')}đ</div>
+      </div>
+    </div>`).join('');
+}
+
+// KHỞI CHẠY GIAO DIỆN MẶC ĐỊNH
+renderUserProducts(products);
+</script>
+</body>
+</html>

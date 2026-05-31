@@ -1,111 +1,146 @@
-import pyodbc
-
 from DBconnection import DBconnection
-from Model.User import Khach,NguoiBan
+from Model.User import User  # Chỉ import duy nhất 1 class User
+
+
 class UserDao:
-  def them_khach_hang(self,khach:Khach):
-      conn= DBconnection.get_connection()
-      if conn is None:
-          return False
-      cursor= conn.cursor()
-      try :
-          sql="""
-          INSERT INTO Users (Ten_User,Dia_Chi,SDT, Vai_Tro,TenDangNhap,MatKhau)
-          VALUES(?,?,?,?,?,?)
-          """
-          cursor.execute(sql,(khach.ten_user,khach.dia_chi,khach.sdt,khach.vai_tro,khach.tendangnhap,khach.mat_khau))
-          conn.commit()
-          return True
-      except Exception as e :
-          print("Lỗi khi thêm khách hàng",e)
-          return False
-      finally:
-          cursor.close()
-          conn.close()
+    def them_user(self, user: User):
+        conn = DBconnection.get_connection()
+        if conn is None: return False
+        cursor = conn.cursor()
 
-  def kiem_tra_tendangnhap_ton_tai(self,tendangnhap):
-            conn=DBconnection.get_connection()
-            if conn is None:
-                return False
-
-            cursor=conn.cursor()
-            cursor.execute("select  Ma_User FROM Users where TenDangNhap=?",(tendangnhap,))
-            row=cursor.fetchone()
-
-            cursor.close()
-            conn.close()
-            return row is not None
-  def lay_danh_sach_user(self):
-      conn=DBconnection.get_connection()
-      if conn is None:
-          return []
-      cursor=conn.cursor()
-      try:
-          sql="""
-          SELECT Ma_User,Ma_Khach_Hang,Ten_User,Dia_Chi,SDT,Vai_Tro,TenDangNhap From Users
-          """
-          cursor.execute(sql)
-          rows =cursor.fetchall()
-
-          danh_sach_user=[]
-          for row in rows:
-              user={
-                  "ma_user":row.Ma_User,
-                  "ma_khach_hang":row.Ma_Khach_Hang,
-                  "ten_user":row.Ten_User,
-                  "dia_chi":row.Dia_Chi,
-                  "sdt":row.SDT,
-                  "vai_tro":row.Vai_Tro,
-                  "tendangnhap":row.TenDangNhap,
-
-              }
-              danh_sach_user.append(user)
-          return danh_sach_user
-      except Exception as e :
-          print("Lỗi khi lấy danh sách User :",e)
-          return []
-      finally:
-          cursor.close()
-          conn.close()
-
-  def cap_nhat_user(self,ma_user,ten_user,dia_chi,sdt):
-        conn=DBconnection.get_connection()
-        if conn is None:
-            return False
-        cursor=conn.cursor()
         try:
-            sql="""
-            UPDATE Users
-            set Ten_User=?,Dia_Chi=?,SDT=?
-            WHERE Ma_User=?
+            sql = """
+                INSERT INTO Users (FullName, Address, Phone, NationalId, Role_id, Username, Password)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
             """
-            cursor.execute(sql,(ten_user,dia_chi,sdt,ma_user))
+            cursor.execute(sql, (
+                user.ten_user,
+                user.dia_chi,
+                user.sdt,
+                user.cmnd,
+                user.ma_nhom_quyen,
+                user.tendangnhap,
+                user.mat_khau
+            ))
             conn.commit()
-            if cursor.rowcount > 0:
-                return True
-            return False
-        except Exception as e :
-            print("Lỗi khi cập nhất User:",e)
+            return True
+        except Exception as e:
+            print("Lỗi khi thêm người dùng:", e)
             return False
         finally:
             cursor.close()
             conn.close()
-  def xoa_user(self,ma_user):
-      conn=DBconnection.get_connection()
-      if conn is None:
-          return False
-      cursor=conn.cursor()
-      try:
-          sql="""
-          DELETE FROM Users where Ma_User=?"""
-          cursor.execute(sql,(ma_user,))
-          conn.commit()
-          if(cursor.rowcount > 0):
-              return True
-          return False
-      except Exception as e :
-          print("Lỗi khi xoá User:",e)
-          return False
-      finally:
-          cursor.close()
-          conn.close()
+
+    def dang_nhap(self, username, password):
+        conn = DBconnection.get_connection()
+        if conn is None: return None
+        cursor = conn.cursor()
+
+        try:
+            sql = """
+                SELECT UserId, FullName, Role_id 
+                FROM Users 
+                WHERE Username = ? AND Password = ?
+            """
+            cursor.execute(sql, (username, password))
+            row = cursor.fetchone()
+
+            if row:
+
+                return User(
+                    ma_user=row.UserId,
+                    ten_user=row.FullName,
+                    ma_nhom_quyen=row.Role_id
+                )
+            return None
+        except Exception as e:
+            print("Lỗi đăng nhập:", e)
+            return None
+        finally:
+            cursor.close()
+            conn.close()
+
+
+    def kiem_tra_tendangnhap_ton_tai(self, tendangnhap):
+        conn = DBconnection.get_connection()
+        if conn is None: return False
+        cursor = conn.cursor()
+
+        try:
+            cursor.execute("SELECT UserId FROM Users WHERE Username = ?", (tendangnhap,))
+            row = cursor.fetchone()
+            return row is not None
+        except Exception as e:
+            print("Lỗi kiểm tra tên đăng nhập:", e)
+            return False
+        finally:
+            cursor.close()
+            conn.close()
+
+
+    def lay_danh_sach_user(self):
+        conn = DBconnection.get_connection()
+        if conn is None: return []
+        cursor = conn.cursor()
+
+        try:
+
+            sql = """
+                SELECT u.UserId, u.FullName, u.Address, u.Phone, u.Role_id, r.RoleName, u.Username 
+                FROM Users u
+                JOIN Roles r ON u.Role_id = r.RoleId
+            """
+            cursor.execute(sql)
+            rows = cursor.fetchall()
+
+            danh_sach_user = []
+            for row in rows:
+                user_dict = {
+                    "ma_user": row.UserId,
+                    "ten_user": row.FullName,
+                    "dia_chi": row.Address,
+                    "sdt": row.Phone,
+                    "ma_nhom_quyen": row.Role_id,
+                    "ten_nhom_quyen": row.RoleName,
+                    "tendangnhap": row.Username
+                }
+                danh_sach_user.append(user_dict)
+            return danh_sach_user
+        except Exception as e:
+            print("Lỗi khi lấy danh sách User:", e)
+            return []
+        finally:
+            cursor.close()
+            conn.close()
+
+    def cap_nhat_user(self, ma_user, ten_user, dia_chi, sdt):
+        conn = DBconnection.get_connection()
+        if conn is None: return False
+        cursor = conn.cursor()
+        try:
+            sql = "UPDATE Users SET FullName=?, Address=?, Phone=? WHERE UserId=?"
+            cursor.execute(sql, (ten_user, dia_chi, sdt, ma_user))
+            conn.commit()
+            return cursor.rowcount > 0
+        except Exception as e:
+            print("Lỗi khi cập nhật User:", e)
+            return False
+        finally:
+            cursor.close()
+            conn.close()
+
+    def xoa_user(self, ma_user):
+        conn = DBconnection.get_connection()
+        if conn is None: return False
+        cursor = conn.cursor()
+        try:
+            sql = "DELETE FROM Users WHERE UserId=?"
+            cursor.execute(sql, (ma_user,))
+            conn.commit()
+            return cursor.rowcount > 0
+        except Exception as e:
+            print("Lỗi khi xoá User:", e)
+            return False
+        finally:
+            cursor.close()
+            conn.close()

@@ -1,4 +1,4 @@
-from DAO.PhanQuyenDao import PhanQuyenDao  # Sửa lại đường dẫn import nếu cần
+from back_end.DAO.PhanQuyenDao import PhanQuyenDao  # Sửa lại đường dẫn import nếu cần
 
 
 class PhanQuyenBus:

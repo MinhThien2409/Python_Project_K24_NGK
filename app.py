@@ -1,8 +1,9 @@
 # app.py
+
 from flask import Flask, request, jsonify
 from flask_cors import CORS
-from BUS.UserBus import UserBus
-from BUS.PhanQuyenBus import PhanQuyenBus
+from back_end.BUS.UserBus import UserBus
+from back_end.BUS.PhanQuyenBus import PhanQuyenBus
 
 app = Flask(__name__)
 # Dòng này cho phép mọi cổng (3000, 5500, 63342...) đều được gọi vào Flask

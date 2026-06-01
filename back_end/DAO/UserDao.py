@@ -1,5 +1,5 @@
-from DBconnection import DBconnection
-from Model.User import User  # Chỉ import duy nhất 1 class User
+from back_end.DBconnection import DBconnection
+from back_end.Model.User import User  # Chỉ import duy nhất 1 class User
 
 
 class UserDao:

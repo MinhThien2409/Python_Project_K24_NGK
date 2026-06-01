@@ -1,5 +1,5 @@
-from Model.User import User
-from DAO.UserDao import UserDao
+from back_end.Model.User import User
+from back_end.DAO.UserDao import UserDao
 
 
 class UserBus:
@@ -23,7 +23,7 @@ class UserBus:
             dia_chi=dia_chi,
             sdt=sdt,
             cmnd=None,
-            ma_nhom_quyen=2,
+            ma_nhom_quyen=14,
             tendangnhap=tendangnhap,
             mat_khau=mat_khau
         )

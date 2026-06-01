@@ -190,13 +190,9 @@
 </head>
 <body>
 
-<div class="view-switcher">
-  <span>💡 Chuyển đổi góc nhìn để xem đầy đủ tính năng:</span>
-  <div class="btns">
-    <button id="btnViewUser" class="active" onclick="switchViewMode('user')">Giao diện USER (Khách hàng)</button>
-    <button id="btnViewAdmin" onclick="switchViewMode('admin')">Giao diện ADMIN (Quản trị viên)</button>
-  </div>
-</div>
+
+
+
 
 <div id="userInterface">
   <div class="topbar">
@@ -309,8 +305,13 @@
 </div>
 
 <div id="adminInterface" style="display:none;">
-  <div class="topbar" style="background:#3D1F1A;">
-    <span>🛠️ HỆ THỐNG QUẢN TRỊ VIÊN POOBY ADMIN v2.5</span>
+<div class="topbar" style="background:#3D1F1A; display: flex; justify-content: space-between; align-items: center; padding: 8px 24px;">
+    <span style="font-size: 13px; font-weight: 700;">🛠️ HỆ THỐNG QUẢN TRỊ VIÊN POOBY ADMIN v2.5</span>
+
+    <!-- Nút quay lại giao diện User -->
+    <button onclick="switchViewMode('user')" style="background: var(--accent); color: var(--text); border: none; padding: 6px 16px; border-radius: 6px; font-weight: 700; cursor: pointer; font-family: inherit; font-size: 12px; box-shadow: 0 2px 4px rgba(0,0,0,0.2);">
+      🛍️ Quay lại trang Mua sắm
+    </button>
   </div>
 
   <div class="admin-layout">
@@ -449,6 +450,21 @@
         <span>Tổng cộng tiền:</span><span id="cartTotalText" style="color:var(--red);">0đ</span>
       </div>
       <button class="checkout-btn" id="btnCheckoutTrigger" onclick="openCheckoutModal()">Tiến hành đặt hàng & Thanh toán →</button>
+    </div>
+  </div>
+</div>
+  <!-- MODAL THÔNG TIN TÀI KHOẢN & CÀI ĐẶT -->
+<div class="modal-overlay" id="profileModal">
+  <div class="modal-box" style="width:400px;">
+    <button class="modal-close" onclick="closeModal('profileModal')">✕</button>
+    <h3 style="margin-bottom:20px; border-bottom: 1px solid var(--border); padding-bottom: 10px;">⚙️ Quản lý tài khoản</h3>
+
+    <div id="profileDetails" style="margin-bottom: 24px; line-height: 2; font-size: 14px; background: var(--bg); padding: 16px; border-radius: 8px;">
+      </div>
+
+    <div style="display: flex; flex-direction: column; gap: 12px;">
+      <button id="btnGoAdmin" class="btn-submit" style="background: var(--primary); display: none;" onclick="goToAdmin()">🛠️ Vào khu vực Quản trị hệ thống</button>
+      <button class="btn-submit" style="background: var(--red); margin-top: 10px;" onclick="handleLogout()">🚪 Đăng xuất</button>
     </div>
   </div>
 </div>
@@ -625,13 +641,12 @@ let sellers = [];
 // 1. CHUYỂN ĐỔI VIEW & ĐIỀU HƯỚNG
 // ==========================================
 function switchViewMode(mode) {
-  document.getElementById('btnViewUser').classList.toggle('active', mode === 'user');
-  document.getElementById('btnViewAdmin').classList.toggle('active', mode === 'admin');
+  // Chỉ cần ẩn/hiện giao diện, không cần tìm mấy cái nút cũ nữa
   document.getElementById('userInterface').style.display = (mode === 'user') ? 'block' : 'none';
   document.getElementById('adminInterface').style.display = (mode === 'admin') ? 'block' : 'none';
+
   if(mode === 'admin') initAdminDashboard();
 }
-
 function switchAdminTab(tabName) {
   document.querySelectorAll('.admin-menu-item').forEach(el => el.classList.remove('active'));
   document.querySelectorAll('.admin-pane').forEach(el => el.style.display = 'none');
@@ -663,6 +678,7 @@ function switchAuthForm(form) {
 function openAuthModal() { document.getElementById('authModal').classList.add('show'); }
 function closeModal(id) { document.getElementById(id).classList.remove('show'); }
 
+// 1. CẬP NHẬT HÀM XỬ LÝ ĐĂNG NHẬP
 async function handleLogin(e) {
   e.preventDefault();
   const tendangnhap = document.getElementById('loginUsername').value.trim();
@@ -683,17 +699,18 @@ async function handleLogin(e) {
       let ma_nhom_quyen = currentUser.ma_nhom_quyen || currentUser.Role_id;
 
       document.getElementById('topbarUserText').innerHTML = `🟢 Xin chào: <b>${ten_user}</b>`;
-      document.getElementById('authBtnLabel').textContent = 'Đăng xuất';
-      document.getElementById('hdrAuthBtn').onclick = handleLogout;
-      document.getElementById('hdrHistoryBtn').style.display = 'flex';
 
-      // Điều hướng gom nhóm quyền
+      // ĐỔI NÚT ĐĂNG NHẬP THÀNH NÚT TÀI KHOẢN
+      document.getElementById('authBtnLabel').textContent = 'Tài khoản';
+      document.getElementById('hdrAuthBtn').onclick = openProfileModal; // <--- Điểm mấu chốt
+
       if(ma_nhom_quyen === 14 || ma_nhom_quyen === 15) {
           switchViewMode('user');
       } else if (ma_nhom_quyen === 13) {
           document.getElementById('hdrSellerBtn').style.display = 'flex';
           switchViewMode('user');
       } else {
+          // ADMIN MẶC ĐỊNH VÀO TRANG QUẢN TRỊ
           switchViewMode('admin');
           await loadAndApplyAdminPermissions(ma_user);
       }
@@ -705,6 +722,122 @@ async function handleLogin(e) {
   } catch (error) {
     showToast('❌ Lỗi kết nối đến máy chủ Backend!');
   }
+}
+
+
+// 2. HÀM MỞ BẢNG THÔNG TIN CÁ NHÂN (Cho phép chỉnh sửa)
+function openProfileModal() {
+  if(!currentUser) return;
+
+  let ten_user = currentUser.ten_user || currentUser.FullName || "";
+  let sdt = currentUser.sdt || currentUser.Phone || "";
+  let dia_chi = currentUser.dia_chi || currentUser.Address || "";
+  let cmnd = currentUser.cmnd || currentUser.NationalId || "";
+  let ma_nhom_quyen = currentUser.ma_nhom_quyen || currentUser.Role_id;
+
+  let role = "Khách hàng";
+  if (ma_nhom_quyen === 20) role = "Quản trị viên (Admin)";
+  else if (ma_nhom_quyen === 13) role = "Đối tác Bán hàng";
+  else if (ma_nhom_quyen === 5) role = "Nhân viên Kế toán";
+  else if (currentUser.ten_nhom_quyen) role = currentUser.ten_nhom_quyen;
+
+  // Đổi các dòng text tĩnh thành thẻ <input> để nhập liệu
+  document.getElementById('profileDetails').innerHTML = `
+    <div style="margin-bottom: 12px;">👑 <b>Vai trò:</b> <span class="badge-status status-confirmed">${role}</span></div>
+
+    <div class="form-group">
+      <label>Họ và tên</label>
+      <input type="text" id="editName" value="${ten_user}" placeholder="Nhập họ tên...">
+    </div>
+    <div class="form-group">
+      <label>Số điện thoại</label>
+      <input type="tel" id="editPhone" value="${sdt === 'Chưa có SĐT' ? '' : sdt}" placeholder="Nhập SĐT...">
+    </div>
+    <div class="form-group">
+      <label>Địa chỉ giao hàng</label>
+      <input type="text" id="editAddress" value="${dia_chi === 'Chưa có địa chỉ' ? '' : dia_chi}" placeholder="Nhập địa chỉ...">
+    </div>
+    <div class="form-group">
+      <label>Số CMND/CCCD</label>
+      <input type="text" id="editCmnd" value="${cmnd === 'Chưa cập nhật CMND' ? '' : cmnd}" placeholder="Nhập số CMND/CCCD...">
+    </div>
+
+    <button class="btn-submit" style="background: var(--green); width: 100%; margin-top: 10px;" onclick="updateUserProfile()">💾 Lưu cập nhật thông tin</button>
+  `;
+
+  if(ma_nhom_quyen !== 14 && ma_nhom_quyen !== 15) {
+     document.getElementById('btnGoAdmin').style.display = 'block';
+  } else {
+     document.getElementById('btnGoAdmin').style.display = 'none';
+  }
+
+  document.getElementById('profileModal').classList.add('show');
+}
+
+// HÀM MỚI: GỬI DỮ LIỆU CẬP NHẬT LÊN SERVER
+async function updateUserProfile() {
+  const newName = document.getElementById('editName').value.trim();
+  const newPhone = document.getElementById('editPhone').value.trim();
+  const newAddress = document.getElementById('editAddress').value.trim();
+  const newCmnd = document.getElementById('editCmnd').value.trim();
+
+  if(!newName) { showToast("⚠️ Họ tên không được để trống!"); return; }
+
+  try {
+    const response = await fetch('http://localhost:5000/api/cap-nhat-profile', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        ma_user: currentUser.ma_user || currentUser.UserId,
+        ten_user: newName,
+        sdt: newPhone,
+        dia_chi: newAddress,
+        cmnd: newCmnd
+      })
+    });
+
+    const result = await response.json();
+    if(result.status === true) {
+      showToast('✅ ' + result.message);
+      // Cập nhật lại biến trên trình duyệt để không phải load lại trang
+      currentUser.ten_user = newName;
+      currentUser.sdt = newPhone;
+      currentUser.dia_chi = newAddress;
+      currentUser.cmnd = newCmnd;
+      document.getElementById('topbarUserText').innerHTML = `🟢 Xin chào: <b>${newName}</b>`;
+    } else {
+      showToast('❌ ' + result.message);
+    }
+  } catch (e) {
+    showToast('❌ Lỗi kết nối đến máy chủ Backend!');
+  }
+}
+// 3. CÁC HÀM ĐIỀU HƯỚNG TỪ MODAL
+function goToAdmin() {
+  closeModal('profileModal');
+  switchViewMode('admin');
+}
+
+function goToUser() {
+  closeModal('profileModal');
+  switchViewMode('user');
+}
+
+// 4. CẬP NHẬT HÀM ĐĂNG XUẤT
+function handleLogout() {
+  currentUser = null;
+  document.getElementById('topbarUserText').textContent = '👤 Chưa đăng nhập';
+  document.getElementById('authBtnLabel').textContent = 'Đăng nhập';
+  document.getElementById('hdrAuthBtn').onclick = openAuthModal;
+
+  document.getElementById('hdrHistoryBtn').style.display = 'none';
+  document.getElementById('hdrSellerBtn').style.display = 'none';
+
+  // Đóng profile và ép văng ra giao diện User
+  closeModal('profileModal');
+  switchViewMode('user');
+  cart = []; updateCartBadge();
+  showToast('Đã đăng xuất.');
 }
 // --- HÀM TẢI DANH SÁCH USER VÀO DROPDOWN ---
 async function loadUsersToDropdown() {
@@ -767,17 +900,7 @@ async function handleRegister(e) {
   }
 }
 
-function handleLogout() {
-  currentUser = null;
-  document.getElementById('topbarUserText').textContent = '👤 Chưa đăng nhập';
-  document.getElementById('authBtnLabel').textContent = 'Đăng nhập';
-  document.getElementById('hdrAuthBtn').onclick = openAuthModal;
-  document.getElementById('hdrHistoryBtn').style.display = 'none';
-  document.getElementById('hdrSellerBtn').style.display = 'none';
-  switchViewMode('user');
-  cart = []; updateCartBadge();
-  showToast('Đã đăng xuất tài khoản.');
-}
+
 
 // ==========================================
 // 3. API: QUẢN LÝ PHÂN QUYỀN & MENU ĐỘNG

@@ -54,7 +54,10 @@ class UserBus:
                 "data": {
                     "ma_user": user.ma_user,
                     "ten_user": user.ten_user,
-                    "ma_nhom_quyen": user.ma_nhom_quyen
+                    "ma_nhom_quyen": user.ma_nhom_quyen,
+                    "dia_chi":user.dia_chi,
+                    "sdt":user.sdt,
+                    "cmnd":user.cmnd
                 }
             }
         else:
@@ -65,11 +68,11 @@ class UserBus:
         danh_sach = self.dao.lay_danh_sach_user()
         return {"status": True, "data": danh_sach}
 
-    def cap_nhat_user(self, ma_user, ten_user, dia_chi, sdt):
+    def cap_nhat_user(self, ma_user, ten_user, dia_chi, sdt,cmnd):
         if not ma_user or not ten_user:
             return {"status": False, "message": "Tên người dùng không được để trống!"}
 
-        is_success = self.dao.cap_nhat_user(ma_user, ten_user, dia_chi, sdt)
+        is_success = self.dao.cap_nhat_user(ma_user, ten_user, dia_chi, sdt,cmnd)
         if is_success:
             return {"status": True, "message": "Cập nhật thông tin thành công!"}
         else:

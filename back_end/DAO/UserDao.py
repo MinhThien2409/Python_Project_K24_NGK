@@ -38,7 +38,7 @@ class UserDao:
 
         try:
             sql = """
-                SELECT UserId, FullName, Role_id 
+                SELECT UserId, FullName, Role_id ,Address,Phone,NationalId
                 FROM Users 
                 WHERE Username = ? AND Password = ?
             """
@@ -50,7 +50,10 @@ class UserDao:
                 return User(
                     ma_user=row.UserId,
                     ten_user=row.FullName,
-                    ma_nhom_quyen=row.Role_id
+                    ma_nhom_quyen=row.Role_id,
+                    dia_chi=row.Address,
+                    sdt=row.Phone,
+                    cmnd=row.NationalId
                 )
             return None
         except Exception as e:
@@ -113,13 +116,13 @@ class UserDao:
             cursor.close()
             conn.close()
 
-    def cap_nhat_user(self, ma_user, ten_user, dia_chi, sdt):
+    def cap_nhat_user(self, ma_user, ten_user, dia_chi, sdt,cmnd):
         conn = DBconnection.get_connection()
         if conn is None: return False
         cursor = conn.cursor()
         try:
-            sql = "UPDATE Users SET FullName=?, Address=?, Phone=? WHERE UserId=?"
-            cursor.execute(sql, (ten_user, dia_chi, sdt, ma_user))
+            sql = "UPDATE Users SET FullName=?, Address=?, Phone=?,NationalId=? WHERE UserId=?"
+            cursor.execute(sql, (ten_user, dia_chi, sdt,cmnd, ma_user))
             conn.commit()
             return cursor.rowcount > 0
         except Exception as e:

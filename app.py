@@ -95,5 +95,23 @@ def get_user_permissions_api(ma_user):
     ket_qua = phan_quyen_bus.lay_quyen_cua_user(ma_user)
     return jsonify(ket_qua)
 
+
+@app.route('/api/cap-nhat-profile', methods=['POST', 'OPTIONS'])
+def cap_nhat_profile():
+    # Xử lý lệnh "gõ cửa" thăm dò của trình duyệt
+    if request.method == 'OPTIONS':
+        return jsonify({"status": True}), 200
+
+    data = request.json
+    ma_user = data.get('ma_user')
+    ten_user = data.get('ten_user')
+    sdt = data.get('sdt')
+    dia_chi = data.get('dia_chi')
+    cmnd = data.get('cmnd')
+
+    # Gọi hàm cập nhật từ UserBus
+    ket_qua = user_bus.cap_nhat_user(ma_user, ten_user, dia_chi, sdt, cmnd)
+    return jsonify(ket_qua)
+
 if __name__ == '__main__':
     app.run(debug=True, port=5000)

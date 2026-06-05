@@ -1,6 +1,6 @@
 # app.py
 
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, render_template
 from flask_cors import CORS
 from back_end.BUS.UserBus import UserBus
 from back_end.BUS.PhanQuyenBus import PhanQuyenBus
@@ -12,6 +12,14 @@ CORS(app, resources={r"/*": {"origins": "*"}})
 # Khởi tạo bộ não BUS
 user_bus = UserBus()
 phan_quyen_bus = PhanQuyenBus()
+
+# ==========================================
+# 0. API HIỂN THỊ GIAO DIỆN CHÍNH (TRANG CHỦ)
+# ==========================================
+@app.route('/')
+def home():
+    # Lệnh này sẽ tìm file index.html trong thư mục templates và hiển thị lên trình duyệt
+    return render_template('index.html')
 
 # ==========================================
 # 1. API ĐĂNG KÝ TÀI KHOẢN

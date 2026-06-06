@@ -23,10 +23,54 @@ let sellers = [];
 // 1. CHUYỂN ĐỔI VIEW & ĐIỀU HƯỚNG
 // ==========================================
 function switchViewMode(mode) {
+  // Bật tắt 3 khối giao diện chính
   document.getElementById('userInterface').style.display = (mode === 'user') ? 'block' : 'none';
   document.getElementById('adminInterface').style.display = (mode === 'admin') ? 'block' : 'none';
+  document.getElementById('sellerDashboard').style.display = (mode === 'seller') ? 'block' : 'none';
 
-  if(mode === 'admin') initAdminDashboard();
+  // Đổi màu nút Active trên thanh chuyển đổi
+  document.querySelectorAll('.view-switcher button').forEach(btn => btn.classList.remove('active'));
+
+  if (mode === 'user') {
+      const btn = document.getElementById('btnViewUser');
+      if (btn) btn.classList.add('active');
+  }
+  else if (mode === 'admin') {
+      const btn = document.getElementById('btnViewAdmin');
+      if (btn) btn.classList.add('active');
+      initAdminDashboard(); // Tải dữ liệu tổng quan cho Admin
+  }
+  else if (mode === 'seller') {
+      const btn = document.getElementById('btnViewSeller');
+      if (btn) btn.classList.add('active');
+      switchSellerTab('overview'); // Mở tab mặc định của Seller
+  }
+}
+function switchSellerTab(tabName) {
+  // Tắt hết trạng thái active của menu bên trái
+  document.querySelectorAll('#sellerDashboard .admin-menu-item').forEach(el => el.classList.remove('active'));
+  // Ẩn hết các nội dung (pane) bên phải
+  document.querySelectorAll('#sellerDashboard .admin-pane').forEach(el => el.style.display = 'none');
+
+  // Bật menu và nội dung tương ứng
+  const menuItem = document.getElementById(`smenu-${tabName}`);
+  if (menuItem) menuItem.classList.add('active');
+
+  const paneItem = document.getElementById(`spane-${tabName}`);
+  if (paneItem) paneItem.style.display = 'block';
+
+  // Nơi đây sau này chúng ta sẽ gọi API tương ứng
+  if (tabName === 'overview') {
+      document.getElementById('sellerOverviewContent').innerHTML = `
+          <div style="padding: 20px; text-align: center; color: var(--text-muted);">
+              Đang tải dữ liệu tổng quan gian hàng...
+          </div>`;
+      // Ví dụ: fetch('/api/seller/overview')
+  } else if (tabName === 'products') {
+      // fetch('/api/seller/products')
+  } else if (tabName === 'orders') {
+      // fetch('/api/seller/orders')
+  }
 }
 
 function switchAdminTab(tabName) {
@@ -80,35 +124,23 @@ async function handleLogin(e) {
     if (result.status === true) {
       currentUser = result.data;
 
-      // Cập nhật tên hiển thị trên topbar
-      document.getElementById('topbarUserText').innerHTML =
-        `🟢 Xin chào: <b>${currentUser.ten_user}</b>`;
-      document.getElementById('authBtnLabel').textContent = currentUser.ten_user;
-
-      document.getElementById('hdrAuthBtn').style.display = 'none';
-      document.getElementById('hdrUserBtn').style.display = 'flex';
-      document.getElementById('userBtnLabel').textContent = currentUser.ten_user;
-
-      // Hiện các nút cần đăng nhập
-      document.getElementById('hdrProfileBtn').style.display = 'flex';
-      document.getElementById('hdrHistoryBtn').style.display = 'flex';
-      document.getElementById('hdrNotifBtn').style.display  = 'flex';
-      document.getElementById('hdrWishBtn').style.display   = 'flex';
-
-      closeModal('authModal'); // ✅ Đúng tên hàm
-
+      closeModal('authModal');
       showToast(`🎉 ${result.message}`);
+      updateHeaderForUser();
 
-      // Điều hướng theo quyền
-      if (currentUser.ma_nhom_quyen === 20) {
+      const maQuyen = currentUser.ma_nhom_quyen || currentUser.Role_id;
+      if (maQuyen === 20) {
         switchViewMode('admin');
+        loadAndApplyAdminPermissions(currentUser.ma_user);
       } else {
-        switchViewMode('user');
+        switchViewMode('user'); // Seller và Customer đều ở trang user
       }
 
     } else {
+      // ✅ Thêm else này — hiện lỗi khi sai tài khoản/mật khẩu
       showToast('❌ ' + result.message);
     }
+
   } catch (error) {
     console.error(error);
     showToast('❌ Lỗi kết nối máy chủ!');
@@ -237,6 +269,8 @@ function handleLogout() {
   document.getElementById('hdrAuthBtn').style.display = 'flex';
 document.getElementById('hdrUserBtn').style.display = 'none';
   document.getElementById('hdrAuthBtn').style.display    = 'flex';
+  document.getElementById('hdrRegisterSellerBtn').style.display = 'none';
+  document.getElementById('hdrGoSellerBtn').style.display = 'none';
 
   // Ẩn các nút chỉ hiện khi đã đăng nhập
   ['hdrProfileBtn', 'hdrHistoryBtn', 'hdrNotifBtn', 'hdrWishBtn', 'hdrSellerBtn'].forEach(id => {
@@ -381,7 +415,47 @@ async function handleSaveProfile(e) {
     showToast('❌ Lỗi kết nối đến máy chủ!');
   }
 }
+function updateHeaderForUser() {
+  if (!currentUser) return;
 
+  // Cập nhật tên và các nút cơ bản
+  document.getElementById('topbarUserText').innerHTML = `🟢 <b>${currentUser.ten_user || currentUser.FullName}</b>`;
+  document.getElementById('authBtnLabel').textContent = 'Tài khoản';
+
+  // Ẩn nút Đăng nhập, hiện nút User
+  document.getElementById('hdrAuthBtn').style.display = 'none';
+  document.getElementById('hdrUserBtn').style.display = 'flex';
+  document.getElementById('userBtnLabel').textContent = currentUser.ten_user || currentUser.FullName;
+  document.getElementById('hdrUserBtn').onclick = openProfileModal;
+
+  // Hiện các nút chức năng mặc định
+  document.getElementById('hdrProfileBtn').style.display = 'flex';
+  document.getElementById('hdrHistoryBtn').style.display = 'flex';
+  document.getElementById('hdrNotifBtn').style.display = 'flex';
+  document.getElementById('hdrWishBtn').style.display = 'flex';
+
+  // --- LOGIC PHÂN QUYỀN HIỂN THỊ NÚT SELLER ---
+  const maQuyen = currentUser.ma_nhom_quyen || currentUser.Role_id;
+
+  if (maQuyen === 20 || currentUser.role === 'Admin') {
+      // 1. Nếu là Admin -> Hiện thanh Admin màu đen trên cùng
+      document.getElementById('viewSwitcher').style.display = 'flex';
+      document.getElementById('hdrRegisterSellerBtn').style.display = 'none';
+      document.getElementById('hdrGoSellerBtn').style.display = 'none';
+  }
+  else if (maQuyen === 13 || currentUser.role === 'Seller') {
+      // 2. Nếu là Seller -> BẬT NÚT KÊNH NGƯỜI BÁN
+      document.getElementById('viewSwitcher').style.display = 'none';
+      document.getElementById('hdrRegisterSellerBtn').style.display = 'none';
+      document.getElementById('hdrGoSellerBtn').style.display = 'flex';
+  }
+  else {
+      // 3. Nếu là Khách hàng thường -> BẬT NÚT ĐĂNG KÝ BÁN
+      document.getElementById('viewSwitcher').style.display = 'none';
+      document.getElementById('hdrGoSellerBtn').style.display = 'none';
+      document.getElementById('hdrRegisterSellerBtn').style.display = 'flex';
+  }
+}
 async function savePermissions() {
   const ma_user = document.getElementById('permUserSelect').value;
   if(!ma_user) { showToast("⚠️ Vui lòng chọn một tài khoản trước khi lưu!"); return; }
@@ -463,6 +537,191 @@ function renderUserProducts(arr) {
         <div class="card-price">${p.price.toLocaleString('vi-VN')}đ</div>
       </div>
     </div>`).join('');
+}
+async function handleSellerRegister(e) {
+  e.preventDefault();
+
+  // Kiểm tra xem đã đăng nhập chưa
+  if (!currentUser) {
+      showToast("⚠️ Bạn cần đăng nhập để đăng ký bán hàng!");
+      return;
+  }
+
+  const shopName = document.getElementById('selShopName').value.trim();
+  const phone = document.getElementById('selPhone').value.trim();
+  const desc = document.getElementById('sellerDesc').value.trim();
+  const nationalId = document.getElementById('sellerNationalId').value.trim();
+
+  try {
+    const response = await fetch('http://localhost:5000/api/dang-ky-gian-hang', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        StoreName: shopName,
+        Address: desc, // Tạm mượn trường Address để lưu mô tả (bạn có thể tạo thêm cột trong DB sau)
+        UserId: currentUser.ma_user || currentUser.UserId
+      })
+    });
+
+    const result = await response.json();
+    if (result.status === true) {
+      showToast('🎉 ' + result.message);
+      closeModalById('sellerModal');
+
+      // Tùy chọn: Ép tải lại trang hoặc tự update quyền thành Seller (13) để trải nghiệm ngay
+      // currentUser.ma_nhom_quyen = 13;
+      // updateHeaderForUser();
+    } else {
+      showToast('❌ ' + result.message);
+    }
+  } catch (error) {
+    showToast('❌ Lỗi kết nối đến máy chủ!');
+  }
+}
+let currentPermType = 'user'; // Mặc định là phân quyền theo user
+
+function switchPermType(type) {
+    currentPermType = type;
+    const btnUser = document.getElementById('btnRoleTypeUser');
+    const btnGroup = document.getElementById('btnRoleTypeGroup');
+    const label = document.getElementById('permLabel');
+
+    if (type === 'user') {
+        // Đổi UI sang chế độ User
+        btnUser.style.background = 'var(--primary)'; btnUser.style.color = 'white';
+        btnGroup.style.background = 'white'; btnGroup.style.color = 'var(--text)';
+        label.textContent = 'Tài khoản cần phân quyền:';
+        loadUsersToDropdown(); // Gọi hàm cũ của bạn
+    } else {
+        // Đổi UI sang chế độ Group
+        btnGroup.style.background = 'var(--primary)'; btnGroup.style.color = 'white';
+        btnUser.style.background = 'white'; btnUser.style.color = 'var(--text)';
+        label.textContent = 'Nhóm quyền cần cấu hình:';
+        loadRolesToDropdown(); // Hàm mới (xem bên dưới)
+    }
+
+    document.querySelectorAll('#tblPermissionsBody input[type="checkbox"]')
+        .forEach(cb => cb.checked = false);
+}
+
+// Hàm load danh sách các nhóm quyền (Hardcode hoặc lấy từ API)
+function loadRolesToDropdown() {
+    const selectBox = document.getElementById('permUserSelect');
+    if (!selectBox) return;
+
+    // Vì nhóm quyền ít khi thay đổi, bạn có thể cấu hình cứng ở đây cho nhanh
+    selectBox.innerHTML = `
+    <option value="">-- Chọn nhóm quyền --</option>
+    <option value="20">🛠️ Quản trị viên (Admin)</option>
+    <option value="13">🏪 Đối tác Bán hàng (Seller)</option>
+    <option value="5">💰 Nhân viên Kế toán</option>
+    <option value="14">👤 Khách hàng mặc định</option>
+    `;
+}
+async function apDungQuyenNhomChoUser() {
+    // Chỉ hoạt động khi đang ở chế độ phân quyền cá nhân
+    if (currentPermType !== 'user') {
+        showToast("⚠️ Chức năng này chỉ dùng khi phân quyền theo Cá nhân!");
+        return;
+    }
+
+    const ma_user = document.getElementById('permUserSelect').value;
+    if (!ma_user) {
+        showToast("⚠️ Vui lòng chọn tài khoản trước!");
+        return;
+    }
+
+    // Xác nhận trước khi thực hiện
+    if (!confirm("Thao tác này sẽ XÓA mọi quyền ngoại lệ và đặt lại về quyền mặc định của nhóm. Tiếp tục?")) return;
+
+    try {
+        const res = await fetch('http://localhost:5000/api/ap-dung-quyen-nhom-cho-user', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ ma_user: ma_user })
+        });
+        const result = await res.json();
+
+        showToast((result.status ? '✅ ' : '❌ ') + result.message);
+
+        // Tự động tải lại quyền mới để hiển thị lên bảng
+        if (result.status) loadPermissionsData();
+
+    } catch(e) {
+        showToast("❌ Lỗi kết nối server!");
+    }
+}
+async function loadPermissionsData() {
+    const targetId = document.getElementById('permUserSelect').value;
+    if (!targetId) {
+        showToast("⚠️ Vui lòng chọn đối tượng để xem quyền!");
+        return;
+    }
+
+    // Nếu là user thì gọi API user, nếu là group thì gọi API group
+    const apiUrl = currentPermType === 'user'
+        ? `http://localhost:5000/api/quyen-cua-user/${targetId}`
+        : `http://localhost:5000/api/quyen-cua-nhom/${targetId}`;
+
+    try {
+        const res = await fetch(apiUrl);
+        const result = await res.json();
+
+        if (result.status === true) {
+            toggleAllPermissions(false);
+            // ... Logic tick checkbox giống hệt hàm cũ của bạn
+            result.data.forEach(q => {
+               let cbView = document.querySelector(`.cb-view[data-mod="${q.ma_chuc_nang}"]`);
+               let cbAdd = document.querySelector(`.cb-add[data-mod="${q.ma_chuc_nang}"]`);
+               let cbEdit = document.querySelector(`.cb-edit[data-mod="${q.ma_chuc_nang}"]`);
+               let cbDelete = document.querySelector(`.cb-delete[data-mod="${q.ma_chuc_nang}"]`);
+
+               if(cbView) cbView.checked = q.xem;
+               if(cbAdd) cbAdd.checked = q.them;
+               if(cbEdit) cbEdit.checked = q.sua;
+               if(cbDelete) cbDelete.checked = q.xoa;
+            });
+            showToast('✅ Đã tải cấu hình phân quyền!');
+        } else {
+            showToast('❌ ' + result.message);
+        }
+    } catch(e) {
+        showToast("❌ Lỗi kết nối Server!");
+    }
+}
+
+async function savePermissionsData() {
+    const targetId = document.getElementById('permUserSelect').value;
+    if (!targetId) { showToast("⚠️ Vui lòng chọn đối tượng trước khi lưu!"); return; }
+
+    let permissionsData = [];
+    sysModules.forEach(m => {
+        permissionsData.push({
+            ma_chuc_nang: m.id,
+            xem: document.querySelector(`.cb-view[data-mod="${m.id}"]`)?.checked || false,
+            them: document.querySelector(`.cb-add[data-mod="${m.id}"]`)?.checked || false,
+            sua: document.querySelector(`.cb-edit[data-mod="${m.id}"]`)?.checked || false,
+            xoa: document.querySelector(`.cb-delete[data-mod="${m.id}"]`)?.checked || false
+        });
+    });
+
+    const apiUrl = currentPermType === 'user'
+        ? 'http://localhost:5000/api/cap-quyen-ngoai-le'  // API lưu cho user
+        : 'http://localhost:5000/api/cap-quyen-nhom';    // API lưu cho nhóm (role)
+
+    const payload = currentPermType === 'user'
+        ? { ma_user: targetId, permissions: permissionsData }
+        : { role_id: targetId, permissions: permissionsData };
+
+    try {
+        const response = await fetch(apiUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        const result = await response.json();
+        showToast((result.status ? '💾 ' : '❌ ') + result.message);
+    } catch(e) { showToast("❌ Lỗi kết nối lưu phân quyền!"); }
 }
 
 // KHỞI CHẠY GIAO DIỆN MẶC ĐỊNH

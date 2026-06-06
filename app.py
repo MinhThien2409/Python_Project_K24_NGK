@@ -4,6 +4,12 @@ from flask import Flask, request, jsonify, render_template
 from flask_cors import CORS
 from back_end.BUS.UserBus import UserBus
 from back_end.BUS.PhanQuyenBus import PhanQuyenBus
+from back_end.Model.GianHang import GianHang
+from back_end.Model.YeuCau import YeuCau
+from back_end.BUS.GianHangBus import GianHangBus
+
+
+
 
 app = Flask(__name__)
 # Dòng này cho phép mọi cổng (3000, 5500, 63342...) đều được gọi vào Flask
@@ -12,6 +18,8 @@ CORS(app, resources={r"/*": {"origins": "*"}})
 # Khởi tạo bộ não BUS
 user_bus = UserBus()
 phan_quyen_bus = PhanQuyenBus()
+gian_hang_bus = GianHangBus()
+
 
 # ==========================================
 # 0. API HIỂN THỊ GIAO DIỆN CHÍNH (TRANG CHỦ)
@@ -122,5 +130,90 @@ def cap_nhat_profile():
     ket_qua = user_bus.cap_nhat_user(ma_user, ten_user, dia_chi, sdt, cmnd)
     return jsonify(ket_qua)
 
+
+@app.route('/api/dang-ky-gian-hang', methods=['POST'])
+def api_dang_ky_gian_hang():
+    data = request.json
+    req = YeuCau(
+        UserId       = data.get('UserId'),
+        ShopName     = data.get('StoreName'),
+        BusinessPhone= data.get('Phone'),
+        Category     = data.get('Category'),
+        Description  = data.get('Description'),
+        NationalId   = data.get('NationalId')
+    )
+    return jsonify(gian_hang_bus.dang_ky_gian_hang(req))
+
+@app.route('/api/seller-requests', methods=['GET'])
+def api_lay_yeu_cau():
+    return jsonify(gian_hang_bus.lay_danh_sach_yeu_cau())
+
+@app.route('/api/duyet-seller/<int:request_id>', methods=['POST'])
+def api_duyet_seller(request_id):
+    data = request.json
+    reviewed_by = data.get('reviewed_by')  # UserId của Admin
+    return jsonify(gian_hang_bus.duyet_yeu_cau(request_id, reviewed_by))
+
+@app.route('/api/tu-choi-seller/<int:request_id>', methods=['POST'])
+def api_tu_choi_seller(request_id):
+    data = request.json
+    return jsonify(gian_hang_bus.tu_choi_yeu_cau(
+        request_id,
+        data.get('reviewed_by'),
+        data.get('ly_do', '')
+    ))
+
+# ─── ROUTE: LẤY QUYỀN CỦA MỘT NHÓM ─────────────────────────
+@app.route('/api/quyen-cua-nhom/<int:ma_nhom>', methods=['GET'])
+def quyen_cua_nhom(ma_nhom):
+    try:
+        result = phan_quyen_bus.lay_quyen_cua_nhom(ma_nhom)
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({"status": False, "message": f"Lỗi server: {str(e)}"}), 500
+
+
+# ─── ROUTE: LƯU QUYỀN CHO MỘT NHÓM ──────────────────────────
+@app.route('/api/cap-quyen-nhom', methods=['POST'])
+def cap_quyen_nhom():
+    try:
+        data = request.get_json()
+        role_id     = data.get('role_id')
+        permissions = data.get('permissions', [])
+
+        if not role_id:
+            return jsonify({"status": False, "message": "Thiếu role_id!"}), 400
+
+        loi = []
+        for p in permissions:
+            result = phan_quyen_bus.cap_nhat_quyen(
+                ma_nhom      = role_id,
+                ma_chuc_nang = p.get('ma_chuc_nang'),
+                xem          = p.get('xem',  False),
+                them         = p.get('them', False),
+                sua          = p.get('sua',  False),
+                xoa          = p.get('xoa',  False)
+            )
+            if not result['status']:
+                loi.append(p.get('ma_chuc_nang'))
+
+        if loi:
+            return jsonify({"status": False, "message": f"Lỗi khi lưu chức năng ID: {loi}"})
+
+        return jsonify({"status": True, "message": f"Đã lưu quyền cho nhóm ID {role_id} thành công!"})
+
+    except Exception as e:
+        return jsonify({"status": False, "message": f"Lỗi server: {str(e)}"}), 500
+
+
+@app.route('/api/ap-dung-quyen-nhom-cho-user', methods=['POST'])
+def ap_dung_quyen_nhom_cho_user():
+        data = request.get_json()
+        ma_user = data.get('ma_user')
+        if not ma_user:
+            return jsonify({"status": False, "message": "Thiếu ma_user!"}), 400
+
+        ket_qua = phan_quyen_bus.ap_dung_quyen_nhom_cho_user(ma_user)
+        return jsonify(ket_qua)
 if __name__ == '__main__':
     app.run(debug=True, port=5000)

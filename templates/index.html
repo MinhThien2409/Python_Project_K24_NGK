@@ -65,6 +65,17 @@
           <span class="label">Yêu thích</span>
           <span class="badge" id="wishBadge" style="display:none;">0</span>
         </button>
+<button class="hdr-btn" id="hdrRegisterSellerBtn" onclick="document.getElementById('sellerModal').classList.add('show')" style="display:none;">
+          <span class="icon">📝</span>
+          <span class="label">Đăng ký bán</span>
+        </button>
+
+        <!-- Nút Kênh Người Bán (Chỉ hiện cho tài khoản Seller) -->
+        <button class="hdr-btn" id="hdrGoSellerBtn" onclick="switchViewMode('seller')" style="display:none;">
+          <span class="icon">🏪</span>
+          <span class="label">Kênh Người Bán</span>
+        </button>
+
         <button class="hdr-btn" onclick="openCart()">
           <span class="icon">🛒</span>
           <span class="label">Giỏ hàng</span>
@@ -337,16 +348,24 @@
         <div class="admin-card">
           <h3 style="margin-bottom: 20px;">Cấu hình Phân quyền hệ thống</h3>
           <div style="display: flex; gap: 16px; margin-bottom: 20px; align-items: center; border-bottom: 1px solid var(--border); padding-bottom: 16px;">
-            <span style="font-weight: 700; font-size: 14px;">Phân quyền theo:</span>
-            <button id="btnRoleTypeUser" class="checkout-btn" style="background: var(--primary); color: white; padding: 6px 16px; border-radius: 6px; border: 1px solid var(--primary);">Cá nhân (Tài khoản)</button>
-            <button id="btnRoleTypeGroup" class="checkout-btn" style="background: white; color: var(--text); padding: 6px 16px; border-radius: 6px; border: 1px solid var(--border);">Nhóm quyền</button>
-          </div>
-          <div style="margin-bottom: 16px; display: flex; align-items: center; gap: 10px;">
-              <label style="font-weight: 700; font-size: 14px;">Tài khoản cần phân quyền:</label>
-              <select id="permUserSelect" style="padding: 10px; border: 1px solid var(--border); border-radius: 6px; width: 250px; font-family: inherit;"></select>
-              <button class="checkout-btn" style="background: #e2e8f0; color: #1e293b; padding: 10px 20px;" onclick="loadUserPermissions()">Xem quyền</button>
-              <button class="checkout-btn" style="background: var(--primary); padding: 10px 24px; margin-left: auto; box-shadow: 0 4px 12px rgba(145,22,212,0.3);" onclick="savePermissions()">💾 Lưu cấu hình phân quyền</button>
-          </div>
+  <span style="font-weight: 700; font-size: 14px;">Phân quyền theo:</span>
+  <button id="btnRoleTypeUser" class="checkout-btn" style="background: var(--primary); color: white; padding: 6px 16px; border-radius: 6px; border: 1px solid var(--primary);" onclick="switchPermType('user')">Cá nhân (Tài khoản)</button>
+  <button id="btnRoleTypeGroup" class="checkout-btn" style="background: white; color: var(--text); padding: 6px 16px; border-radius: 6px; border: 1px solid var(--border);" onclick="switchPermType('group')">Nhóm quyền</button>
+</div>
+
+<div style="margin-bottom: 16px; display: flex; align-items: center; gap: 10px;">
+    <label id="permLabel" style="font-weight: 700; font-size: 14px;">Tài khoản cần phân quyền:</label>
+    <select id="permUserSelect" style="padding: 10px; border: 1px solid var(--border); border-radius: 6px; width: 250px; font-family: inherit;"></select>
+
+    <button class="checkout-btn" style="background: #e2e8f0; color: #1e293b; padding: 10px 20px;" onclick="loadPermissionsData()">Xem quyền</button>
+    <button class="checkout-btn"
+        style="background: #e67e22; color: white; padding: 10px 20px;"
+        onclick="apDungQuyenNhomChoUser()">
+    🔄 Áp dụng quyền nhóm
+</button>
+    <button class="checkout-btn" style="background: var(--primary); padding: 10px 24px; margin-left: auto; box-shadow: 0 4px 12px rgba(145,22,212,0.3);" onclick="savePermissionsData()">💾 Lưu cấu hình</button>
+</div>
+
           <table style="border: 1px solid var(--border);">
             <thead>
               <tr style="background: #f1f5f9; color: #334155;">

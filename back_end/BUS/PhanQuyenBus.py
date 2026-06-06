@@ -49,3 +49,20 @@ class PhanQuyenBus:
 
         danh_sach = self.dao.lay_quyen_cua_user(ma_user)
         return {"status": True, "data": danh_sach}
+
+    def lay_quyen_cua_nhom(self, ma_nhom):
+        if not ma_nhom:
+            return {"status": False, "message": "Thiếu mã nhóm quyền!", "data": []}
+
+        danh_sach = self.dao.lay_quyen_cua_nhom(ma_nhom)  # Bạn đã có trong DAO
+        return {"status": True, "data": danh_sach}
+
+    def ap_dung_quyen_nhom_cho_user(self, ma_user):
+        if not ma_user:
+            return {"status": False, "message": "Thiếu mã user!"}
+
+        is_success = self.dao.ap_dung_quyen_nhom_cho_user(ma_user)
+        if is_success:
+            return {"status": True, "message": f"Đã áp dụng quyền nhóm cho tài khoản ID {ma_user}!"}
+        else:
+            return {"status": False, "message": "Lỗi khi áp dụng quyền nhóm. Kiểm tra xem nhóm có user khác không!"}

@@ -1,7 +1,18 @@
 class YeuCau:
-    def __init__(self,ma_yeu_cau=None,ma_user=None,cmnd_upload=None,ngaygui=None,trangthai="Chờ duyệt"):
-        self.ma_yeu_cau = ma_yeu_cau
-        self.ma_user = ma_user
-        self.cmnd_upload = cmnd_upload
-        self.ngaygui = ngaygui
-        self.trangthai = trangthai
+    def __init__(self, RequestId=None, UserId=None, ShopName=None,
+                 BusinessPhone=None, Category=None, Description=None,
+                 NationalId=None, Status='pending',
+                 CreatedAt=None, ReviewedBy=None,
+                 ReviewedAt=None, RejectReason=None):
+        self.RequestId     = RequestId
+        self.UserId        = UserId
+        self.ShopName      = ShopName
+        self.BusinessPhone = BusinessPhone
+        self.Category      = Category
+        self.Description   = Description
+        self.NationalId    = NationalId
+        self.Status        = Status
+        self.CreatedAt     = CreatedAt
+        self.ReviewedBy    = ReviewedBy
+        self.ReviewedAt    = ReviewedAt
+        self.RejectReason  = RejectReason

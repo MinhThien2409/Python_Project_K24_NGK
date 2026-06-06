@@ -526,20 +526,81 @@ function initAdminDashboard() {
   document.getElementById('statProducts').textContent = products.length;
 }
 
-function applyUserFilters() { renderUserProducts(products); }
+function applyUserFilters() {
+  let filtered = [...products]; // products đã là data từ API sau loadProducts()
 
-function renderUserProducts(arr) {
-  const container = document.getElementById('userProductsGrid');
-  if(!container) return;
-  container.innerHTML = arr.map(p => `
-    <div class="product-card">
-      <div class="card-img">${p.emoji}</div>
-      <div class="card-body">
-        <div class="card-title">${p.name}</div>
-        <div class="card-price">${p.price.toLocaleString('vi-VN')}đ</div>
-      </div>
-    </div>`).join('');
+  // Lọc theo danh mục checkbox
+  const checkedCats = [...document.querySelectorAll('#filterCatList input:checked')]
+    .map(cb => cb.value);
+  if (checkedCats.length > 0) {
+    filtered = filtered.filter(p => checkedCats.includes(p.category_name));
+  }
+
+  // Lọc theo search text
+  const searchText = document.getElementById('userSearchInput')?.value.toLowerCase() || '';
+  if (searchText) {
+    filtered = filtered.filter(p => p.name.toLowerCase().includes(searchText));
+  }
+
+  // Lọc theo giá
+  const priceMin = Number(document.getElementById('priceMin')?.value) || 0;
+  const priceMax = Number(document.getElementById('priceMax')?.value) || Infinity;
+  if (priceMin || priceMax !== Infinity) {
+    filtered = filtered.filter(p => p.price >= priceMin && p.price <= priceMax);
+  }
+
+  // Lọc theo danh mục dropdown header
+  const catSelect = document.getElementById('searchCategorySelect')?.value;
+  if (catSelect && catSelect !== 'all') {
+    filtered = filtered.filter(p => p.category_name === catSelect);
+  }
+
+  // Sắp xếp
+  const sort = document.getElementById('sortSelect')?.value || 'default';
+  if (sort === 'price-asc')  filtered.sort((a, b) => a.price - b.price);
+  if (sort === 'price-desc') filtered.sort((a, b) => b.price - a.price);
+  if (sort === 'rating')     filtered.sort((a, b) => (b.rating||0) - (a.rating||0));
+  if (sort === 'bestseller') filtered.sort((a, b) => (b.sold||0) - (a.sold||0));
+
+  renderUserProducts(filtered);
 }
+function addToCart(productId) {
+  if (!currentUser) {
+    showToast('⚠️ Vui lòng đăng nhập để mua hàng!');
+    openAuthModal();
+    return;
+  }
+
+  const product = products.find(p => p.id === productId);
+  if (!product) return;
+
+  const existing = cart.find(c => c.id === productId);
+  if (existing) {
+    existing.qty += 1;
+  } else {
+    cart.push({ ...product, qty: 1 });
+  }
+
+  updateCartBadge();
+  showToast(`✅ Đã thêm "${product.name}" vào giỏ hàng!`);
+}
+
+async function loadProducts() {
+  try {
+    const res    = await fetch('http://localhost:5000/api/products');
+    const result = await res.json();
+    if (result.status) {
+      products = result.data; // Cập nhật biến global
+      renderUserProducts(products);
+    }
+  } catch (e) {
+    console.error('Lỗi load sản phẩm:', e);
+  }
+}
+
+// Cuối file - thay renderUserProducts(products) bằng:
+loadCategories();
+loadProducts();  // ← Thay dòng này
 async function handleSellerRegister(e) {
   e.preventDefault();
   if (!currentUser) { showToast('⚠️ Vui lòng đăng nhập trước!'); return; }
@@ -823,6 +884,33 @@ async function loadCategories() {
     console.error('Lỗi load categories:', e);
   }
 }
+function renderUserProducts(arr) {
+  const container = document.getElementById('userProductsGrid');
+  if (!container) return;
+
+  if (!arr || arr.length === 0) {
+    container.innerHTML = `
+      <div class="empty-state" style="grid-column:1/-1;">
+        <div class="icon">📦</div>
+        <p>Không có sản phẩm nào</p>
+      </div>`;
+    return;
+  }
+
+  container.innerHTML = arr.map(p => `
+    <div class="product-card" onclick="openProductDetail(${p.id})">
+      <div class="card-img">${p.emoji || '📦'}</div>
+      <div class="card-body">
+        <div class="card-title">${p.name}</div>
+        ${p.old_price ? `<div style="font-size:12px; color:var(--text-muted); text-decoration:line-through;">${Number(p.old_price).toLocaleString('vi-VN')}đ</div>` : ''}
+        <div class="card-price">${Number(p.price).toLocaleString('vi-VN')}đ</div>
+        <div class="card-footer">
+          <span style="font-size:11px; color:var(--text-muted);">⭐ ${p.rating || 4.5} · Đã bán ${p.sold || 0}</span>
+          <button class="add-cart-btn" onclick="event.stopPropagation(); addToCart(${p.id})">+ Giỏ hàng</button>
+        </div>
+      </div>
+    </div>`).join('');
+}
 
 // Hàm mở modal đăng ký gian hàng - load categories trước
 function openSellerRegisterModal() {
@@ -837,4 +925,4 @@ function openSellerRegisterModal() {
 
 // KHỞI CHẠY GIAO DIỆN MẶC ĐỊNH
 loadCategories();
-renderUserProducts(products);
+loadProducts();

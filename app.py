@@ -8,6 +8,7 @@ from back_end.Model.GianHang import GianHang
 from back_end.Model.YeuCau import YeuCau
 from back_end.BUS.GianHangBus import GianHangBus
 from back_end.BUS.DanhMucBus import DanhMucBus
+from back_end.BUS.SanPhamBus import SanPhamBus
 
 
 
@@ -22,6 +23,7 @@ category_bus = DanhMucBus()
 user_bus = UserBus()
 phan_quyen_bus = PhanQuyenBus()
 gian_hang_bus = GianHangBus()
+san_pham_bus = SanPhamBus()
 
 
 # ==========================================
@@ -245,5 +247,58 @@ def update_category(category_id):
 @app.route('/api/categories/<int:category_id>', methods=['DELETE'])
 def delete_category(category_id):
     return jsonify(category_bus.xoa_category(category_id))
+# ==========================================
+# API SẢN PHẨM
+# ==========================================
+@app.route('/api/products', methods=['GET'])
+def get_products():
+    return jsonify(san_pham_bus.lay_tat_ca())
+
+@app.route('/api/products/<int:product_id>', methods=['GET'])
+def get_product_detail(product_id):
+    return jsonify(san_pham_bus.lay_theo_id(product_id))
+
+@app.route('/api/products/store/<int:store_id>', methods=['GET'])
+def get_products_by_store(store_id):
+    return jsonify(san_pham_bus.lay_theo_store(store_id))
+
+@app.route('/api/products/best-sellers', methods=['GET'])
+def get_best_sellers():
+    return jsonify(san_pham_bus.lay_ban_chay())
+
+@app.route('/api/products', methods=['POST'])
+def add_product():
+    d = request.json
+    return jsonify(san_pham_bus.them_san_pham(
+        ten        = d.get('name'),
+        mo_ta      = d.get('description'),
+        gia        = d.get('price'),
+        gia_goc    = d.get('old_price'),
+        so_luong   = d.get('quantity'),
+        rating     = d.get('rating'),
+        emoji      = d.get('emoji'),
+        category_id= d.get('category_id'),
+        store_id   = d.get('store_id')
+    ))
+
+@app.route('/api/products/<int:product_id>', methods=['PUT'])
+def update_product(product_id):
+    d = request.json
+    return jsonify(san_pham_bus.sua_san_pham(
+        product_id = product_id,
+        ten        = d.get('name'),
+        mo_ta      = d.get('description'),
+        gia        = d.get('price'),
+        gia_goc    = d.get('old_price'),
+        so_luong   = d.get('quantity'),
+        rating     = d.get('rating'),
+        emoji      = d.get('emoji'),
+        category_id= d.get('category_id'),
+        store_id   = d.get('store_id')
+    ))
+
+@app.route('/api/products/<int:product_id>', methods=['DELETE'])
+def delete_product(product_id):
+    return jsonify(san_pham_bus.xoa_san_pham(product_id))
 if __name__ == '__main__':
     app.run(debug=True, port=5000)

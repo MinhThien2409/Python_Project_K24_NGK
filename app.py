@@ -7,6 +7,7 @@ from back_end.BUS.PhanQuyenBus import PhanQuyenBus
 from back_end.Model.GianHang import GianHang
 from back_end.Model.YeuCau import YeuCau
 from back_end.BUS.GianHangBus import GianHangBus
+from back_end.BUS.DanhMucBus import DanhMucBus
 
 
 
@@ -14,6 +15,8 @@ from back_end.BUS.GianHangBus import GianHangBus
 app = Flask(__name__)
 # Dòng này cho phép mọi cổng (3000, 5500, 63342...) đều được gọi vào Flask
 CORS(app, resources={r"/*": {"origins": "*"}})
+
+category_bus = DanhMucBus()
 
 # Khởi tạo bộ não BUS
 user_bus = UserBus()
@@ -215,5 +218,32 @@ def ap_dung_quyen_nhom_cho_user():
 
         ket_qua = phan_quyen_bus.ap_dung_quyen_nhom_cho_user(ma_user)
         return jsonify(ket_qua)
+# Thêm vào app.py
+@app.route('/api/doi-mat-khau', methods=['POST'])
+def doi_mat_khau():
+    data = request.json
+    ket_qua = user_bus.doi_mat_khau(
+        ma_user     = data.get('ma_user'),
+        mat_khau_cu = data.get('mat_khau_cu'),
+        mat_khau_moi= data.get('mat_khau_moi')
+    )
+    return jsonify(ket_qua)
+@app.route('/api/categories', methods=['GET'])
+def get_categories():
+    return jsonify(category_bus.lay_tat_ca())
+
+@app.route('/api/categories', methods=['POST'])
+def add_category():
+    data = request.json
+    return jsonify(category_bus.them_category(data.get('name')))
+
+@app.route('/api/categories/<int:category_id>', methods=['PUT'])
+def update_category(category_id):
+    data = request.json
+    return jsonify(category_bus.sua_category(category_id, data.get('name')))
+
+@app.route('/api/categories/<int:category_id>', methods=['DELETE'])
+def delete_category(category_id):
+    return jsonify(category_bus.xoa_category(category_id))
 if __name__ == '__main__':
     app.run(debug=True, port=5000)

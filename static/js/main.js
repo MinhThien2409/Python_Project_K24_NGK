@@ -89,6 +89,8 @@ function switchAdminTab(tabName) {
           loadUsersToDropdown();
       }, 100);
   }
+
+    if (tabName === 'sellers') renderAdminSellers();
 }
 
 // ==========================================
@@ -540,42 +542,28 @@ function renderUserProducts(arr) {
 }
 async function handleSellerRegister(e) {
   e.preventDefault();
+  if (!currentUser) { showToast('⚠️ Vui lòng đăng nhập trước!'); return; }
 
-  // Kiểm tra xem đã đăng nhập chưa
-  if (!currentUser) {
-      showToast("⚠️ Bạn cần đăng nhập để đăng ký bán hàng!");
-      return;
-  }
-
-  const shopName = document.getElementById('selShopName').value.trim();
-  const phone = document.getElementById('selPhone').value.trim();
-  const desc = document.getElementById('sellerDesc').value.trim();
-  const nationalId = document.getElementById('sellerNationalId').value.trim();
+  const body = {
+    UserId     : currentUser.ma_user,
+    StoreName  : document.getElementById('selShopName').value.trim(),
+    Phone      : document.getElementById('selPhone').value.trim(),
+    Category   : document.getElementById('selCat').value,
+    Description: document.getElementById('sellerDesc').value.trim(),
+    NationalId : document.getElementById('sellerNationalId').value.trim()
+  };
 
   try {
-    const response = await fetch('http://localhost:5000/api/dang-ky-gian-hang', {
-      method: 'POST',
+    const res    = await fetch('http://localhost:5000/api/dang-ky-gian-hang', {
+      method : 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        StoreName: shopName,
-        Address: desc, // Tạm mượn trường Address để lưu mô tả (bạn có thể tạo thêm cột trong DB sau)
-        UserId: currentUser.ma_user || currentUser.UserId
-      })
+      body   : JSON.stringify(body)
     });
-
-    const result = await response.json();
-    if (result.status === true) {
-      showToast('🎉 ' + result.message);
-      closeModalById('sellerModal');
-
-      // Tùy chọn: Ép tải lại trang hoặc tự update quyền thành Seller (13) để trải nghiệm ngay
-      // currentUser.ma_nhom_quyen = 13;
-      // updateHeaderForUser();
-    } else {
-      showToast('❌ ' + result.message);
-    }
-  } catch (error) {
-    showToast('❌ Lỗi kết nối đến máy chủ!');
+    const result = await res.json();
+    showToast(result.status ? '🎉 ' + result.message : '❌ ' + result.message);
+    if (result.status) closeModal('sellerModal');
+  } catch (e) {
+    showToast('❌ Lỗi kết nối!');
   }
 }
 let currentPermType = 'user'; // Mặc định là phân quyền theo user
@@ -723,6 +711,130 @@ async function savePermissionsData() {
         showToast((result.status ? '💾 ' : '❌ ') + result.message);
     } catch(e) { showToast("❌ Lỗi kết nối lưu phân quyền!"); }
 }
+// Thêm hàm render bảng Sellers trong admin (tab sellers)
+async function renderAdminSellers() {
+  try {
+    const res    = await fetch('http://localhost:5000/api/seller-requests');
+    const result = await res.json();
+    const tbody  = document.getElementById('tblAdminSellersBody');
+
+    if (!result.status || !result.data.length) {
+      tbody.innerHTML = `<tr><td colspan="7" style="text-align:center; color:var(--text-muted);">Chưa có yêu cầu nào</td></tr>`;
+      return;
+    }
+
+    tbody.innerHTML = result.data.map(r => `
+      <tr>
+        <td><b>${r.shop_name}</b></td>
+        <td>${r.ten_user}</td>
+        <td>${r.phone}</td>
+        <td>${r.category}</td>
+        <td style="max-width:160px; font-size:12px; color:var(--text-secondary);">${r.description || '—'}</td>
+        <td>
+          ${r.status === 'pending'  ? '<span class="badge-status status-pending">Chờ duyệt</span>'   : ''}
+          ${r.status === 'approved' ? '<span class="badge-status status-confirmed">Đã duyệt</span>'  : ''}
+          ${r.status === 'rejected' ? '<span class="badge-status status-cancelled">Từ chối</span>'   : ''}
+        </td>
+        <td>
+          ${r.status === 'pending' ? `
+            <button class="admin-action-btn btn-confirm" onclick="duyetSeller(${r.request_id})">✅ Duyệt</button>
+            <button class="admin-action-btn btn-cancel"  onclick="tuChoiSeller(${r.request_id})">❌ Từ chối</button>
+          ` : '—'}
+        </td>
+      </tr>
+    `).join('');
+
+    // Cập nhật badge số đơn chờ
+    const pending = result.data.filter(r => r.status === 'pending').length;
+    document.getElementById('sellerPendingBadge').textContent = pending ? `(${pending})` : '';
+
+  } catch (e) {
+    showToast('❌ Không thể tải danh sách yêu cầu người bán!');
+  }
+}
+
+async function duyetSeller(request_id) {
+  if (!confirm('Xác nhận duyệt yêu cầu này? Tài khoản sẽ được cấp quyền Seller.')) return;
+  try {
+    const res    = await fetch(`http://localhost:5000/api/duyet-seller/${request_id}`, {
+      method : 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body   : JSON.stringify({ reviewed_by: currentUser?.ma_user })
+    });
+    const result = await res.json();
+    showToast(result.status ? '✅ ' + result.message : '❌ ' + result.message);
+    if (result.status) renderAdminSellers(); // Reload bảng
+  } catch (e) {
+    showToast('❌ Lỗi kết nối!');
+  }
+}
+
+async function tuChoiSeller(request_id) {
+  const ly_do = prompt('Lý do từ chối (tuỳ chọn):') ?? '';
+  try {
+    const res    = await fetch(`http://localhost:5000/api/tu-choi-seller/${request_id}`, {
+      method : 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body   : JSON.stringify({ reviewed_by: currentUser?.ma_user, ly_do })
+    });
+    const result = await res.json();
+    showToast(result.status ? '✅ ' + result.message : '❌ ' + result.message);
+    if (result.status) renderAdminSellers();
+  } catch (e) {
+    showToast('❌ Lỗi kết nối!');
+  }
+}
+// Load danh mục từ API đổ vào tất cả dropdowns
+async function loadCategories() {
+  try {
+    const res    = await fetch('http://localhost:5000/api/categories');
+    const result = await res.json();
+    if (!result.status || !result.data.length) return;
+
+    const options = result.data.map(c =>
+      `<option value="${c.name}">${c.name}</option>`
+    ).join('');
+
+    // Đổ vào dropdown đăng ký gian hàng
+    const selCat = document.getElementById('selCat');
+    if (selCat) selCat.innerHTML = options;
+
+    // Đổ vào dropdown thêm sản phẩm (admin)
+    const prodCat = document.getElementById('prodCategory');
+    if (prodCat) prodCat.innerHTML = options;
+
+    // Đổ vào thanh tìm kiếm header
+    const searchCat = document.getElementById('searchCategorySelect');
+    if (searchCat) {
+      searchCat.innerHTML = `<option value="all">Tất cả danh mục</option>` + options;
+    }
+
+    // Đổ vào sidebar filter
+    const filterCatList = document.getElementById('filterCatList');
+    if (filterCatList) {
+      filterCatList.innerHTML = result.data.map(c => `
+        <label class="filter-option">
+          <input type="checkbox" value="${c.name}" onchange="applyUserFilters()"> ${c.name}
+        </label>
+      `).join('');
+    }
+
+  } catch (e) {
+    console.error('Lỗi load categories:', e);
+  }
+}
+
+// Hàm mở modal đăng ký gian hàng - load categories trước
+function openSellerRegisterModal() {
+  if (!currentUser) {
+    showToast('⚠️ Vui lòng đăng nhập trước khi đăng ký bán hàng!');
+    openAuthModal();
+    return;
+  }
+  loadCategories(); // ← Load dữ liệu trước khi hiện modal
+  document.getElementById('sellerModal').classList.add('show');
+}
 
 // KHỞI CHẠY GIAO DIỆN MẶC ĐỊNH
+loadCategories();
 renderUserProducts(products);

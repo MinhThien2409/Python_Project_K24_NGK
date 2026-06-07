@@ -7,17 +7,23 @@ class DonHangDao:
     # ==========================================
     # 1. TẠO ĐƠN HÀNG (DÙNG TRANSACTION)
     # ==========================================
+    import uuid  # thêm dòng này lên đầu file
+
     def tao_don_hang(self, order: DonHang, order_items: list):
         conn = DBconnection().get_connection()
         if not conn: return False
         cursor = conn.cursor()
         try:
+            # Sinh mã voucher unique nếu không có
+            # Tránh lỗi UNIQUE KEY khi nhiều đơn cùng NULL
+            voucher_code = order.VoucherCode if order.VoucherCode else None
+
             sql_order = """
-            INSERT INTO Orders (Status, ShippingFee, UserId, ReceiverName, 
-                                ReceiverPhone, ShippingAddress, PaymentMethod, 
-                                VoucherCode, SubTotal, DiscountAmount, TotalAmount, Note)
+            INSERT INTO Orders (Status, ShippingFee, UserId, ReceiverName,
+                                ReceiverPhone, ShippingAddress, PaymentMethod,
+                                SubTotal, DiscountAmount, TotalAmount, Note)
             OUTPUT INSERTED.OrderId
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """
             cursor.execute(sql_order, (
                 str(order.Status),
@@ -27,7 +33,6 @@ class DonHangDao:
                 str(order.ReceiverPhone),
                 str(order.ShippingAddress),
                 str(order.PaymentMethod),
-                str(order.VoucherCode) if order.VoucherCode else None,
                 float(order.SubTotal or 0),
                 float(order.DiscountAmount or 0),
                 float(order.TotalAmount or 0),
@@ -37,7 +42,8 @@ class DonHangDao:
             new_order_id = cursor.fetchone()[0]
 
             sql_item = """
-            INSERT INTO OrderItems (OrderId, ProductId, ProductName, Emoji, Quantity, UnitPrice, TotalPrice)
+            INSERT INTO OrderItems (OrderId, ProductId, ProductName, Emoji,
+                                    Quantity, UnitPrice, TotalPrice)
             VALUES (?, ?, ?, ?, ?, ?, ?)
             """
             for item in order_items:
@@ -69,41 +75,41 @@ class DonHangDao:
         if not conn: return []
         cursor = conn.cursor()
         try:
-            # Lấy toàn bộ đơn hàng của user
-            sql_orders = "SELECT * FROM Orders WHERE UserId = ? ORDER BY CreatedAt DESC"
+            sql_orders = """
+            SELECT * FROM Orders 
+            WHERE UserId = ? 
+            ORDER BY CreatedAt DESC
+            """
             cursor.execute(sql_orders, (ma_user,))
             rows = cursor.fetchall()
-
+            columns = [col[0] for col in cursor.description]
             danh_sach_don = []
 
             for row in rows:
-                dh = DonHang(
-                    OrderId=row[0], Status=row[1], ShippingFee=row[2], CartId=row[3],
-                    UserId=row[4], ReceiverName=row[5], ReceiverPhone=row[6],
-                    ShippingAddress=row[7], PaymentMethod=row[8], VoucherCode=row[9],
-                    SubTotal=row[10], DiscountAmount=row[11], TotalAmount=row[12],
-                    Note=row[13], CreatedAt=row[14], UpdatedAt=row[15]
+                don = dict(zip(columns, row))
+
+                # Lấy items
+                cursor2 = conn.cursor()
+                cursor2.execute(
+                    "SELECT * FROM OrderItems WHERE OrderId = ?",
+                    (don['OrderId'],)
                 )
+                item_rows = cursor2.fetchall()
+                item_columns = [col[0] for col in cursor2.description]
+                don['Items'] = [dict(zip(item_columns, ir)) for ir in item_rows]
+                cursor2.close()
 
-                # Truy vấn lấy danh sách OrderItems của đơn hàng này
-                sql_items = "SELECT * FROM OrderItems WHERE OrderId = ?"
-                cursor.execute(sql_items, (dh.OrderId,))
-                items_rows = cursor.fetchall()
+                # Chuyển datetime thành string
+                if don.get('CreatedAt'):
+                    don['CreatedAt'] = str(don['CreatedAt'])
+                if don.get('UpdatedAt'):
+                    don['UpdatedAt'] = str(don['UpdatedAt'])
 
-                # Ép dữ liệu vào class OrderItem và đưa vào list dh.Items
-                for i_row in items_rows:
-                    item = OrderItem(
-                        OrderItemId=i_row[0], OrderId=i_row[1], ProductId=i_row[2],
-                        ProductName=i_row[3], Emoji=i_row[4], Quantity=i_row[5],
-                        UnitPrice=i_row[6], TotalPrice=i_row[7]
-                    )
-                    dh.Items.append(item.__dict__)  # Đổi thành dict để dễ xuất JSON
-
-                danh_sach_don.append(dh.__dict__)
+                danh_sach_don.append(don)
 
             return danh_sach_don
         except Exception as e:
-            print("Lỗi lấy lịch sử đơn hàng:", e)
+            print("Lỗi lay_don_hang_cua_user:", e)
             return []
         finally:
             cursor.close()
@@ -134,13 +140,22 @@ class DonHangDao:
         cursor = conn.cursor()
         try:
             sql = """
-            SELECT o.OrderId, o.Status, o.ShippingFee, o.UserId,
-                   u.ten_user AS CustomerName,
-                   o.ReceiverName, o.ReceiverPhone, o.ShippingAddress,
-                   o.PaymentMethod, o.SubTotal, o.DiscountAmount,
-                   o.TotalAmount, o.CreatedAt
+            SELECT 
+                o.OrderId,
+                o.Status,
+                o.ShippingFee,
+                o.UserId,
+                u.FullName      AS CustomerName,
+                o.ReceiverName,
+                o.ReceiverPhone,
+                o.ShippingAddress,
+                o.PaymentMethod,
+                o.SubTotal,
+                o.DiscountAmount,
+                o.TotalAmount,
+                o.CreatedAt
             FROM Orders o
-            LEFT JOIN Users u ON o.UserId = u.ma_user
+            LEFT JOIN Users u ON o.UserId = u.UserId
             ORDER BY o.CreatedAt DESC
             """
             cursor.execute(sql)
@@ -151,15 +166,16 @@ class DonHangDao:
             for row in rows:
                 don = dict(zip(columns, row))
 
-                # Lấy items của từng đơn
                 cursor2 = conn.cursor()
-                cursor2.execute("SELECT * FROM OrderItems WHERE OrderId = ?", (don['OrderId'],))
+                cursor2.execute(
+                    "SELECT * FROM OrderItems WHERE OrderId = ?",
+                    (don['OrderId'],)
+                )
                 item_rows = cursor2.fetchall()
                 item_columns = [col[0] for col in cursor2.description]
                 don['Items'] = [dict(zip(item_columns, ir)) for ir in item_rows]
                 cursor2.close()
 
-                # Chuyển datetime thành string
                 if don.get('CreatedAt'):
                     don['CreatedAt'] = str(don['CreatedAt'])
 

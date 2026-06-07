@@ -87,3 +87,11 @@ class UserBus:
             return {"status": True, "message": "Đã xóa người dùng thành công!"}
         else:
             return {"status": False, "message": "Lỗi khi xóa người dùng."}
+
+    def cap_nhat_vai_tro(self, ma_user, role_id):
+        if not ma_user or not role_id:
+            return {"status": False, "message": "Thiếu thông tin!"}
+        ok = self.dao.cap_nhat_vai_tro(ma_user, role_id)
+        if ok:
+            return {"status": True, "message": "Đã cập nhật vai trò thành công!"}
+        return {"status": False, "message": "Lỗi cập nhật vai trò."}

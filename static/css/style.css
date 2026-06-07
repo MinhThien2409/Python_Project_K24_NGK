@@ -352,6 +352,22 @@ footer {
   margin-bottom: 8px;
   text-align: left;
 }
+.emoji-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.emoji-grid span {
+  font-size: 22px;
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 6px;
+  transition: background 0.15s;
+  line-height: 1;
+}
+.emoji-grid span:hover {
+  background: var(--primary-light);
+}
 .profile-action-btn:hover { background: var(--bg); }
 .profile-action-btn.danger { color: var(--red); border-color: var(--red-light); }
 .profile-action-btn.danger:hover { background: var(--red-light); }

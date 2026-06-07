@@ -147,3 +147,21 @@ class UserDao:
         finally:
             cursor.close()
             conn.close()
+
+    def cap_nhat_vai_tro(self, ma_user, role_id):
+        conn = DBconnection.get_connection()
+        if conn is None: return False
+        cursor = conn.cursor()
+        try:
+            cursor.execute(
+                "UPDATE Users SET Role_id=? WHERE UserId=?",
+                (role_id, ma_user)
+            )
+            conn.commit()
+            return cursor.rowcount > 0
+        except Exception as e:
+            print("Lỗi cập nhật vai trò:", e)
+            return False
+        finally:
+            cursor.close();
+            conn.close()

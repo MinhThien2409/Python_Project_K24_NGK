@@ -42,3 +42,9 @@ class GianHangBus:
         if ok:
             return {"status": True, "message": "Đã từ chối yêu cầu."}
         return {"status": False, "message": "Lỗi khi từ chối!"}
+
+    def lay_store_theo_user(self, user_id):
+        store = self.dao.lay_theo_user(user_id)
+        if store:
+            return {"status": True, "data": store}
+        return {"status": False, "message": "Bạn chưa có gian hàng!"}

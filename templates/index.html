@@ -55,16 +55,8 @@
           <span class="icon">📋</span>
           <span class="label">Lịch sử đơn</span>
         </button>
-        <button class="hdr-btn" id="hdrNotifBtn" onclick="openNotifModal()" style="display:none;">
-          <span class="icon">🔔</span>
-          <span class="label">Thông báo</span>
-          <span class="badge" id="notifBadge" style="display:none;">0</span>
-        </button>
-        <button class="hdr-btn" id="hdrWishBtn" onclick="openWishlistModal()" style="display:none;">
-          <span class="icon">❤️</span>
-          <span class="label">Yêu thích</span>
-          <span class="badge" id="wishBadge" style="display:none;">0</span>
-        </button>
+
+
 
         <button class="hdr-btn" id="hdrRegisterSellerBtn"
           onclick="openSellerRegisterModal()" 
@@ -525,29 +517,51 @@
 </div>
 
 <div class="modal-overlay" id="checkoutModal">
-  <div class="modal-box" style="width:500px;">
+  <div class="modal-box" style="width:520px;">
     <button class="modal-close" onclick="closeModal('checkoutModal')">✕</button>
     <h3 style="margin-bottom:16px;">💳 Thông tin đặt hàng & Thanh toán</h3>
+
+    <!-- Tóm tắt giỏ hàng -->
     <div id="checkoutCartSummary" style="background:var(--bg); border-radius:8px; padding:10px; font-size:13px; margin-bottom:14px; max-height:150px; overflow-y:auto;"></div>
-    <div id="checkoutShopGroups" style="margin-bottom:10px;"></div>
+
     <form onsubmit="handlePlaceOrder(event)">
       <div class="form-group"><label>Người nhận hàng</label><input type="text" id="chkName" required></div>
       <div class="form-group"><label>Số điện thoại liên hệ</label><input type="tel" id="chkPhone" required></div>
-      <div class="form-group"><label>Địa chỉ giao hàng cụ thể</label><textarea id="chkAddress" rows="2" required></textarea></div>
+      <div class="form-group">
+        <label>Địa chỉ giao hàng cụ thể</label>
+        <textarea id="chkAddress" rows="2" required></textarea>
+      </div>
+
+      <!-- PHẦN TÍNH PHÍ SHIP MỚI -->
+      <div class="form-group">
+        <label>Thành phố / Tỉnh nhận hàng</label>
+        <select id="chkBuyerCity" onchange="recalcOrderTotal()" style="padding:10px; border:1px solid var(--border); border-radius:8px; width:100%; font-family:inherit;">
+          <option value="hcm">TP. Hồ Chí Minh</option>
+          <option value="hn">Hà Nội</option>
+          <option value="dn">Đà Nẵng</option>
+          <option value="ct">Cần Thơ</option>
+          <option value="other">Tỉnh / Thành phố khác</option>
+        </select>
+      </div>
+      <div style="background:var(--bg); border-radius:8px; padding:10px 14px; margin-bottom:12px; font-size:13px; display:flex; align-items:center; gap:8px;">
+        🚚
+        <span id="shippingNote" style="color:#555;">Phí vận chuyển nội thành:</span>
+        <b id="shippingFeeDisplay" style="color:var(--green);">25.000đ</b>
+      </div>
+
+      <!-- PHƯƠNG THỨC THANH TOÁN -->
       <div class="form-group">
         <label>Phương thức thanh toán</label>
         <select id="chkPayment" onchange="togglePaymentDetails(this.value)">
           <option value="COD">Thanh toán khi nhận hàng (COD)</option>
-          <option value="BANK">Chuyển khoản ngân hàng điện tử (QR)</option>
+          <option value="BANK">Chuyển khoản ngân hàng (QR)</option>
           <option value="MOMO">Ví MoMo</option>
           <option value="ZALOPAY">ZaloPay</option>
         </select>
       </div>
       <div id="bankDetailsBlock" style="display:none; background:#FFF8EC; border:1px solid #FFD4A8; padding:12px; border-radius:8px; font-size:12px; margin-bottom:14px; line-height:1.6;">
-        <strong>🏦 THÔNG TIN CHUYỂN KHOẢN:</strong><br>
-        Ngân hàng: MB Bank (Ngân hàng Quân Đội)<br>
-        Số TK: <b>0987654321999</b><br>
-        Nội dung CK: <span style="color:red; font-weight:bold;">POBBYPAY</span>
+        <strong>🏦 MB Bank:</strong> STK <b>0987654321999</b><br>
+        Nội dung CK: <span style="color:red; font-weight:bold;">POBBYPAY [Mã đơn hàng]</span>
       </div>
       <div id="momoBlock" style="display:none; background:#FDECEA; border:1px solid #FFB8B8; padding:12px; border-radius:8px; font-size:12px; margin-bottom:14px;">
         📲 MoMo: <b>0987654321</b> – POBBY STORE
@@ -556,30 +570,50 @@
         💙 ZaloPay: <b>0987654321</b> – POBBY STORE
       </div>
 
+      <!-- VOUCHER -->
       <div style="display:flex; gap:8px; margin-bottom:10px;">
         <input type="text" id="checkoutVoucherInput" placeholder="🎟️ Mã voucher..." style="flex:1; border:1px solid var(--border); border-radius:6px; padding:6px;">
         <button type="button" onclick="applyCheckoutVoucher()" style="background:var(--primary); color:white; border:none; border-radius:6px; padding:6px 10px; font-weight:bold; cursor:pointer;">Áp dụng</button>
       </div>
       <div id="checkoutVoucherMsg" style="font-size:12px; margin-bottom:10px;"></div>
 
-      <div style="font-size:13px; display:flex; justify-content:space-between; margin-bottom:4px;">
-        <span>Tạm tính:</span><span id="checkoutSubtotalText">0đ</span>
+      <!-- TỔNG KẾT -->
+      <div style="background:var(--bg); border-radius:8px; padding:12px 14px; margin-bottom:14px; font-size:13px;">
+        <div style="display:flex; justify-content:space-between; margin-bottom:6px;">
+          <span>Tạm tính hàng hoá:</span><span id="checkoutSubtotalText">0đ</span>
+        </div>
+        <div style="display:flex; justify-content:space-between; margin-bottom:6px;">
+          <span>Phí vận chuyển:</span><span id="checkoutShipText" style="color:var(--green);">0đ</span>
+        </div>
+        <div id="checkoutDiscRow" style="display:none; justify-content:space-between; color:var(--green); margin-bottom:6px;">
+          <span>Giảm voucher:</span><span id="checkoutDiscText">-0đ</span>
+        </div>
+        <div style="display:flex; justify-content:space-between; font-weight:bold; font-size:15px; padding-top:8px; border-top:1px solid var(--border);">
+          <span>Tổng thanh toán:</span>
+          <span id="checkoutTotalText" style="color:var(--red); font-size:17px;">0đ</span>
+        </div>
       </div>
-      <div id="checkoutDiscRow" style="font-size:13px; display:none; justify-content:space-between; color:var(--green); margin-bottom:4px;">
-        <span>Giảm voucher:</span><span id="checkoutDiscText">-0đ</span>
-      </div>
-      <div style="font-size:15px; font-weight:bold; margin-bottom:16px; text-align:right;">
-        Tổng số tiền phải trả: <span id="checkoutTotalText" style="color:var(--red); font-size:18px;">0đ</span>
-      </div>
-      <button type="submit" class="btn-submit" style="background:var(--green); width:100%;">Xác nhận Đặt hàng ngay</button>
+
+      <button type="submit" class="btn-submit" style="background:var(--green); width:100%;">✅ Xác nhận Đặt hàng ngay</button>
     </form>
   </div>
 </div>
 
 <div class="modal-overlay" id="orderHistoryModal">
-  <div class="modal-box" style="width:700px;">
+  <div class="modal-box" style="width:740px; max-height:85vh; overflow-y:auto;">
     <button class="modal-close" onclick="closeModal('orderHistoryModal')">✕</button>
-    <h3 style="margin-bottom:14px;">📋 Lịch sử đơn hàng cá nhân</h3>
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+      <h3 style="margin:0;">📋 Lịch sử đơn hàng</h3>
+      <select id="historyFilterStatus" onchange="filterOrderHistory()"
+        style="padding:6px 10px; border-radius:6px; border:1px solid var(--border); font-family:inherit; font-size:13px;">
+        <option value="all">Tất cả</option>
+        <option value="Pending">Chờ duyệt</option>
+        <option value="Confirmed">Đã xác nhận</option>
+        <option value="Shipping">Đang giao</option>
+        <option value="Completed">Hoàn thành</option>
+        <option value="Cancelled">Đã hủy</option>
+      </select>
+    </div>
     <div id="orderHistoryContent"></div>
   </div>
 </div>
@@ -603,6 +637,19 @@
 <div class="modal-overlay" id="notifModal">
   <div class="modal-box" style="width:400px;">
     <button class="modal-close" onclick="closeModal('notifModal')">✕</button>
+
+    <!-- LỊCH SỬ ĐƠN HÀNG NGOÀI TRANG CHỦ - chỉ hiện khi đã đăng nhập -->
+<div id="orderHistorySection" style="display:none; margin-bottom:20px;">
+  <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+    <h3 style="margin:0; font-size:16px;">📋 Đơn hàng gần đây của bạn</h3>
+    <button onclick="openOrderHistoryModal()"
+      style="background:none; border:1px solid var(--border); border-radius:6px;
+             padding:5px 12px; cursor:pointer; font-size:12px; font-family:inherit;">
+      Xem tất cả →
+    </button>
+  </div>
+  <div id="recentOrdersPreview"></div>
+</div>
     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;">
         <h3 style="margin:0;">🔔 Thông báo</h3>
         <button onclick="markAllRead()" style="background:none; border:none; color:var(--primary); cursor:pointer; font-weight:bold;">Đánh dấu đã đọc</button>
@@ -660,7 +707,45 @@
         <div class="form-group" style="flex:1;"><label>Tồn kho</label><input type="number" id="prodStock" required></div>
         <div class="form-group" style="flex:1;"><label>Đánh giá (0-5)</label><input type="number" id="prodRating" step="0.1" max="5" value="4.5"></div>
       </div>
-      <div class="form-group"><label>Biểu tượng sản phẩm (Emoji đại diện)</label><input type="text" id="prodEmoji" required></div>
+      <!-- Thay thế form-group prodEmoji hiện tại -->
+<div class="form-group">
+  <label>Biểu tượng sản phẩm (Emoji đại diện)</label>
+  <div style="display:flex; gap:8px; align-items:center;">
+    <input type="text" id="prodEmoji" placeholder="Nhập hoặc chọn emoji..."
+           style="flex:1;" maxlength="4">
+    <button type="button" onclick="toggleEmojiPicker()"
+            style="padding:10px 14px; border:1px solid var(--border); border-radius:8px; background:var(--bg); cursor:pointer; font-size:20px;">
+      😀
+    </button>
+  </div>
+  <!-- Bảng emoji -->
+  <div id="emojiPicker" style="display:none; background:var(--white); border:1px solid var(--border); border-radius:10px; padding:10px; margin-top:6px; display:none;">
+    <div style="font-size:11px; font-weight:700; color:var(--text-muted); margin-bottom:6px;">ĐIỆN TỬ</div>
+    <div class="emoji-grid">
+      📱 💻 🖥️ ⌨️ 🖱️ 🎧 📷 📸 🎮 🕹️ 📺 🔋 💡 🔌 📡 🖨️
+    </div>
+    <div style="font-size:11px; font-weight:700; color:var(--text-muted); margin:8px 0 6px;">THỰC PHẨM</div>
+    <div class="emoji-grid">
+      🍎 🥦 🥩 🍗 🥚 🧀 🍞 🥛 🍜 🍕 🍔 🧃 🥤 🍵 ☕ 🍫
+    </div>
+    <div style="font-size:11px; font-weight:700; color:var(--text-muted); margin:8px 0 6px;">THỜI TRANG</div>
+    <div class="emoji-grid">
+      👗 👔 👟 👠 👒 🧢 👜 🎒 💍 ⌚ 🕶️ 🧣 🧤 🧥 👙 🩱
+    </div>
+    <div style="font-size:11px; font-weight:700; color:var(--text-muted); margin:8px 0 6px;">NHÀ CỬA</div>
+    <div class="emoji-grid">
+      🛋️ 🪑 🛏️ 🚿 🪴 🕯️ 🧹 🧺 🪣 🔧 🔨 🪟 🚪 🧲 🪞 💐
+    </div>
+    <div style="font-size:11px; font-weight:700; color:var(--text-muted); margin:8px 0 6px;">THỂ THAO</div>
+    <div class="emoji-grid">
+      ⚽ 🏀 🎾 🏸 🥊 🎯 🏋️ 🚴 🏊 ⛷️ 🎿 🏄 🧘 🤸 🎽 🥋
+    </div>
+    <div style="font-size:11px; font-weight:700; color:var(--text-muted); margin:8px 0 6px;">KHÁC</div>
+    <div class="emoji-grid">
+      📦 🎁 💊 🧴 📚 🖊️ 🎵 🎨 🧸 🪆 🎪 🎠 🎡 🌟 💎 🏆
+    </div>
+  </div>
+</div>
       <div class="form-group"><label>Nhà bán hàng (Thương hiệu)</label><input type="text" id="prodShop" required></div>
       <div class="form-group"><label>Mô tả</label><textarea id="prodDesc" rows="2"></textarea></div>
       <button type="submit" class="btn-submit" style="width:100%;">Lưu thông tin sản phẩm</button>

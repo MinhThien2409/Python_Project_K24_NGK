@@ -186,3 +186,28 @@ class GianHangDao:
             return False
         finally:
             cursor.close(); conn.close()
+
+    # GianHangDao
+    def lay_theo_user(self, user_id):
+        conn = DBconnection.get_connection()
+        cursor = conn.cursor()
+        try:
+            cursor.execute(
+                "SELECT * FROM Stores WHERE UserId = ? AND IsActive = 1",
+                (user_id,)
+            )
+            row = cursor.fetchone()
+            if not row: return None
+            return {
+                "store_id": row.StoreId,
+                "store_name": row.StoreName,
+                "phone": row.Phone,
+                "category": row.Category,
+                "description": row.Description
+            }
+        except Exception as e:
+            print("Lỗi lay_theo_user:", e)
+            return None
+        finally:
+            cursor.close();
+            conn.close()

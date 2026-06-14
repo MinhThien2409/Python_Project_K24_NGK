@@ -66,3 +66,20 @@ class PhanQuyenBus:
             return {"status": True, "message": f"Đã áp dụng quyền nhóm cho tài khoản ID {ma_user}!"}
         else:
             return {"status": False, "message": "Lỗi khi áp dụng quyền nhóm. Kiểm tra xem nhóm có user khác không!"}
+
+    def lay_tat_ca_roles(self):
+        data = self.dao.lay_tat_ca_roles()
+        return {"status": True, "data": data}
+
+    def them_role(self, role_name):
+        if not role_name or not role_name.strip():
+            return {"status": False, "message": "Tên nhóm quyền không được trống!"}
+        return self.dao.them_role(role_name.strip())
+
+    def sua_role(self, role_id, role_name):
+        if not role_name or not role_name.strip():
+            return {"status": False, "message": "Tên nhóm quyền không được trống!"}
+        return self.dao.sua_role(role_id, role_name.strip())
+
+    def xoa_role(self, role_id):
+        return self.dao.xoa_role(role_id)

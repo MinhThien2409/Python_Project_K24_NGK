@@ -105,3 +105,39 @@ class GioHangDao:
         finally:
             cursor.close()
             conn.close()
+
+    def xoa_khoi_gio(self, cart_id, product_id):
+        conn = DBconnection.get_connection()
+        if conn is None: return False
+        cursor = conn.cursor()
+        try:
+            cursor.execute(
+                "DELETE FROM CartItems WHERE CartId=? AND ProductId=?",
+                (cart_id, product_id)
+            )
+            conn.commit()
+            return cursor.rowcount > 0
+        except Exception as e:
+            print("Lỗi xóa khỏi giỏ:", e)
+            return False
+        finally:
+            cursor.close();
+            conn.close()
+
+    def cap_nhat_so_luong(self, cart_id, product_id, quantity):
+        conn = DBconnection.get_connection()
+        if conn is None: return False
+        cursor = conn.cursor()
+        try:
+            cursor.execute(
+                "UPDATE CartItems SET Quantity=? WHERE CartId=? AND ProductId=?",
+                (quantity, cart_id, product_id)
+            )
+            conn.commit()
+            return cursor.rowcount > 0
+        except Exception as e:
+            print("Lỗi cập nhật số lượng:", e)
+            return False
+        finally:
+            cursor.close();
+            conn.close()

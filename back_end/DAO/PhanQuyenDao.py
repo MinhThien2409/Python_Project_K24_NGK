@@ -223,3 +223,75 @@ class PhanQuyenDao:
         finally:
             cursor.close()
             conn.close()
+
+    def lay_tat_ca_roles(self):
+        conn = DBconnection().get_connection()
+        if not conn: return []
+        cursor = conn.cursor()
+        try:
+            cursor.execute("SELECT RoleId, RoleName FROM Roles ORDER BY RoleId")
+            rows = cursor.fetchall()
+            return [{"RoleId": r[0], "RoleName": r[1]} for r in rows]
+        except Exception as e:
+            print("Lỗi lay_tat_ca_roles:", e)
+            return []
+        finally:
+            cursor.close()
+            conn.close()
+
+    def them_role(self, role_name):
+        conn = DBconnection().get_connection()
+        if not conn: return {"status": False, "message": "Lỗi kết nối DB!"}
+        cursor = conn.cursor()
+        try:
+            cursor.execute(
+                "INSERT INTO Roles (RoleName) OUTPUT INSERTED.RoleId VALUES (?)",
+                (role_name,)
+            )
+            new_id = cursor.fetchone()[0]
+            conn.commit()
+            return {"status": True, "message": f"Đã thêm nhóm quyền '{role_name}'!", "data": {"RoleId": new_id}}
+        except Exception as e:
+            conn.rollback()
+            print("Lỗi them_role:", e)
+            return {"status": False, "message": "Thêm nhóm quyền thất bại!"}
+        finally:
+            cursor.close()
+            conn.close()
+
+    def sua_role(self, role_id, role_name):
+        conn = DBconnection().get_connection()
+        if not conn: return {"status": False, "message": "Lỗi kết nối DB!"}
+        cursor = conn.cursor()
+        try:
+            cursor.execute(
+                "UPDATE Roles SET RoleName = ? WHERE RoleId = ?",
+                (role_name, role_id)
+            )
+            conn.commit()
+            return {"status": True, "message": f"Đã cập nhật nhóm quyền!"}
+        except Exception as e:
+            conn.rollback()
+            print("Lỗi sua_role:", e)
+            return {"status": False, "message": "Cập nhật thất bại!"}
+        finally:
+            cursor.close()
+            conn.close()
+
+    def xoa_role(self, role_id):
+        conn = DBconnection().get_connection()
+        if not conn: return {"status": False, "message": "Lỗi kết nối DB!"}
+        cursor = conn.cursor()
+        try:
+            # Xóa quyền của nhóm trước, rồi mới xóa nhóm
+            cursor.execute("DELETE FROM RolePermissions WHERE RoleId = ?", (role_id,))
+            cursor.execute("DELETE FROM Roles WHERE RoleId = ?", (role_id,))
+            conn.commit()
+            return {"status": True, "message": "Đã xóa nhóm quyền!"}
+        except Exception as e:
+            conn.rollback()
+            print("Lỗi xoa_role:", e)
+            return {"status": False, "message": "Xóa thất bại! Nhóm này có thể đang được dùng."}
+        finally:
+            cursor.close()
+            conn.close()

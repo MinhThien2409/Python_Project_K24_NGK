@@ -290,8 +290,9 @@ function switchAdminTab(tabName) {
   }
   if (tabName === 'permissions') {
     renderPermissionsTable();
-    setTimeout(() => loadUsersToDropdown(), 100);
-  }
+    renderGroupPermTable();
+    switchPermTab('user');
+}
 }
 
 // ==========================================
@@ -515,38 +516,14 @@ document.getElementById('hdrUserBtn').style.display = 'none';
 // ==========================================
 // 3. API: DỮ LIỆU USER & QUẢN LÝ PHÂN QUYỀN
 // ==========================================
-async function loadUsersToDropdown() {
-  const selectBox = document.getElementById('permUserSelect');
-  if (!selectBox) return; 
 
-  try {
-    const response = await fetch('http://localhost:5000/api/users');
-    const result = await response.json();
-
-    if(result.status === true && Array.isArray(result.data)) {
-      selectBox.innerHTML = '<option value="">-- Chọn tài khoản --</option>';
-      result.data.forEach(u => {
-        let id = u.ma_user || u.UserId;
-        let name = u.ten_user || u.FullName;
-        let role = u.ten_nhom_quyen || u.RoleName || "Chưa cấp quyền";
-
-        let opt = document.createElement('option');
-        opt.value = id;
-        opt.textContent = `${name} - [${role}]`;
-        selectBox.appendChild(opt);
-      });
-    }
-  } catch(e) {
-    showToast("❌ Không thể tải danh sách tài khoản!");
-  }
-}
 
 
 
 const sysModules = [
   { id: 1, name: 'Quản lý Sản phẩm' }, { id: 2, name: 'Quản lý Đơn hàng' },
   { id: 3, name: 'Quản lý Người dùng' }, { id: 4, name: 'Quản lý Danh mục' },
-  { id: 5, name: 'Quản lý Cấu hình hệ thống' }, { id: 6, name: 'Quản lý Đối tác kinh doanh' }
+  { id: 5, name: 'Quản lý Phân quyền' }, { id: 6, name: 'Quản lý Người bán' }
 ];
 
 async function loadAndApplyAdminPermissions(ma_user) {
@@ -707,22 +684,7 @@ async function savePermissions() {
   } catch(e) { showToast("❌ Lỗi kết nối lưu phân quyền!"); }
 }
 
-function renderPermissionsTable() {
-  const tbody = document.getElementById('tblPermissionsBody');
-  const searchTxt = document.getElementById('searchModule')?.value.toLowerCase() || '';
-  const filteredModules = sysModules.filter(m => m.name.toLowerCase().includes(searchTxt));
-  if(document.getElementById('moduleCountText')) document.getElementById('moduleCountText').textContent = `${filteredModules.length} chức năng`;
 
-  tbody.innerHTML = filteredModules.map(m => `
-    <tr style="border-bottom: 1px solid var(--border);">
-      <td style="border-right: 1px solid var(--border); font-weight: 500;">${m.name}</td>
-      <td style="text-align: center;"><input type="checkbox" style="transform: scale(1.3); cursor: pointer;" class="cb-view" data-mod="${m.id}"></td>
-      <td style="text-align: center;"><input type="checkbox" style="transform: scale(1.3); cursor: pointer;" class="cb-add" data-mod="${m.id}"></td>
-      <td style="text-align: center;"><input type="checkbox" style="transform: scale(1.3); cursor: pointer;" class="cb-edit" data-mod="${m.id}"></td>
-      <td style="text-align: center;"><input type="checkbox" style="transform: scale(1.3); cursor: pointer;" class="cb-delete" data-mod="${m.id}"></td>
-    </tr>
-  `).join('');
-}
 
 function toggleAllPermissions(status) {
   document.querySelectorAll('#tblPermissionsBody input[type="checkbox"]').forEach(cb => cb.checked = status);
@@ -744,12 +706,145 @@ function showToast(msg) {
   t._timeoutId = setTimeout(() => t.classList.remove('show'), 2500);
 }
 
-function initAdminDashboard() {
-  document.getElementById('statRevenue').textContent = '240.000đ';
-  document.getElementById('statOrders').textContent = '1';
-  document.getElementById('statProducts').textContent = products.length;
+async function initAdminDashboard() {
+  try {
+    const res    = await fetch('http://localhost:5000/api/thong-ke/tong-quan');
+    const result = await res.json();
+    if (!result.status) return;
+
+    const d = result.data;
+
+    // ── Stat boxes ──────────────────────────────────────────
+    document.getElementById('statRevenue').textContent =
+      Number(d.doanh_thu).toLocaleString('vi-VN') + 'đ';
+    document.getElementById('statOrders').textContent  = d.tong_don;
+    document.getElementById('statProducts').textContent = d.tong_san_pham;
+    document.getElementById('statPending').textContent  = d.cho_duyet;
+
+    // ── Top sản phẩm bán chạy ───────────────────────────────
+    const maxSold = Math.max(...d.top_san_pham.map(p => p.sold), 1);
+    document.getElementById('bestSellersChart').innerHTML =
+      d.top_san_pham.map((p, i) => `
+        <div style="display:flex; align-items:center; gap:12px; padding:8px 0;
+                    border-bottom:1px solid var(--border);">
+          <div style="width:24px; height:24px; border-radius:50%;
+                      background:var(--primary-light); color:var(--primary);
+                      display:flex; align-items:center; justify-content:center;
+                      font-weight:800; font-size:12px; flex-shrink:0;">
+            ${i + 1}
+          </div>
+          <div style="font-size:22px; flex-shrink:0;">${p.emoji}</div>
+          <div style="flex:1; min-width:0;">
+            <div style="font-weight:600; font-size:13px; white-space:nowrap;
+                        overflow:hidden; text-overflow:ellipsis;">${p.name}</div>
+            <div style="margin-top:4px; background:var(--bg); border-radius:4px;
+                        height:6px; overflow:hidden;">
+              <div style="height:100%; background:var(--primary); border-radius:4px;
+                          width:${Math.round(p.sold / maxSold * 100)}%;
+                          transition: width 0.6s ease;"></div>
+            </div>
+          </div>
+          <div style="text-align:right; flex-shrink:0;">
+            <div style="font-weight:700; color:var(--primary);">
+              ${p.sold} đã bán
+            </div>
+            <div style="font-size:11px; color:var(--text-muted);">
+              ${Number(p.price).toLocaleString('vi-VN')}đ
+            </div>
+          </div>
+        </div>
+      `).join('') || '<div style="color:var(--text-muted); text-align:center;">Chưa có dữ liệu</div>';
+
+    // ── Đơn hàng gần đây ────────────────────────────────────
+    const statusMap = {
+      'Pending'  : { label: 'Chờ duyệt',   cls: 'status-pending'   },
+      'Confirmed': { label: 'Đã xác nhận', cls: 'status-confirmed' },
+      'Shipping' : { label: 'Đang giao',   cls: 'status-shipping'  },
+      'Completed': { label: 'Hoàn thành',  cls: 'status-done'      },
+      'Cancelled': { label: 'Đã hủy',      cls: 'status-cancelled' },
+    };
+
+    document.getElementById('tblRecentOrders').innerHTML =
+      d.don_gan_day.map(o => {
+        const s = statusMap[o.status] || { label: o.status, cls: '' };
+        const date = new Date(o.created_at)
+          .toLocaleDateString('vi-VN', { day:'2-digit', month:'2-digit', year:'numeric' });
+        return `
+          <tr>
+            <td style="padding:8px; border-bottom:1px solid var(--border);
+                       font-weight:700; color:var(--text-muted);">#${o.order_id}</td>
+            <td style="padding:8px; border-bottom:1px solid var(--border);">
+              <div style="font-weight:600;">${o.receiver_name}</div>
+              <div style="font-size:11px; color:var(--text-muted);">${o.customer_name}</div>
+            </td>
+            <td style="padding:8px; border-bottom:1px solid var(--border);
+                       font-weight:700; color:var(--red);">
+              ${Number(o.total_amount).toLocaleString('vi-VN')}đ
+            </td>
+            <td style="padding:8px; border-bottom:1px solid var(--border);">
+              <span class="badge-status ${s.cls}">${s.label}</span>
+            </td>
+            <td style="padding:8px; border-bottom:1px solid var(--border);
+                       font-size:12px; color:var(--text-muted);">${date}</td>
+          </tr>
+        `;
+      }).join('') ||
+      `<tr><td colspan="5" style="text-align:center; padding:20px;
+             color:var(--text-muted);">Chưa có đơn hàng nào</td></tr>`;
+
+    // ── Biểu đồ doanh thu theo tháng ────────────────────────
+    await renderRevenueChart();
+
+  } catch (e) {
+    console.error('Lỗi load dashboard:', e);
+  }
 }
 
+async function renderRevenueChart() {
+  const res    = await fetch('http://localhost:5000/api/thong-ke/doanh-thu-theo-thang?year=2026');
+  const result = await res.json();
+  if (!result.status) return;
+
+  const data   = result.data;
+  const maxRev = Math.max(...data.map(d => d.doanh_thu), 1);
+  const months = ['T1','T2','T3','T4','T5','T6','T7','T8','T9','T10','T11','T12'];
+
+  // Thêm chart container vào dashboard nếu chưa có
+  let chartEl = document.getElementById('revenueChartWrap');
+  if (!chartEl) {
+    const card = document.createElement('div');
+    card.className = 'admin-card';
+    card.innerHTML = `
+      <h3 style="margin-bottom:16px;">📊 Doanh thu theo tháng (2026)</h3>
+      <div id="revenueChartWrap"
+           style="display:flex; align-items:flex-end; gap:8px;
+                  height:160px; padding-bottom:24px; position:relative;">
+      </div>`;
+    document.getElementById('pane-dashboard').appendChild(card);
+    chartEl = document.getElementById('revenueChartWrap');
+  }
+
+  chartEl.innerHTML = data.map((d, i) => {
+    const pct    = maxRev > 0 ? Math.round(d.doanh_thu / maxRev * 100) : 0;
+    const hasRev = d.doanh_thu > 0;
+    return `
+      <div style="flex:1; display:flex; flex-direction:column;
+                  align-items:center; gap:4px; height:100%; justify-content:flex-end;">
+        ${hasRev ? `
+          <div style="font-size:9px; color:var(--text-muted); font-weight:600;">
+            ${Math.round(d.doanh_thu/1000000)}tr
+          </div>` : ''}
+        <div style="width:100%; background:${hasRev ? 'var(--primary)' : 'var(--border)'};
+                    border-radius:4px 4px 0 0; height:${Math.max(pct, 3)}%;
+                    transition: height 0.5s ease; cursor:pointer;"
+             title="${months[i]}: ${Number(d.doanh_thu).toLocaleString('vi-VN')}đ (${d.so_don} đơn)">
+        </div>
+        <div style="font-size:10px; color:var(--text-muted); font-weight:600;
+                    position:absolute; bottom:0;">${months[i]}</div>
+      </div>
+    `;
+  }).join('');
+}
 function applyUserFilters() {
   let filtered = [...products]; // products đã là data từ API sau loadProducts()
 
@@ -1679,6 +1774,342 @@ async function handleSaveUserRole() {
     showToast('❌ Lỗi kết nối!');
   }
 }
+// ==========================================
+// PHÂN QUYỀN — REFACTOR HOÀN TOÀN
+// ==========================================
+
+let currentPermTab = 'user';
+
+function switchPermTab(tab) {
+  currentPermTab = tab;
+  const isUser = tab === 'user';
+
+  const btnUser  = document.getElementById('btnPermTabUser');
+  const btnGroup = document.getElementById('btnPermTabGroup');
+  if (btnUser) {
+    btnUser.style.background = isUser ? 'var(--primary)' : 'white';
+    btnUser.style.color      = isUser ? 'white' : 'var(--text)';
+    btnUser.style.border     = isUser ? 'none' : '1px solid var(--border)';
+  }
+  if (btnGroup) {
+    btnGroup.style.background = isUser ? 'white' : 'var(--primary)';
+    btnGroup.style.color      = isUser ? 'var(--text)' : 'white';
+    btnGroup.style.border     = isUser ? '1px solid var(--border)' : 'none';
+  }
+
+  const panelUser  = document.getElementById('permPanelUser');
+  const panelGroup = document.getElementById('permPanelGroup');
+  if (panelUser)  panelUser.style.display  = isUser ? 'block' : 'none';
+  if (panelGroup) panelGroup.style.display = isUser ? 'none'  : 'block';
+
+  if (isUser) {
+    loadUsersToDropdown();
+    renderPermissionsTable();
+  } else {
+    loadRolesForPermPanel();
+    renderGroupPermTable();
+  }
+}
+
+// ── PANEL CÁ NHÂN ─────────────────────────────────────────────
+async function loadUsersToDropdown() {
+  const selectBox = document.getElementById('permUserSelect');
+  if (!selectBox) return;
+  try {
+    const res    = await fetch('http://localhost:5000/api/users');
+    const result = await res.json();
+    if (result.status && Array.isArray(result.data)) {
+      selectBox.innerHTML = '<option value="">-- Chọn tài khoản --</option>';
+      result.data.forEach(u => {
+        const id   = u.ma_user || u.UserId;
+        const name = u.ten_user || u.FullName || '?';
+        const role = u.ten_nhom_quyen || u.RoleName || '';
+        const opt  = document.createElement('option');
+        opt.value       = id;
+        opt.textContent = `#${id} ${name} [${role}]`;
+        selectBox.appendChild(opt);
+      });
+    }
+  } catch (e) {
+    showToast('❌ Không thể tải danh sách tài khoản!');
+  }
+}
+
+function renderPermissionsTable() {
+  const tbody = document.getElementById('tblPermissionsBody');
+  if (!tbody) return;
+  tbody.innerHTML = sysModules.map(m => `
+    <tr style="border-bottom:1px solid var(--border);">
+      <td style="padding:10px; border-right:1px solid var(--border); font-weight:500;">${m.name}</td>
+      <td style="text-align:center;"><input type="checkbox" class="cb-view"   data-mod="${m.id}" style="transform:scale(1.3); cursor:pointer;"></td>
+      <td style="text-align:center;"><input type="checkbox" class="cb-add"    data-mod="${m.id}" style="transform:scale(1.3); cursor:pointer;"></td>
+      <td style="text-align:center;"><input type="checkbox" class="cb-edit"   data-mod="${m.id}" style="transform:scale(1.3); cursor:pointer;"></td>
+      <td style="text-align:center;"><input type="checkbox" class="cb-delete" data-mod="${m.id}" style="transform:scale(1.3); cursor:pointer;"></td>
+    </tr>
+  `).join('');
+}
+
+async function loadPermissionsData() {
+  const userId = document.getElementById('permUserSelect').value;
+  if (!userId) { showToast('⚠️ Vui lòng chọn tài khoản!'); return; }
+  try {
+    const res    = await fetch(`http://localhost:5000/api/quyen-cua-user/${userId}`);
+    const result = await res.json();
+    if (result.status) {
+      document.querySelectorAll('#tblPermissionsBody input[type="checkbox"]')
+        .forEach(cb => cb.checked = false);
+      result.data.forEach(q => {
+        if (q.xem)  { const el = document.querySelector(`.cb-view[data-mod="${q.ma_chuc_nang}"]`);   if (el) el.checked = true; }
+        if (q.them) { const el = document.querySelector(`.cb-add[data-mod="${q.ma_chuc_nang}"]`);    if (el) el.checked = true; }
+        if (q.sua)  { const el = document.querySelector(`.cb-edit[data-mod="${q.ma_chuc_nang}"]`);   if (el) el.checked = true; }
+        if (q.xoa)  { const el = document.querySelector(`.cb-delete[data-mod="${q.ma_chuc_nang}"]`); if (el) el.checked = true; }
+      });
+      showToast('✅ Đã tải quyền của tài khoản!');
+    }
+  } catch (e) { showToast('❌ Lỗi kết nối!'); }
+}
+
+function capTatCaQuyenUser() {
+  document.querySelectorAll('#tblPermissionsBody input[type="checkbox"]')
+    .forEach(cb => cb.checked = true);
+  showToast('✅ Đã chọn tất cả quyền!');
+}
+
+function thuHoiTatCaQuyenUser() {
+  document.querySelectorAll('#tblPermissionsBody input[type="checkbox"]')
+    .forEach(cb => cb.checked = false);
+  showToast('❌ Đã bỏ tất cả quyền!');
+}
+
+async function savePermissionsData() {
+  const userId = document.getElementById('permUserSelect').value;
+  if (!userId) { showToast('⚠️ Vui lòng chọn tài khoản!'); return; }
+  const permissions = sysModules.map(m => ({
+    ma_chuc_nang: m.id,
+    xem  : document.querySelector(`.cb-view[data-mod="${m.id}"]`)?.checked   || false,
+    them : document.querySelector(`.cb-add[data-mod="${m.id}"]`)?.checked    || false,
+    sua  : document.querySelector(`.cb-edit[data-mod="${m.id}"]`)?.checked   || false,
+    xoa  : document.querySelector(`.cb-delete[data-mod="${m.id}"]`)?.checked || false,
+  }));
+  try {
+    const res    = await fetch('http://localhost:5000/api/cap-quyen-ngoai-le', {
+      method : 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body   : JSON.stringify({ ma_user: userId, permissions })
+    });
+    const result = await res.json();
+    showToast((result.status ? '💾 ' : '❌ ') + result.message);
+  } catch (e) { showToast('❌ Lỗi kết nối!'); }
+}
+
+async function apDungQuyenNhomChoUser() {
+  const userId = document.getElementById('permUserSelect').value;
+  if (!userId) { showToast('⚠️ Vui lòng chọn tài khoản!'); return; }
+  if (!confirm('Thao tác này sẽ XÓA mọi quyền ngoại lệ và đặt lại về quyền mặc định của nhóm. Tiếp tục?')) return;
+  try {
+    const res    = await fetch('http://localhost:5000/api/ap-dung-quyen-nhom-cho-user', {
+      method : 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body   : JSON.stringify({ ma_user: userId })
+    });
+    const result = await res.json();
+    showToast((result.status ? '✅ ' : '❌ ') + result.message);
+    if (result.status) loadPermissionsData();
+  } catch (e) { showToast('❌ Lỗi kết nối!'); }
+}
+
+// ── PANEL NHÓM QUYỀN ──────────────────────────────────────────
+async function loadRolesForPermPanel() {
+  try {
+    const res    = await fetch('http://localhost:5000/api/roles');
+    const result = await res.json();
+    if (!result.status) return;
+    const roles = result.data;
+
+    const select = document.getElementById('permGroupSelect');
+    if (select) {
+      select.innerHTML = '<option value="">-- Chọn nhóm --</option>' +
+        roles.map(r => `<option value="${r.RoleId}">${r.RoleId}. ${r.RoleName}</option>`).join('');
+    }
+     const content = document.getElementById('rolesManagerContent');
+    if (content && content.style.display !== 'none') {
+      renderRolesList(roles);
+    }
+  } catch (e) { showToast('❌ Lỗi tải danh sách nhóm!'); }
+}
+
+function renderRolesList(roles) {
+  const tbody = document.getElementById('tblRolesList');
+  if (!tbody) return;
+  if (!roles.length) {
+    tbody.innerHTML = `<tr><td colspan="3" style="text-align:center; padding:10px;
+                       color:var(--text-muted);">Chưa có nhóm nào</td></tr>`;
+    return;
+  }
+  tbody.innerHTML = roles.map(r => `
+    <tr style="border-bottom:1px solid var(--border);">
+      <td style="padding:7px 10px; color:var(--text-muted); font-size:12px;">#${r.RoleId}</td>
+      <td style="padding:7px 10px;">
+        <span id="roleName_${r.RoleId}">${r.RoleName}</span>
+        <input type="text" id="roleNameInput_${r.RoleId}" value="${r.RoleName}"
+          style="display:none; padding:4px 8px; border:1px solid var(--border);
+                 border-radius:4px; font-family:inherit; font-size:13px; width:80%;">
+      </td>
+      <td style="padding:7px 10px; text-align:center;">
+        <button class="admin-action-btn btn-edit"   id="btnEdit_${r.RoleId}"
+          onclick="batDauSuaRole(${r.RoleId})">✏️ Sửa</button>
+        <button class="admin-action-btn btn-confirm" id="btnSave_${r.RoleId}"
+          onclick="luuSuaRole(${r.RoleId})" style="display:none;">💾 Lưu</button>
+        <button class="admin-action-btn btn-cancel"  id="btnCancel_${r.RoleId}"
+          onclick="huyySuaRole(${r.RoleId})" style="display:none;">✕</button>
+        <button class="admin-action-btn btn-delete"
+          onclick="xoaNhomQuyen(${r.RoleId}, '${r.RoleName.replace(/'/g,"\\'")}')">🗑️ Xóa</button>
+      </td>
+    </tr>
+  `).join('');
+}
+
+function renderGroupPermTable() {
+  const tbody = document.getElementById('tblGroupPermissionsBody');
+  if (!tbody) return;
+  tbody.innerHTML = sysModules.map(m => `
+    <tr style="border-bottom:1px solid var(--border);">
+      <td style="padding:10px; border-right:1px solid var(--border); font-weight:500;">${m.name}</td>
+      <td style="text-align:center;"><input type="checkbox" class="grp-view"   data-mod="${m.id}" style="transform:scale(1.3); cursor:pointer;"></td>
+      <td style="text-align:center;"><input type="checkbox" class="grp-add"    data-mod="${m.id}" style="transform:scale(1.3); cursor:pointer;"></td>
+      <td style="text-align:center;"><input type="checkbox" class="grp-edit"   data-mod="${m.id}" style="transform:scale(1.3); cursor:pointer;"></td>
+      <td style="text-align:center;"><input type="checkbox" class="grp-delete" data-mod="${m.id}" style="transform:scale(1.3); cursor:pointer;"></td>
+    </tr>
+  `).join('');
+}
+
+function onGroupSelectChange() {
+  document.querySelectorAll('#tblGroupPermissionsBody input[type="checkbox"]')
+    .forEach(cb => cb.checked = false);
+}
+
+async function loadGroupPermissions() {
+  const groupId = document.getElementById('permGroupSelect').value;
+  if (!groupId) { showToast('⚠️ Vui lòng chọn nhóm quyền!'); return; }
+  try {
+    const res    = await fetch(`http://localhost:5000/api/quyen-cua-nhom/${groupId}`);
+    const result = await res.json();
+    if (result.status) {
+      document.querySelectorAll('#tblGroupPermissionsBody input[type="checkbox"]')
+        .forEach(cb => cb.checked = false);
+      result.data.forEach(q => {
+        if (q.xem)  { const el = document.querySelector(`.grp-view[data-mod="${q.ma_chuc_nang}"]`);   if (el) el.checked = true; }
+        if (q.them) { const el = document.querySelector(`.grp-add[data-mod="${q.ma_chuc_nang}"]`);    if (el) el.checked = true; }
+        if (q.sua)  { const el = document.querySelector(`.grp-edit[data-mod="${q.ma_chuc_nang}"]`);   if (el) el.checked = true; }
+        if (q.xoa)  { const el = document.querySelector(`.grp-delete[data-mod="${q.ma_chuc_nang}"]`); if (el) el.checked = true; }
+      });
+      showToast('✅ Đã tải quyền của nhóm!');
+    }
+  } catch (e) { showToast('❌ Lỗi kết nối!'); }
+}
+
+function capTatCaQuyenGroup() {
+  document.querySelectorAll('#tblGroupPermissionsBody input[type="checkbox"]')
+    .forEach(cb => cb.checked = true);
+  showToast('✅ Đã chọn tất cả quyền nhóm!');
+}
+
+function thuHoiTatCaQuyenGroup() {
+  document.querySelectorAll('#tblGroupPermissionsBody input[type="checkbox"]')
+    .forEach(cb => cb.checked = false);
+  showToast('❌ Đã bỏ tất cả quyền nhóm!');
+}
+
+async function saveGroupPermissions() {
+  const groupId = document.getElementById('permGroupSelect').value;
+  if (!groupId) { showToast('⚠️ Vui lòng chọn nhóm!'); return; }
+  const permissions = sysModules.map(m => ({
+    ma_chuc_nang: m.id,
+    xem  : document.querySelector(`.grp-view[data-mod="${m.id}"]`)?.checked   || false,
+    them : document.querySelector(`.grp-add[data-mod="${m.id}"]`)?.checked    || false,
+    sua  : document.querySelector(`.grp-edit[data-mod="${m.id}"]`)?.checked   || false,
+    xoa  : document.querySelector(`.grp-delete[data-mod="${m.id}"]`)?.checked || false,
+  }));
+  try {
+    const res    = await fetch('http://localhost:5000/api/cap-quyen-nhom', {
+      method : 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body   : JSON.stringify({ role_id: groupId, permissions })
+    });
+    const result = await res.json();
+    showToast((result.status ? '💾 ' : '❌ ') + result.message);
+  } catch (e) { showToast('❌ Lỗi kết nối!'); }
+}
+
+// ── CRUD NHÓM QUYỀN ───────────────────────────────────────────
+async function themNhomQuyen() {
+  const name = document.getElementById('newRoleName').value.trim();
+  if (!name) { showToast('⚠️ Nhập tên nhóm quyền!'); return; }
+  try {
+    const res    = await fetch('http://localhost:5000/api/roles', {
+      method : 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body   : JSON.stringify({ role_name: name })
+    });
+    const result = await res.json();
+    if (result.status) {
+      showToast('✅ ' + result.message);
+      document.getElementById('newRoleName').value = '';
+      loadRolesForPermPanel(); // reload cả dropdown lẫn bảng
+    } else {
+      showToast('❌ ' + result.message);
+    }
+  } catch (e) { showToast('❌ Lỗi kết nối!'); }
+}
+
+function batDauSuaRole(roleId) {
+  document.getElementById(`roleName_${roleId}`).style.display      = 'none';
+  document.getElementById(`roleNameInput_${roleId}`).style.display = 'inline-block';
+  document.getElementById(`btnEdit_${roleId}`).style.display       = 'none';
+  document.getElementById(`btnSave_${roleId}`).style.display       = 'inline-block';
+  document.getElementById(`btnCancel_${roleId}`).style.display     = 'inline-block';
+}
+
+function huyySuaRole(roleId) {
+  document.getElementById(`roleName_${roleId}`).style.display      = 'inline';
+  document.getElementById(`roleNameInput_${roleId}`).style.display = 'none';
+  document.getElementById(`btnEdit_${roleId}`).style.display       = 'inline-block';
+  document.getElementById(`btnSave_${roleId}`).style.display       = 'none';
+  document.getElementById(`btnCancel_${roleId}`).style.display     = 'none';
+}
+
+async function luuSuaRole(roleId) {
+  const newName = document.getElementById(`roleNameInput_${roleId}`).value.trim();
+  if (!newName) { showToast('⚠️ Tên nhóm không được trống!'); return; }
+  try {
+    const res    = await fetch(`http://localhost:5000/api/roles/${roleId}`, {
+      method : 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body   : JSON.stringify({ role_name: newName })
+    });
+    const result = await res.json();
+    if (result.status) {
+      showToast('✅ ' + result.message);
+      loadRolesForPermPanel();
+    } else {
+      showToast('❌ ' + result.message);
+    }
+  } catch (e) { showToast('❌ Lỗi kết nối!'); }
+}
+
+async function xoaNhomQuyen(roleId, roleName) {
+  if (!confirm(`Xóa nhóm quyền "${roleName}"?\nTất cả quyền của nhóm này sẽ bị xóa theo!`)) return;
+  try {
+    const res    = await fetch(`http://localhost:5000/api/roles/${roleId}`, { method: 'DELETE' });
+    const result = await res.json();
+    if (result.status) {
+      showToast('✅ ' + result.message);
+      loadRolesForPermPanel();
+    } else {
+      showToast('❌ ' + result.message);
+    }
+  } catch (e) { showToast('❌ Lỗi kết nối!'); }
+}
 async function loadCartFromServer() {
   if (!currentUser) return;
   try {
@@ -1808,38 +2239,130 @@ async function handlePlaceOrder(e) {
 }
 // ─── RENDER GIAO DIỆN GIỎ HÀNG ─────────────────────────────────────────────
 function renderCartItems() {
-    const container = document.getElementById('cartItemsList');
+  const container = document.getElementById('cartItemsList');
 
-    if (!cart || cart.length === 0) {
-        container.innerHTML = `
-            <div style="text-align:center; padding: 40px 20px; color: var(--text-muted);">
-                <div style="font-size: 40px; margin-bottom: 10px;">🛒</div>
-                <p>Giỏ hàng của bạn đang trống</p>
-            </div>`;
-        document.getElementById('cartSubtotalText').textContent = '0đ';
-        document.getElementById('cartTotalText').textContent = '0đ';
-        return;
-    }
+  if (!cart || cart.length === 0) {
+    container.innerHTML = `
+      <div style="text-align:center; padding:40px 20px; color:var(--text-muted);">
+        <div style="font-size:40px; margin-bottom:10px;">🛒</div>
+        <p>Giỏ hàng của bạn đang trống</p>
+      </div>`;
+    document.getElementById('cartSubtotalText').textContent = '0đ';
+    document.getElementById('cartTotalText').textContent    = '0đ';
+    return;
+  }
 
-    // Vẽ từng món hàng ra (Lưu ý: API trả về viết hoa ProductId, Quantity...)
-    container.innerHTML = cart.map(item => `
-        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 12px; border-bottom: 1px solid var(--border); padding-bottom: 12px;">
-            <div style="flex: 1;">
-                <div style="font-weight:600; font-size:14px;">Mã Sản Phẩm: #${item.ProductId}</div>
-                <div style="font-size:12px; color:var(--text-muted); margin-top:4px;">
-                    Số lượng: <b>${item.Quantity}</b> x ${Number(item.UnitPrice).toLocaleString('vi-VN')}đ
-                </div>
-            </div>
-            <div style="font-weight:700; color:var(--red); font-size:15px;">
-                ${Number(item.Quantity * item.UnitPrice).toLocaleString('vi-VN')}đ
-            </div>
+  container.innerHTML = cart.map(item => `
+    <div style="display:flex; gap:12px; padding:12px 0;
+                border-bottom:1px solid var(--border); align-items:flex-start;">
+
+      <!-- Emoji sản phẩm -->
+      <div style="font-size:36px; flex-shrink:0;">${item.Emoji || '📦'}</div>
+
+      <!-- Tên + điều chỉnh số lượng -->
+      <div style="flex:1; min-width:0;">
+        <div style="font-weight:600; font-size:14px; margin-bottom:4px;
+                    white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
+          ${item.ProductName || 'Sản phẩm #' + item.ProductId}
         </div>
-    `).join('');
+        <div style="font-size:13px; color:var(--text-muted); margin-bottom:8px;">
+          ${Number(item.UnitPrice).toLocaleString('vi-VN')}đ / sản phẩm
+        </div>
 
-    // Tính tổng tiền và gắn vào UI
-    const totalAmount = cart.reduce((sum, item) => sum + (item.Quantity * item.UnitPrice), 0);
-    document.getElementById('cartSubtotalText').textContent = totalAmount.toLocaleString('vi-VN') + 'đ';
-    document.getElementById('cartTotalText').textContent = totalAmount.toLocaleString('vi-VN') + 'đ';
+        <!-- Nút tăng / giảm số lượng -->
+        <div style="display:flex; align-items:center; gap:8px;">
+          <button onclick="changeCartQty(${item.ProductId}, ${item.Quantity - 1})"
+            style="width:28px; height:28px; border-radius:6px; border:1px solid var(--border);
+                   background:var(--bg); cursor:pointer; font-size:16px; font-weight:700;
+                   display:flex; align-items:center; justify-content:center;">−</button>
+
+          <span style="min-width:24px; text-align:center; font-weight:700;">
+            ${item.Quantity}
+          </span>
+
+          <button onclick="changeCartQty(${item.ProductId}, ${item.Quantity + 1})"
+            style="width:28px; height:28px; border-radius:6px; border:1px solid var(--border);
+                   background:var(--bg); cursor:pointer; font-size:16px; font-weight:700;
+                   display:flex; align-items:center; justify-content:center;">+</button>
+        </div>
+      </div>
+
+      <!-- Tổng tiền + nút xóa -->
+      <div style="display:flex; flex-direction:column; align-items:flex-end; gap:8px; flex-shrink:0;">
+        <div style="font-weight:700; color:var(--red); font-size:15px;">
+          ${Number(item.Quantity * item.UnitPrice).toLocaleString('vi-VN')}đ
+        </div>
+        <button onclick="xoaKhoiGio(${item.ProductId})"
+          style="background:none; border:none; color:var(--text-muted);
+                 cursor:pointer; font-size:18px; line-height:1;"
+          title="Xóa sản phẩm">🗑️</button>
+      </div>
+    </div>
+  `).join('');
+
+  const subtotal = cart.reduce((s, i) => s + i.Quantity * i.UnitPrice, 0);
+  document.getElementById('cartSubtotalText').textContent =
+    subtotal.toLocaleString('vi-VN') + 'đ';
+  document.getElementById('cartTotalText').textContent =
+    subtotal.toLocaleString('vi-VN') + 'đ';
+}
+
+// ─── Xóa 1 sản phẩm khỏi giỏ ────────────────────────────────
+async function xoaKhoiGio(productId) {
+  if (!currentUser) return;
+  try {
+    const res    = await fetch('http://localhost:5000/api/gio-hang/xoa', {
+      method : 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body   : JSON.stringify({
+        UserId   : currentUser.ma_user || currentUser.UserId,
+        ProductId: productId
+      })
+    });
+    const result = await res.json();
+    if (result.status) {
+      await loadCartFromServer();
+      renderCartItems();
+      showToast('🗑️ Đã xóa sản phẩm khỏi giỏ hàng!');
+    } else {
+      showToast('❌ ' + result.message);
+    }
+  } catch (e) {
+    showToast('❌ Lỗi kết nối!');
+  }
+}
+
+// ─── Tăng/giảm số lượng ──────────────────────────────────────
+async function changeCartQty(productId, newQty) {
+  if (!currentUser) return;
+
+  // Nếu newQty = 0 → xóa luôn
+  if (newQty === 0) {
+    if (!confirm('Xóa sản phẩm này khỏi giỏ hàng?')) return;
+    await xoaKhoiGio(productId);
+    return;
+  }
+
+  try {
+    const res    = await fetch('http://localhost:5000/api/gio-hang/cap-nhat', {
+      method : 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body   : JSON.stringify({
+        UserId   : currentUser.ma_user || currentUser.UserId,
+        ProductId: productId,
+        Quantity : newQty
+      })
+    });
+    const result = await res.json();
+    if (result.status) {
+      await loadCartFromServer();
+      renderCartItems();
+    } else {
+      showToast('❌ ' + result.message);
+    }
+  } catch (e) {
+    showToast('❌ Lỗi kết nối!');
+  }
 }
 
 // Bật/tắt khung giỏ hàng
@@ -2319,6 +2842,17 @@ async function renderRecentOrdersPreview() {
   } catch (e) {
     section.style.display = 'none';
   }
+}
+function toggleRolesManager() {
+  const content = document.getElementById('rolesManagerContent');
+  const btn     = document.getElementById('btnToggleRolesManager');
+  const isHidden = content.style.display === 'none';
+
+  content.style.display = isHidden ? 'block' : 'none';
+  btn.textContent       = isHidden ? '➖ Thu gọn' : '➕ Mở rộng';
+
+  // Lần đầu mở → load danh sách roles
+  if (isHidden) loadRolesForPermPanel();
 }
 // KHỞI CHẠY GIAO DIỆN MẶC ĐỊNH
 loadCategories();

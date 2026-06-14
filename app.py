@@ -384,5 +384,49 @@ def api_cap_nhat_trang_thai(order_id):
 @app.route('/api/don-hang/cua-toi/<int:user_id>', methods=['GET'])
 def api_lay_don_hang_cua_toi(user_id):
     return jsonify(don_hang_bus.lay_don_hang_cua_toi(user_id))
+# ==========================================
+# API QUẢN LÝ ROLES (NHÓM QUYỀN)
+# ==========================================
+@app.route('/api/roles', methods=['GET'])
+def get_all_roles():
+    return jsonify(phan_quyen_bus.lay_tat_ca_roles())
+
+@app.route('/api/roles', methods=['POST'])
+def add_role():
+    data = request.json
+    return jsonify(phan_quyen_bus.them_role(data.get('role_name')))
+
+@app.route('/api/roles/<int:role_id>', methods=['PUT'])
+def update_role(role_id):
+    data = request.json
+    return jsonify(phan_quyen_bus.sua_role(role_id, data.get('role_name')))
+
+@app.route('/api/roles/<int:role_id>', methods=['DELETE'])
+def delete_role(role_id):
+    return jsonify(phan_quyen_bus.xoa_role(role_id))
+@app.route('/api/gio-hang/xoa', methods=['POST'])
+def api_xoa_khoi_gio():
+    data = request.json
+    return jsonify(cart_bus.xoa_khoi_gio(
+        data.get('UserId'),
+        data.get('ProductId')
+    ))
+
+@app.route('/api/gio-hang/cap-nhat', methods=['POST'])
+def api_cap_nhat_so_luong():
+    data = request.json
+    return jsonify(cart_bus.cap_nhat_so_luong(
+        data.get('UserId'),
+        data.get('ProductId'),
+        data.get('Quantity')
+    ))
+@app.route('/api/thong-ke/tong-quan', methods=['GET'])
+def api_thong_ke_tong_quan():
+    return jsonify(don_hang_bus.lay_thong_ke_tong_quan())
+
+@app.route('/api/thong-ke/doanh-thu-theo-thang', methods=['GET'])
+def api_doanh_thu_theo_thang():
+    year = request.args.get('year', 2026, type=int)
+    return jsonify(don_hang_bus.lay_doanh_thu_theo_thang(year))
 if __name__ == '__main__':
     app.run(debug=True, port=5000)

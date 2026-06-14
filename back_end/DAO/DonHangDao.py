@@ -188,3 +188,133 @@ class DonHangDao:
         finally:
             cursor.close()
             conn.close()
+
+    def lay_thong_ke_tong_quan(self):
+        conn = DBconnection.get_connection()
+        if conn is None: return {}
+        cursor = conn.cursor()
+        try:
+
+            cursor.execute("""
+                SELECT 
+                    ISNULL(SUM(CASE WHEN Status='Completed' THEN TotalAmount ELSE 0 END), 0) AS doanh_thu,
+                    COUNT(*) AS tong_don,
+                    SUM(CASE WHEN Status='Pending'   THEN 1 ELSE 0 END) AS cho_duyet,
+                    SUM(CASE WHEN Status='Shipping'  THEN 1 ELSE 0 END) AS dang_giao,
+                    SUM(CASE WHEN Status='Completed' THEN 1 ELSE 0 END) AS hoan_thanh,
+                    SUM(CASE WHEN Status='Cancelled' THEN 1 ELSE 0 END) AS da_huy
+                FROM Orders
+            """)
+            row = cursor.fetchone()
+
+            # Tổng sản phẩm
+            cursor.execute("SELECT COUNT(*) AS tong FROM Products")
+            p = cursor.fetchone()
+
+            # Tổng user
+            cursor.execute("SELECT COUNT(*) AS tong FROM Users")
+            u = cursor.fetchone()
+
+            cursor.execute("""
+                SELECT TOP 5
+                    p.ProductId,
+                    p.ProductName,
+                    p.Emoji,
+                    p.SoldCount,
+                    p.Price,
+                    c.CategoryName  
+                FROM Products p
+                LEFT JOIN Categories c ON p.CategoryId = c.CategoryId
+                ORDER BY p.SoldCount DESC
+            """)
+            top_sp = cursor.fetchall()
+
+            cursor.execute("""
+                SELECT TOP 5
+                    o.OrderId,
+                    o.ReceiverName,
+                    o.TotalAmount,
+                    o.Status,
+                    o.CreatedAt,
+                    u.FullName
+                FROM Orders o
+                LEFT JOIN Users u ON o.UserId = u.UserId
+                ORDER BY o.CreatedAt DESC
+            """)
+            recent = cursor.fetchall()
+
+            return {
+                "status": True,
+                "data": {
+                    "doanh_thu": float(row.doanh_thu),
+                    "tong_don": row.tong_don,
+                    "cho_duyet": row.cho_duyet,
+                    "dang_giao": row.dang_giao,
+                    "hoan_thanh": row.hoan_thanh,
+                    "da_huy": row.da_huy,
+                    "tong_san_pham": p.tong,
+                    "tong_user": u.tong,
+
+                    "top_san_pham": [
+                        {
+                            "id": r.ProductId,
+                            "name": r.ProductName,
+                            "emoji": r.Emoji or '📦',
+                            "sold": r.SoldCount or 0,
+                            "price": float(r.Price),
+                            "category": r.CategoryName or '—'
+                        } for r in top_sp
+                    ],
+
+                    "don_gan_day": [
+                        {
+                            "order_id": r.OrderId,
+                            "receiver_name": r.ReceiverName,
+                            "customer_name": r.FullName or '—',
+                            "total_amount": float(r.TotalAmount),
+                            "status": r.Status,
+                            "created_at": str(r.CreatedAt)
+                        } for r in recent
+                    ]
+                }
+            }
+        except Exception as e:
+            print("Lỗi thống kê:", e)
+            return {"status": False, "data": {}}
+        finally:
+            cursor.close()
+            conn.close()
+
+    def lay_doanh_thu_theo_thang(self, year):
+        conn = DBconnection.get_connection()
+        if conn is None: return {}
+        cursor = conn.cursor()
+        try:
+            cursor.execute("""
+                SELECT 
+                    MONTH(CreatedAt) AS thang,
+                    ISNULL(SUM(TotalAmount), 0) AS doanh_thu,
+                    COUNT(*) AS so_don
+                FROM Orders
+                WHERE YEAR(CreatedAt) = ?
+                  AND Status = 'Completed'
+                GROUP BY MONTH(CreatedAt)
+                ORDER BY thang
+            """, (year,))
+            rows = cursor.fetchall()
+
+            # Đảm bảo đủ 12 tháng
+            data = {i: {"thang": i, "doanh_thu": 0, "so_don": 0} for i in range(1, 13)}
+            for r in rows:
+                data[r.thang] = {
+                    "thang": r.thang,
+                    "doanh_thu": float(r.doanh_thu),
+                    "so_don": r.so_don
+                }
+            return {"status": True, "data": list(data.values())}
+        except Exception as e:
+            print("Lỗi doanh thu theo tháng:", e)
+            return {"status": False, "data": []}
+        finally:
+            cursor.close();
+            conn.close()

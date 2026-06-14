@@ -31,3 +31,23 @@ class GioHangBus:
 
         items = self.dao.lay_chi_tiet_gio_hang(cart_id)
         return {"status": True, "message": "Thành công", "data": items}
+
+    def xoa_khoi_gio(self, user_id, product_id):
+        cart_id = self.dao.lay_hoac_tao_gio_hang(user_id)
+        if not cart_id:
+            return {"status": False, "message": "Không tìm thấy giỏ hàng!"}
+        ok = self.dao.xoa_khoi_gio(cart_id, product_id)
+        if ok:
+            return {"status": True, "message": "Đã xóa sản phẩm khỏi giỏ hàng!"}
+        return {"status": False, "message": "Lỗi khi xóa sản phẩm!"}
+
+    def cap_nhat_so_luong(self, user_id, product_id, quantity):
+        if quantity <= 0:
+            return self.xoa_khoi_gio(user_id, product_id)
+        cart_id = self.dao.lay_hoac_tao_gio_hang(user_id)
+        if not cart_id:
+            return {"status": False, "message": "Không tìm thấy giỏ hàng!"}
+        ok = self.dao.cap_nhat_so_luong(cart_id, product_id, quantity)
+        if ok:
+            return {"status": True, "message": "Đã cập nhật số lượng!"}
+        return {"status": False, "message": "Lỗi cập nhật!"}

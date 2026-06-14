@@ -339,42 +339,167 @@
       </div>
 
       <!-- Pane Phân Quyền Giữ Nguyên Từ Source 1 -->
-      <div id="pane-permissions" class="admin-pane" style="display:none;">
-        <div class="admin-card">
-          <h3 style="margin-bottom: 20px;">Cấu hình Phân quyền hệ thống</h3>
-          <div style="display: flex; gap: 16px; margin-bottom: 20px; align-items: center; border-bottom: 1px solid var(--border); padding-bottom: 16px;">
-  <span style="font-weight: 700; font-size: 14px;">Phân quyền theo:</span>
-  <button id="btnRoleTypeUser" class="checkout-btn" style="background: var(--primary); color: white; padding: 6px 16px; border-radius: 6px; border: 1px solid var(--primary);" onclick="switchPermType('user')">Cá nhân (Tài khoản)</button>
-  <button id="btnRoleTypeGroup" class="checkout-btn" style="background: white; color: var(--text); padding: 6px 16px; border-radius: 6px; border: 1px solid var(--border);" onclick="switchPermType('group')">Nhóm quyền</button>
-</div>
+<div id="pane-permissions" class="admin-pane" style="display:none;">
+  <div class="admin-card">
+    <h3 style="margin-bottom:20px;">🔐 Cấu hình Phân quyền hệ thống</h3>
 
-<div style="margin-bottom: 16px; display: flex; align-items: center; gap: 10px;">
-    <label id="permLabel" style="font-weight: 700; font-size: 14px;">Tài khoản cần phân quyền:</label>
-    <select id="permUserSelect" style="padding: 10px; border: 1px solid var(--border); border-radius: 6px; width: 250px; font-family: inherit;"></select>
+    <!-- Tabs chuyển chế độ -->
+    <div style="display:flex; gap:8px; margin-bottom:20px; border-bottom:1px solid var(--border); padding-bottom:16px;">
+      <button id="btnPermTabUser" onclick="switchPermTab('user')"
+        style="padding:8px 20px; border-radius:8px; border:none; cursor:pointer;
+               background:var(--primary); color:white; font-weight:700; font-family:inherit;">
+        👤 Cá nhân
+      </button>
+      <button id="btnPermTabGroup" onclick="switchPermTab('group')"
+        style="padding:8px 20px; border-radius:8px; border:1px solid var(--border);
+               cursor:pointer; background:white; color:var(--text); font-weight:700; font-family:inherit;">
+        👥 Nhóm quyền
+      </button>
+    </div>
 
-    <button class="checkout-btn" style="background: #e2e8f0; color: #1e293b; padding: 10px 20px;" onclick="loadPermissionsData()">Xem quyền</button>
-    <button class="checkout-btn"
-        style="background: #e67e22; color: white; padding: 10px 20px;"
-        onclick="apDungQuyenNhomChoUser()">
-    🔄 Áp dụng quyền nhóm
-</button>
-    <button class="checkout-btn" style="background: var(--primary); padding: 10px 24px; margin-left: auto; box-shadow: 0 4px 12px rgba(145,22,212,0.3);" onclick="savePermissionsData()">💾 Lưu cấu hình</button>
-</div>
-
-          <table style="border: 1px solid var(--border);">
-            <thead>
-              <tr style="background: #f1f5f9; color: #334155;">
-                <th style="border-right: 1px solid var(--border);">Tên chức năng</th>
-                <th style="text-align: center; width: 120px;">Xem</th>
-                <th style="text-align: center; width: 120px;">Thêm</th>
-                <th style="text-align: center; width: 120px;">Sửa</th>
-                <th style="text-align: center; width: 120px;">Xóa</th>
-              </tr>
-            </thead>
-            <tbody id="tblPermissionsBody"></tbody>
-          </table>
-        </div>
+    <!-- ===== PANEL CÁ NHÂN ===== -->
+    <div id="permPanelUser">
+      <div style="display:flex; align-items:center; gap:10px; margin-bottom:16px; flex-wrap:wrap;">
+        <label style="font-weight:700; font-size:14px; white-space:nowrap;">Tài khoản:</label>
+        <select id="permUserSelect"
+          style="padding:8px 12px; border:1px solid var(--border); border-radius:6px;
+                 width:260px; font-family:inherit;">
+          <option value="">-- Chọn tài khoản --</option>
+        </select>
+        <button onclick="loadPermissionsData()"
+          style="padding:8px 16px; border-radius:6px; border:1px solid var(--border);
+                 background:var(--bg); cursor:pointer; font-family:inherit;">
+          👁️ Xem quyền
+        </button>
+        <button onclick="apDungQuyenNhomChoUser()"
+          style="padding:8px 16px; border-radius:6px; border:none;
+                 background:#e67e22; color:white; cursor:pointer; font-family:inherit; font-weight:600;">
+          🔄 Áp dụng quyền nhóm
+        </button>
+        <button onclick="capTatCaQuyenUser()"
+          style="padding:8px 16px; border-radius:6px; border:none;
+                 background:var(--green); color:white; cursor:pointer; font-family:inherit; font-weight:600;">
+          ✅ Cấp tất cả
+        </button>
+        <button onclick="thuHoiTatCaQuyenUser()"
+          style="padding:8px 16px; border-radius:6px; border:none;
+                 background:var(--red); color:white; cursor:pointer; font-family:inherit; font-weight:600;">
+          ❌ Thu hồi tất cả
+        </button>
+        <button onclick="savePermissionsData()"
+          style="padding:8px 20px; border-radius:6px; border:none; margin-left:auto;
+                 background:var(--primary); color:white; cursor:pointer;
+                 font-family:inherit; font-weight:700;">
+          💾 Lưu cấu hình
+        </button>
       </div>
+
+      <table style="border:1px solid var(--border); width:100%;">
+        <thead>
+          <tr style="background:#f1f5f9;">
+            <th style="text-align:left; padding:10px; border-right:1px solid var(--border);">Tên chức năng</th>
+            <th style="text-align:center; width:100px;">Xem</th>
+            <th style="text-align:center; width:100px;">Thêm</th>
+            <th style="text-align:center; width:100px;">Sửa</th>
+            <th style="text-align:center; width:100px;">Xóa</th>
+          </tr>
+        </thead>
+        <tbody id="tblPermissionsBody"></tbody>
+      </table>
+    </div>
+
+    <!-- ===== PANEL NHÓM QUYỀN ===== -->
+    <div id="permPanelGroup" style="display:none;">
+
+      <!-- Dòng 1: Chọn nhóm + nút thao tác nhóm -->
+      <div style="display:flex; align-items:center; gap:10px; margin-bottom:14px; flex-wrap:wrap;">
+        <label style="font-weight:700; font-size:14px; white-space:nowrap;">Nhóm quyền:</label>
+        <select id="permGroupSelect" onchange="onGroupSelectChange()"
+          style="padding:8px 12px; border:1px solid var(--border); border-radius:6px;
+                 width:240px; font-family:inherit;">
+          <option value="">-- Chọn nhóm --</option>
+        </select>
+        <button onclick="loadGroupPermissions()"
+          style="padding:8px 16px; border-radius:6px; border:1px solid var(--border);
+                 background:var(--bg); cursor:pointer; font-family:inherit;">
+          👁️ Xem quyền
+        </button>
+        <button onclick="capTatCaQuyenGroup()"
+          style="padding:8px 16px; border-radius:6px; border:none;
+                 background:var(--green); color:white; cursor:pointer; font-family:inherit; font-weight:600;">
+          ✅ Cấp tất cả
+        </button>
+        <button onclick="thuHoiTatCaQuyenGroup()"
+          style="padding:8px 16px; border-radius:6px; border:none;
+                 background:var(--red); color:white; cursor:pointer; font-family:inherit; font-weight:600;">
+          ❌ Thu hồi tất cả
+        </button>
+        <button onclick="saveGroupPermissions()"
+          style="padding:8px 20px; border-radius:6px; border:none; margin-left:auto;
+                 background:var(--primary); color:white; cursor:pointer;
+                 font-family:inherit; font-weight:700;">
+          💾 Lưu quyền nhóm
+        </button>
+      </div>
+
+      <!-- Dòng 2: Quản lý danh sách nhóm -->
+      <!-- Dòng 2: Quản lý danh sách nhóm -->
+<div style="background:var(--bg); border-radius:8px; padding:12px 16px; margin-bottom:16px;">
+  <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+    <span style="font-weight:700; font-size:13px; color:var(--text-muted);">⚙️ Quản lý danh sách nhóm quyền</span>
+    <button onclick="toggleRolesManager()"
+      id="btnToggleRolesManager"
+      style="padding:5px 12px; border-radius:6px; border:1px solid var(--border);
+             background:white; cursor:pointer; font-family:inherit; font-size:12px;">
+      ➕ Mở rộng
+    </button>
+  </div>
+
+  <!-- Nội dung ẩn mặc định -->
+  <div id="rolesManagerContent" style="display:none;">
+    <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-bottom:12px;">
+      <input type="text" id="newRoleName" placeholder="Tên nhóm quyền mới..."
+        style="padding:8px 12px; border:1px solid var(--border); border-radius:6px;
+               flex:1; min-width:180px; font-family:inherit;">
+      <button onclick="themNhomQuyen()"
+        style="padding:8px 16px; border-radius:6px; border:none;
+               background:var(--primary); color:white; cursor:pointer;
+               font-family:inherit; font-weight:600;">
+        ➕ Thêm nhóm
+      </button>
+    </div>
+    <div style="max-height:220px; overflow-y:auto;">
+      <table style="width:100%; border-collapse:collapse; font-size:13px;">
+        <thead>
+          <tr style="background:#e2e8f0;">
+            <th style="text-align:left; padding:7px 10px; border-bottom:1px solid var(--border);">ID</th>
+            <th style="text-align:left; padding:7px 10px; border-bottom:1px solid var(--border);">Tên nhóm quyền</th>
+            <th style="text-align:center; padding:7px 10px; border-bottom:1px solid var(--border); width:160px;">Thao tác</th>
+          </tr>
+        </thead>
+        <tbody id="tblRolesList"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+      <!-- Bảng phân quyền theo nhóm -->
+      <table style="border:1px solid var(--border); width:100%;">
+        <thead>
+          <tr style="background:#f1f5f9;">
+            <th style="text-align:left; padding:10px; border-right:1px solid var(--border);">Tên chức năng</th>
+            <th style="text-align:center; width:100px;">Xem</th>
+            <th style="text-align:center; width:100px;">Thêm</th>
+            <th style="text-align:center; width:100px;">Sửa</th>
+            <th style="text-align:center; width:100px;">Xóa</th>
+          </tr>
+        </thead>
+        <tbody id="tblGroupPermissionsBody"></tbody>
+      </table>
+    </div>
+
+  </div>
+</div>
     </main>
   </div>
 </div>

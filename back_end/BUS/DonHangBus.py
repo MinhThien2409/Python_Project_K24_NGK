@@ -47,3 +47,9 @@ class DonHangBus:
     def lay_tat_ca_don_hang(self):
         danh_sach = self.dao.lay_tat_ca_don_hang()
         return {"status": True, "data": danh_sach}
+
+    def lay_thong_ke_tong_quan(self):
+        return self.dao.lay_thong_ke_tong_quan()
+
+    def lay_doanh_thu_theo_thang(self, year):
+        return self.dao.lay_doanh_thu_theo_thang(year)

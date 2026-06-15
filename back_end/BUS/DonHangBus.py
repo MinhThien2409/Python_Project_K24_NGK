@@ -32,9 +32,9 @@ class DonHangBus:
             return {"status": False, "message": "Lỗi xác thực người dùng", "data": []}
         danh_sach = self.dao.lay_don_hang_cua_user(user_id)
         return {"status": True, "data": danh_sach}
-    
+
     def thay_doi_trang_thai(self, order_id, new_status):
-        trang_thai_hop_le = ['Pending', 'Shipping', 'Completed', 'Cancelled']
+        trang_thai_hop_le = ['Pending', 'Confirmed', 'Shipping', 'Completed', 'Cancelled']
         if new_status not in trang_thai_hop_le:
             return {"status": False, "message": "Trạng thái đơn hàng không hợp lệ!"}
 

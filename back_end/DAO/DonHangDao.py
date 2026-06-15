@@ -197,7 +197,7 @@ class DonHangDao:
 
             cursor.execute("""
                 SELECT 
-                    ISNULL(SUM(CASE WHEN Status='Completed' THEN TotalAmount ELSE 0 END), 0) AS doanh_thu,
+                    ISNULL(SUM(CASE WHEN Status <> 'Cancelled' THEN TotalAmount ELSE 0 END), 0) AS doanh_thu,
                     COUNT(*) AS tong_don,
                     SUM(CASE WHEN Status='Pending'   THEN 1 ELSE 0 END) AS cho_duyet,
                     SUM(CASE WHEN Status='Shipping'  THEN 1 ELSE 0 END) AS dang_giao,

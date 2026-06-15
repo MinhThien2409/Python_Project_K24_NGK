@@ -7,6 +7,9 @@ let categories = [
   { slug: 'fashion', name: 'Thời trang' }, 
   { slug: 'home', name: 'Nhà cửa' }
 ];
+let currentPage = 1;
+const ITEMS_PER_PAGE = 12;
+let currentFilteredProducts = []; // lưu lại mảng đang hiển thị để dùng khi đổi trang
 
 let products = [
   { id: 1, name: 'Điện thoại thông minh Samsung Galaxy S26', category: 'electronics', price: 19900000, emoji: '📱', shop: 'Samsung Official', sold: 45 },
@@ -353,10 +356,16 @@ async function loadSellerStore() {
 
 async function handleRegister(e) {
   e.preventDefault();
-  const ten_user = document.getElementById('regName').value.trim();
-  const tendangnhap = document.getElementById('regUsername').value.trim(); // ID mới
-  const sdt = document.getElementById('regPhone').value.trim();
-  const mat_khau = document.getElementById('regPass').value;
+  const ten_user    = document.getElementById('regName').value.trim();
+  const tendangnhap = document.getElementById('regUsername').value.trim();
+  const sdt         = document.getElementById('regPhone').value.trim();
+  const mat_khau    = document.getElementById('regPass').value;
+
+  // Validate cơ bản
+  if (!ten_user || !tendangnhap || !mat_khau) {
+    showToast('⚠️ Vui lòng điền đầy đủ thông tin bắt buộc!');
+    return;
+  }
 
   try {
     const response = await fetch('http://localhost:5000/api/dang-ky', {
@@ -364,8 +373,28 @@ async function handleRegister(e) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ ten_user, tendangnhap, sdt, mat_khau })
     });
-    // ... code xử lý kết quả giữ nguyên ...
-  } catch (error) { showToast('❌ Lỗi kết nối!'); }
+
+    const result = await response.json();
+
+    if (result.status === true) {
+      showToast('🎉 ' + (result.message || 'Đăng ký thành công! Vui lòng đăng nhập.'));
+
+      // Reset form đăng ký
+      document.getElementById('formRegister').reset();
+
+      // Chuyển sang tab đăng nhập, điền sẵn tên đăng nhập vừa tạo
+      switchAuthForm('login');
+      document.getElementById('loginUsername').value = tendangnhap;
+      document.getElementById('loginPass').value = '';
+
+    } else {
+      showToast('❌ ' + (result.message || 'Đăng ký thất bại!'));
+    }
+
+  } catch (error) {
+    console.error(error);
+    showToast('❌ Lỗi kết nối máy chủ!');
+  }
 }
 // HÀM MỞ BẢNG THÔNG TIN CÁ NHÂN (Cho phép chỉnh sửa)
 // HÀM MỞ BẢNG THÔNG TIN CÁ NHÂN (Cho phép chỉnh sửa)
@@ -1006,6 +1035,7 @@ async function renderRevenueChart() {
   }).join('');
 }
 function applyUserFilters() {
+  currentPage=1
   let filtered = [...products]; // products đã là data từ API sau loadProducts()
 
   // Lọc theo danh mục checkbox
@@ -1207,16 +1237,28 @@ function renderUserProducts(arr) {
   const container = document.getElementById('userProductsGrid');
   if (!container) return;
 
+  currentFilteredProducts = arr || [];
+
   if (!arr || arr.length === 0) {
     container.innerHTML = `
       <div class="empty-state" style="grid-column:1/-1;">
         <div class="icon">📦</div>
         <p>Không có sản phẩm nào</p>
       </div>`;
+    document.getElementById('paginationWrap').innerHTML = '';
     return;
   }
 
-  container.innerHTML = arr.map(p => `
+  // Đảm bảo currentPage hợp lệ
+  const totalPages = Math.ceil(arr.length / ITEMS_PER_PAGE);
+  if (currentPage > totalPages) currentPage = totalPages;
+  if (currentPage < 1) currentPage = 1;
+
+  // Cắt mảng theo trang hiện tại
+  const startIdx = (currentPage - 1) * ITEMS_PER_PAGE;
+  const pageItems = arr.slice(startIdx, startIdx + ITEMS_PER_PAGE);
+
+  container.innerHTML = pageItems.map(p => `
     <div class="product-card" onclick="openProductDetail(${p.id})">
       <div class="card-img">${p.emoji || '📦'}</div>
       <div class="card-body">
@@ -1229,6 +1271,56 @@ function renderUserProducts(arr) {
         </div>
       </div>
     </div>`).join('');
+
+  renderPagination(arr.length);
+}
+function renderPagination(totalItems) {
+  const wrap = document.getElementById('paginationWrap');
+  const totalPages = Math.ceil(totalItems / ITEMS_PER_PAGE);
+
+  if (totalPages <= 1) {
+    wrap.innerHTML = '';
+    return;
+  }
+
+  let html = '';
+
+  // Nút "Trước"
+  html += `<button onclick="goToPage(${currentPage - 1})"
+    ${currentPage === 1 ? 'disabled' : ''}
+    style="padding:6px 12px; border:1px solid var(--border); border-radius:6px;
+           background:white; cursor:${currentPage === 1 ? 'default' : 'pointer'};
+           opacity:${currentPage === 1 ? '0.4' : '1'}; font-family:inherit;">‹</button>`;
+
+  // Các nút số trang
+  for (let i = 1; i <= totalPages; i++) {
+    const active = i === currentPage;
+    html += `<button onclick="goToPage(${i})"
+      style="padding:6px 12px; border:1px solid var(--border); border-radius:6px;
+             background:${active ? 'var(--primary)' : 'white'};
+             color:${active ? 'white' : 'var(--text)'};
+             font-weight:${active ? '700' : '400'};
+             cursor:pointer; font-family:inherit;">${i}</button>`;
+  }
+
+  // Nút "Sau"
+  html += `<button onclick="goToPage(${currentPage + 1})"
+    ${currentPage === totalPages ? 'disabled' : ''}
+    style="padding:6px 12px; border:1px solid var(--border); border-radius:6px;
+           background:white; cursor:${currentPage === totalPages ? 'default' : 'pointer'};
+           opacity:${currentPage === totalPages ? '0.4' : '1'}; font-family:inherit;">›</button>`;
+
+  wrap.innerHTML = html;
+}
+
+function goToPage(page) {
+  const totalPages = Math.ceil(currentFilteredProducts.length / ITEMS_PER_PAGE);
+  if (page < 1 || page > totalPages) return;
+  currentPage = page;
+  renderUserProducts(currentFilteredProducts);
+
+  // Cuộn lên đầu khu vực sản phẩm cho dễ nhìn
+  document.getElementById('userProductsGrid').scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
 // Hàm mở modal đăng ký gian hàng - load categories trước
@@ -2634,17 +2726,19 @@ async function capNhatTrangThaiDon(orderId, newStatus) {
 
     if (result.status) {
       showToast(`✅ ${result.message}`);
-      // Cập nhật local data thay vì gọi lại API
       const idx = allAdminOrders.findIndex(o => o.OrderId === orderId);
       if (idx !== -1) allAdminOrders[idx].Status = newStatus;
-      renderAdminOrders(); // Re-render từ data local
+      renderAdminOrders();
+
+      // ← Thêm dòng này: cập nhật ngay số liệu doanh thu/đơn hàng trên Dashboard
+      initAdminDashboard();
+
     } else {
       showToast('❌ ' + result.message);
     }
   } catch (e) {
     showToast('❌ Lỗi kết nối!');
   }
-
 }
 // ==========================================
 // LỊCH SỬ ĐƠN HÀNG

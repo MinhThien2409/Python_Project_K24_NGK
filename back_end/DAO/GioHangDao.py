@@ -89,23 +89,27 @@ class GioHangDao:
         if not conn: return []
         cursor = conn.cursor()
         try:
-            # Trong thực tế, bạn sẽ JOIN với bảng Products để lấy thêm Tên và Emoji
-            sql = "SELECT CartId, ProductId, Quantity, UnitPrice FROM CartItems WHERE CartId = ?"
+            sql = """
+            SELECT ci.CartId AS CartId, 
+            ci.ProductId AS ProductId, 
+            ci.Quantity AS Quantity, 
+            ci.UnitPrice AS UnitPrice,
+            p.ProductName AS ProductName, 
+            p.Emoji AS Emoji
+            FROM CartItems ci
+            LEFT JOIN Products p ON ci.ProductId = p.ProductId
+            WHERE ci.CartId = ?
+            """
             cursor.execute(sql, (cart_id,))
             rows = cursor.fetchall()
-
-            items = []
-            for row in rows:
-                item = CartItem(CartId=row[0], ProductId=row[1], Quantity=row[2], UnitPrice=row[3])
-                items.append(item.__dict__)
-            return items
+            columns = [col[0] for col in cursor.description]
+            return [dict(zip(columns, row)) for row in rows]
         except Exception as e:
             print("Lỗi lấy chi tiết giỏ hàng:", e)
             return []
         finally:
             cursor.close()
             conn.close()
-
     def xoa_khoi_gio(self, cart_id, product_id):
         conn = DBconnection.get_connection()
         if conn is None: return False

@@ -72,7 +72,134 @@ async function switchSellerTab(tabName) {
        await renderSellerProducts();
 
   } else if (tabName === 'orders') {
-      // fetch('/api/seller/orders')
+      await renderSellerOrders();
+  }
+}
+async function renderSellerOrders() {
+  const storeId = currentUser?.store?.store_id;
+  const tbody   = document.getElementById('tblSellerOrdersBody');
+
+  if (!storeId) {
+    tbody.innerHTML = `<tr><td colspan="7" style="text-align:center; color:var(--text-muted);">
+      Không tìm thấy gian hàng!
+    </td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = `<tr><td colspan="7" style="text-align:center; padding:20px; color:var(--text-muted);">
+    ⏳ Đang tải...
+  </td></tr>`;
+
+  try {
+    const res    = await fetch(`http://localhost:5000/api/don-hang/cua-seller/${storeId}`);
+    const result = await res.json();
+
+    if (!result.status || !result.data.length) {
+      tbody.innerHTML = `<tr><td colspan="7" style="text-align:center; color:var(--text-muted);">
+        Chưa có đơn hàng nào cho gian hàng này
+      </td></tr>`;
+      return;
+    }
+
+    const statusMap = {
+      'Pending'  : { label: 'Chờ duyệt',   cls: 'status-pending'   },
+      'Confirmed': { label: 'Đã xác nhận', cls: 'status-confirmed' },
+      'Shipping' : { label: 'Đang giao',   cls: 'status-shipping'  },
+      'Completed': { label: 'Hoàn thành',  cls: 'status-done'      },
+      'Cancelled': { label: 'Đã hủy',      cls: 'status-cancelled' },
+    };
+
+    tbody.innerHTML = result.data.map(o => {
+      const s = statusMap[o.Status] || { label: o.Status, cls: '' };
+      const itemSummary = (o.Items || [])
+        .map(i => `${i.Emoji || '📦'} ${i.ProductName} x${i.Quantity}`)
+        .join('<br>');
+      const createdAt = o.CreatedAt
+        ? new Date(o.CreatedAt).toLocaleDateString('vi-VN', {
+            day: '2-digit', month: '2-digit', year: 'numeric',
+            hour: '2-digit', minute: '2-digit'
+          })
+        : '—';
+
+      // Nút thao tác theo từng trạng thái
+      let actionBtn = `<span style="font-size:12px; color:var(--text-muted);">—</span>`;
+
+      if (o.Status === 'Pending') {
+        actionBtn = `
+          <button class="admin-action-btn btn-confirm"
+            onclick="sellerCapNhatDon(${o.OrderId}, 'Confirmed')">
+            ✅ Xác nhận
+          </button>`;
+      } else if (o.Status === 'Confirmed') {
+        actionBtn = `
+          <button class="admin-action-btn btn-confirm"
+            onclick="sellerCapNhatDon(${o.OrderId}, 'Shipping')">
+            🚚 Giao hàng
+          </button>`;
+      } else if (o.Status === 'Shipping') {
+        actionBtn = `
+          <button class="admin-action-btn btn-confirm"
+            onclick="sellerCapNhatDon(${o.OrderId}, 'Completed')">
+            🏁 Hoàn thành
+          </button>`;
+      }
+
+      return `
+        <tr>
+          <td style="font-weight:700; color:var(--text-muted);">#${o.OrderId}</td>
+          <td>
+            <div style="font-weight:600;">${o.ReceiverName}</div>
+            <div style="font-size:11px; color:var(--text-muted);">📞 ${o.ReceiverPhone}</div>
+            <div style="font-size:11px; color:var(--text-muted);">👤 ${o.CustomerName || '—'}</div>
+          </td>
+          <td style="font-size:12px; max-width:180px;">${itemSummary || '—'}</td>
+          <td style="font-weight:700; color:var(--red);">
+            ${Number(o.TotalAmount).toLocaleString('vi-VN')}đ
+            <div style="font-size:11px; color:var(--text-muted); font-weight:400;">
+              Ship: ${Number(o.ShippingFee || 0).toLocaleString('vi-VN')}đ
+            </div>
+          </td>
+          <td><span class="badge-status ${s.cls}">${s.label}</span></td>
+          <td style="font-size:12px; color:var(--text-muted);">${createdAt}</td>
+          <td>${actionBtn}</td>
+        </tr>
+      `;
+    }).join('');
+
+  } catch (e) {
+    tbody.innerHTML = `<tr><td colspan="7" style="text-align:center; color:var(--red);">
+      ❌ Lỗi tải dữ liệu
+    </td></tr>`;
+    console.error('Lỗi renderSellerOrders:', e);
+  }
+}
+
+// Hàm xử lý cập nhật trạng thái từ phía Seller
+async function sellerCapNhatDon(orderId, newStatus) {
+  const labelMap = {
+    'Confirmed': 'Xác nhận đơn hàng',
+    'Shipping' : 'Chuyển sang Đang giao',
+    'Completed': 'Hoàn thành đơn hàng',
+  };
+  const label = labelMap[newStatus] || newStatus;
+  if (!confirm(`${label} cho đơn #${orderId}?`)) return;
+
+  try {
+    const res    = await fetch(`http://localhost:5000/api/don-hang/${orderId}/trang-thai`, {
+      method : 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body   : JSON.stringify({ status: newStatus })
+    });
+    const result = await res.json();
+
+    if (result.status) {
+      showToast(`✅ ${result.message}`);
+      await renderSellerOrders(); // Reload lại bảng
+    } else {
+      showToast('❌ ' + result.message);
+    }
+  } catch (e) {
+    showToast('❌ Lỗi kết nối!');
   }
 }
 async function renderSellerOverview() {
@@ -579,7 +706,10 @@ function switchAdminTab(tabName) {
     renderAdminOrders();
   }
   if (tabName === 'sellers')     renderAdminSellers();
-  if (tabName === 'users')       renderAdminUsers();
+  if (tabName === 'users') {
+  renderUserRoleFilter();
+  renderAdminUsers();
+}
   if (tabName === 'vouchers')    renderAdminVouchers?.();
   if (tabName === 'permissions') {
     renderPermissionsTable();
@@ -1099,8 +1229,8 @@ async function handleSellerRegister(e) {
     StoreName  : document.getElementById('selShopName').value.trim(),
     Phone      : document.getElementById('selPhone').value.trim(),
     Category   : document.getElementById('selCat').value,
-    Description: document.getElementById('sellerDesc').value.trim(),
-    NationalId : document.getElementById('sellerNationalId').value.trim()
+    Description: document.getElementById('sellerDesc').value.trim()
+    // ✅ Không cần gửi NationalId — backend tự lấy từ hồ sơ user
   };
 
   try {
@@ -1330,7 +1460,21 @@ function openSellerRegisterModal() {
     openAuthModal();
     return;
   }
-  loadCategories(); // ← Load dữ liệu trước khi hiện modal
+
+  // Kiểm tra nhanh thông tin tài khoản ngay từ client
+  const thieu = [];
+  if (!currentUser.ten_user)  thieu.push('Họ tên');
+  if (!currentUser.sdt || currentUser.sdt === 'Chưa có SĐT')        thieu.push('Số điện thoại');
+  if (!currentUser.dia_chi || currentUser.dia_chi === 'Chưa có địa chỉ')      thieu.push('Địa chỉ');
+  if (!currentUser.cmnd || currentUser.cmnd === 'Chưa cập nhật CMND')        thieu.push('CMND/CCCD');
+
+  if (thieu.length > 0) {
+    showToast(`⚠️ Vui lòng cập nhật: ${thieu.join(', ')} trước khi đăng ký bán hàng!`);
+    openProfileModal(); // Đưa thẳng vào trang cập nhật thông tin
+    return;
+  }
+
+  loadCategories();
   document.getElementById('sellerModal').classList.add('show');
 }
 // ==========================================
@@ -1755,6 +1899,8 @@ async function renderAdminUsers() {
   tbody.innerHTML = `<tr><td colspan="7" style="text-align:center; padding:20px;
                      color:var(--text-muted);">Đang tải...</td></tr>`;
 
+  if (!allRoles.length) await loadAllRoles();
+
   try {
     const res    = await fetch('http://localhost:5000/api/users');
     const result = await res.json();
@@ -1765,33 +1911,23 @@ async function renderAdminUsers() {
       return;
     }
 
-    // Lấy bộ lọc hiện tại
     const roleFilter   = document.getElementById('userRoleFilter').value;
     const searchFilter = document.getElementById('userSearchFilter').value.toLowerCase();
-
-    // Map role_id → tên & class badge
-    const roleInfo = {
-      20: { label: 'Admin',        cls: 'role-admin'    },
-      13: { label: 'Người bán',    cls: 'role-seller'   },
-      14: { label: 'Khách hàng',   cls: 'role-customer' },
-       5: { label: 'Kế toán',      cls: 'role-customer' },
-    };
-
-    // Lọc dữ liệu
     let data = result.data;
 
     if (searchFilter) {
       data = data.filter(u =>
-        (u.ten_user || '').toLowerCase().includes(searchFilter) ||
+        (u.ten_user    || '').toLowerCase().includes(searchFilter) ||
         (u.tendangnhap || '').toLowerCase().includes(searchFilter) ||
-        (u.sdt || '').includes(searchFilter)
+        (u.sdt         || '').includes(searchFilter)
       );
     }
 
     if (roleFilter !== 'all') {
-      const roleMap = { 'Admin': 20, 'Seller': 13, 'Customer': 14 };
-      const targetId = roleMap[roleFilter];
-      if (targetId) data = data.filter(u => u.ma_nhom_quyen === targetId);
+      const targetRole = allRoles.find(r =>
+        r.RoleName.toLowerCase() === roleFilter.toLowerCase()
+      );
+      if (targetRole) data = data.filter(u => u.ma_nhom_quyen === targetRole.RoleId);
     }
 
     if (!data.length) {
@@ -1801,11 +1937,20 @@ async function renderAdminUsers() {
     }
 
     tbody.innerHTML = data.map(u => {
-      const role = roleInfo[u.ma_nhom_quyen] || { label: u.ten_nhom_quyen || '?', cls: 'role-customer' };
-      const isMe = u.ma_user === currentUser?.ma_user;
+      const roleName = getRoleName(u.ma_nhom_quyen);
+      const roleCls  = getRoleCls(u.ma_nhom_quyen);
+      const isMe     = u.ma_user === currentUser?.ma_user;
+
+      // ✅ Đọc trang_thai từ backend
+      const isBanned   = u.trang_thai === 'banned';
+      const statusHtml = isBanned
+        ? `<span style="background:#fee2e2; color:#dc2626; padding:3px 10px;
+                        border-radius:99px; font-size:11px; font-weight:700;">🔒 Đã khóa</span>`
+        : `<span style="background:#dcfce7; color:#16a34a; padding:3px 10px;
+                        border-radius:99px; font-size:11px; font-weight:700;">✅ Hoạt động</span>`;
 
       return `
-        <tr>
+        <tr style="${isBanned ? 'opacity:0.6;' : ''}">
           <td style="font-weight:700; color:var(--text-muted);">#${u.ma_user}</td>
           <td>
             <div style="font-weight:600;">${u.ten_user}</div>
@@ -1813,17 +1958,18 @@ async function renderAdminUsers() {
           </td>
           <td style="font-size:13px; color:var(--text-secondary);">${u.tendangnhap}</td>
           <td style="font-size:13px;">${u.sdt || '—'}</td>
-          <td><span class="role-badge ${role.cls}">${role.label}</span></td>
-          <td>
-            <span class="user-status-active">Hoạt động</span>
-          </td>
+          <td><span class="role-badge ${roleCls}">${roleName}</span></td>
+          <td>${statusHtml}</td>
           <td>
             ${isMe
               ? `<span style="font-size:12px; color:var(--text-muted);">Tài khoản của bạn</span>`
               : `<button class="admin-action-btn btn-edit"
-                         onclick="openEditUserModal(${u.ma_user}, '${u.ten_user.replace(/'/g,"\\'")}',
-                                                    ${u.ma_nhom_quyen})">
-                   ✏️ Sửa vai trò
+                   onclick="openEditUserModal(
+                     ${u.ma_user},
+                     '${u.ten_user.replace(/'/g,"\\'")}',
+                     ${u.ma_nhom_quyen},
+                     '${isBanned ? 'banned' : 'active'}')">
+                   ✏️ Sửa
                  </button>`
             }
           </td>
@@ -1834,15 +1980,13 @@ async function renderAdminUsers() {
   } catch (e) {
     tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;
                        color:var(--red);">❌ Lỗi tải dữ liệu</td></tr>`;
-    console.error('Lỗi renderAdminUsers:', e);
   }
 }
 
 // ─── MỞ MODAL CHỈNH SỬA USER ─────────────────────────────────────────────────
-function openEditUserModal(ma_user, ten_user, ma_nhom_quyen) {
+async function openEditUserModal(ma_user, ten_user, ma_nhom_quyen, currentStatus = 'active') {
   document.getElementById('editUserId').value = ma_user;
 
-  // Hiện thông tin user trong modal
   document.getElementById('editUserInfo').innerHTML = `
     <div style="display:flex; align-items:center; gap:10px;">
       <div style="width:40px; height:40px; border-radius:50%; background:var(--primary-light);
@@ -1857,42 +2001,54 @@ function openEditUserModal(ma_user, ten_user, ma_nhom_quyen) {
     </div>
   `;
 
-  // Chọn đúng vai trò hiện tại
-  const roleSelect = document.getElementById('editUserRole');
-  const roleMap    = { 20: 'Admin', 13: 'Seller', 14: 'Customer', 5: 'Accountant' };
-  roleSelect.innerHTML = `
-    <option value="14" ${ma_nhom_quyen === 14 ? 'selected' : ''}>👤 Khách hàng</option>
-    <option value="13" ${ma_nhom_quyen === 13 ? 'selected' : ''}>🏪 Người bán hàng</option>
-    <option value="20" ${ma_nhom_quyen === 20 ? 'selected' : ''}>🛠️ Quản trị viên</option>
-    <option value="5"  ${ma_nhom_quyen === 5  ? 'selected' : ''}>💰 Nhân viên Kế toán</option>
-  `;
+  if (!allRoles.length) await loadAllRoles();
+
+  // Dropdown vai trò — động
+  document.getElementById('editUserRole').innerHTML = allRoles.map(r => `
+    <option value="${r.RoleId}" ${r.RoleId === ma_nhom_quyen ? 'selected' : ''}>
+      ${r.RoleName}
+    </option>
+  `).join('');
+
+  // ✅ Set đúng trạng thái hiện tại
+  document.getElementById('editUserStatus').value = currentStatus;
 
   document.getElementById('adminUserModal').classList.add('show');
 }
 
 // ─── LƯU THAY ĐỔI VAI TRÒ ────────────────────────────────────────────────────
 async function handleSaveUserRole() {
-  const ma_user = document.getElementById('editUserId').value;
-  const role_id = document.getElementById('editUserRole').value;
+  const ma_user   = document.getElementById('editUserId').value;
+  const role_id   = document.getElementById('editUserRole').value;
+  const newStatus = document.getElementById('editUserStatus').value;
 
-  if (!ma_user || !role_id) {
-    showToast('⚠️ Thiếu thông tin!');
-    return;
-  }
+  if (!ma_user) { showToast('⚠️ Thiếu thông tin!'); return; }
 
   try {
-    const res    = await fetch(`http://localhost:5000/api/users/${ma_user}/role`, {
-      method : 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body   : JSON.stringify({ role_id: parseInt(role_id) })
-    });
-    const result = await res.json();
+    // Gọi song song 2 API: cập nhật role + cập nhật status
+    const [resRole, resStatus] = await Promise.all([
+      fetch(`http://localhost:5000/api/users/${ma_user}/role`, {
+        method : 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body   : JSON.stringify({ role_id: parseInt(role_id) })
+      }),
+      fetch(`http://localhost:5000/api/users/${ma_user}/status`, {
+        method : 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body   : JSON.stringify({ status: newStatus })
+      })
+    ]);
 
-    showToast(result.status ? '✅ ' + result.message : '❌ ' + result.message);
+    const [rRole, rStatus] = await Promise.all([resRole.json(), resStatus.json()]);
 
-    if (result.status) {
+    if (rRole.status && rStatus.status) {
+      showToast('✅ Đã cập nhật vai trò và trạng thái!');
       closeModal('adminUserModal');
-      renderAdminUsers(); // Reload bảng
+      renderAdminUsers();
+    } else {
+      const errMsg = (!rRole.status ? rRole.message : '') ||
+                     (!rStatus.status ? rStatus.message : '');
+      showToast('❌ ' + errMsg);
     }
 
   } catch (e) {
@@ -2981,6 +3137,75 @@ function toggleRolesManager() {
 
   // Lần đầu mở → load danh sách roles
   if (isHidden) loadRolesForPermPanel();
+}
+// Cache roles động từ API
+let allRoles = [];
+
+async function loadAllRoles() {
+  try {
+    const res    = await fetch('http://localhost:5000/api/roles');
+    const result = await res.json();
+    if (result.status && Array.isArray(result.data)) {
+      allRoles = result.data; // [{ RoleId, RoleName }, ...]
+    }
+  } catch (e) {
+    console.error('Lỗi load roles:', e);
+  }
+}
+
+// Lấy tên role theo ID — dùng trong renderAdminUsers
+function getRoleName(roleId) {
+  const r = allRoles.find(r => r.RoleId === roleId);
+  return r ? r.RoleName : `Role #${roleId}`;
+}
+
+// Lấy class badge theo ID — có thể mở rộng sau
+function getRoleCls(roleId) {
+  if (roleId === 20) return 'role-admin';
+  if (roleId === 13) return 'role-seller';
+  if (roleId === 14) return 'role-customer';
+  return 'role-customer'; // mặc định
+}
+
+// ─── RENDER BẢNG QUẢN LÝ TÀI KHOẢN (ĐỘNG) ───────────────────
+
+// ─── MỞ MODAL CHỈNH SỬA USER — DROPDOWN ĐỘNG ─────────────────
+async function openEditUserModal(ma_user, ten_user, ma_nhom_quyen) {
+  document.getElementById('editUserId').value = ma_user;
+
+  document.getElementById('editUserInfo').innerHTML = `
+    <div style="display:flex; align-items:center; gap:10px;">
+      <div style="width:40px; height:40px; border-radius:50%; background:var(--primary-light);
+                  display:flex; align-items:center; justify-content:center;
+                  font-size:18px; font-weight:700; color:var(--primary);">
+        ${ten_user.charAt(0).toUpperCase()}
+      </div>
+      <div>
+        <div style="font-weight:700;">${ten_user}</div>
+        <div style="font-size:12px; color:var(--text-muted);">ID: #${ma_user}</div>
+      </div>
+    </div>
+  `;
+
+  // Đảm bảo roles đã load
+  if (!allRoles.length) await loadAllRoles();
+
+  // Đổ tất cả roles vào dropdown động
+  const roleSelect = document.getElementById('editUserRole');
+  roleSelect.innerHTML = allRoles.map(r => `
+    <option value="${r.RoleId}" ${r.RoleId === ma_nhom_quyen ? 'selected' : ''}>
+      ${r.RoleName}
+    </option>
+  `).join('');
+
+  document.getElementById('adminUserModal').classList.add('show');
+}
+async function renderUserRoleFilter() {
+  if (!allRoles.length) await loadAllRoles();
+  const select = document.getElementById('userRoleFilter');
+  if (!select) return;
+  select.innerHTML = `<option value="all">Tất cả vai trò</option>` +
+    allRoles.map(r => `<option value="${r.RoleName}">${r.RoleName}</option>`).join('');
 }
 // KHỞI CHẠY GIAO DIỆN MẶC ĐỊNH
 loadCategories();

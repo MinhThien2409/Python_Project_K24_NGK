@@ -80,42 +80,38 @@ class UserDao:
             cursor.close()
             conn.close()
 
-
     def lay_danh_sach_user(self):
         conn = DBconnection.get_connection()
         if conn is None: return []
         cursor = conn.cursor()
-
         try:
-
-            sql = """
-                SELECT u.UserId, u.FullName, u.Address, u.Phone, u.Role_id, r.RoleName, u.Username 
+            cursor.execute("""
+                SELECT u.UserId, u.FullName, u.Username, u.Phone,
+                       u.Role_id, r.RoleName,
+                       COALESCE(u.trang_thai, 'active') AS trang_thai
                 FROM Users u
-                JOIN Roles r ON u.Role_id = r.RoleId
-            """
-            cursor.execute(sql)
+                LEFT JOIN Roles r ON u.Role_id = r.RoleId
+                ORDER BY u.UserId
+            """)
             rows = cursor.fetchall()
-
-            danh_sach_user = []
-            for row in rows:
-                user_dict = {
-                    "ma_user": row.UserId,
-                    "ten_user": row.FullName,
-                    "dia_chi": row.Address,
-                    "sdt": row.Phone,
-                    "ma_nhom_quyen": row.Role_id,
-                    "ten_nhom_quyen": row.RoleName,
-                    "tendangnhap": row.Username
+            return [
+                {
+                    "ma_user": r[0],
+                    "ten_user": r[1],
+                    "tendangnhap": r[2],
+                    "sdt": r[3],
+                    "ma_nhom_quyen": r[4],
+                    "ten_nhom_quyen": r[5],
+                    "trang_thai": r[6]
                 }
-                danh_sach_user.append(user_dict)
-            return danh_sach_user
+                for r in rows
+            ]
         except Exception as e:
-            print("Lỗi khi lấy danh sách User:", e)
+            print(f"Lỗi lay_danh_sach_user: {e}")
             return []
         finally:
             cursor.close()
             conn.close()
-
     def cap_nhat_user(self, ma_user, ten_user, dia_chi, sdt,cmnd):
         conn = DBconnection.get_connection()
         if conn is None: return False
@@ -164,4 +160,41 @@ class UserDao:
             return False
         finally:
             cursor.close();
+            conn.close()
+
+    def lay_thong_tin_user(self, ma_user):
+        conn = DBconnection.get_connection()
+        if conn is None: return None
+        cursor = conn.cursor()
+        try:
+            cursor.execute(
+                "SELECT * FROM Users WHERE UserId = ?", (ma_user,)
+            )
+            row = cursor.fetchone()
+            if not row: return None
+            columns = [col[0] for col in cursor.description]
+            return dict(zip(columns, row))
+        except Exception as e:
+            print("Lỗi lay_thong_tin_user:", e)
+            return None
+        finally:
+            cursor.close();
+            conn.close()
+
+    def cap_nhat_trang_thai(self, ma_user, trang_thai):
+        conn = DBconnection.get_connection()
+        if conn is None: return False
+        cursor = conn.cursor()
+        try:
+            cursor.execute(
+                "UPDATE Users SET trang_thai = ? WHERE UserId = ?",
+                (trang_thai, ma_user)
+            )
+            conn.commit()
+            return cursor.rowcount > 0
+        except Exception as e:
+            print(f"Lỗi cap_nhat_trang_thai: {e}")
+            return False
+        finally:
+            cursor.close()
             conn.close()

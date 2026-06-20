@@ -95,3 +95,18 @@ class UserBus:
         if ok:
             return {"status": True, "message": "Đã cập nhật vai trò thành công!"}
         return {"status": False, "message": "Lỗi cập nhật vai trò."}
+
+    def lay_thong_tin_user(self, ma_user):
+        return self.dao.lay_thong_tin_user(ma_user)
+
+    def cap_nhat_trang_thai(self, ma_user, trang_thai):
+        if not ma_user:
+            return {"status": False, "message": "Thiếu mã user!"}
+        if trang_thai not in ('active', 'banned'):
+            return {"status": False, "message": "Trạng thái không hợp lệ!"}
+
+        ok = self.dao.cap_nhat_trang_thai(ma_user, trang_thai)
+        if ok:
+            label = "Đã khóa tài khoản!" if trang_thai == 'banned' else "Đã mở khóa tài khoản!"
+            return {"status": True, "message": label}
+        return {"status": False, "message": "Lỗi cập nhật trạng thái."}

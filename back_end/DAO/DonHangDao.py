@@ -123,12 +123,48 @@ class DonHangDao:
         if not conn: return False
         cursor = conn.cursor()
         try:
-            sql = "UPDATE Orders SET Status = ?, UpdatedAt = GETDATE() WHERE OrderId = ?"
-            cursor.execute(sql, (new_status, order_id))
+            # Lấy trạng thái hiện tại
+            cursor.execute("SELECT Status FROM Orders WHERE OrderId = ?", (order_id,))
+            row = cursor.fetchone()
+            if not row:
+
+                return False
+
+            current_status = row[0]
+            print(f"Đơn #{order_id}: {current_status} → {new_status}")
+
+            # Cập nhật trạng thái (bỏ UpdatedAt nếu cột không tồn tại)
+            cursor.execute(
+                "UPDATE Orders SET Status = ? WHERE OrderId = ?",
+                (new_status, order_id)
+            )
+            rows_affected = cursor.rowcount
+
+
+            # Cộng SoldCount khi hoàn thành
+            if new_status == 'Completed' and current_status != 'Completed':
+                cursor.execute(
+                    "SELECT ProductId, Quantity FROM OrderItems WHERE OrderId = ?",
+                    (order_id,)
+                )
+                items = cursor.fetchall()
+
+                for item in items:
+                    product_id = item[0]
+                    quantity = item[1]
+                    cursor.execute(
+                        "UPDATE Products SET SoldCount = ISNULL(SoldCount, 0) + ? WHERE ProductId = ?",
+                        (quantity, product_id)
+                    )
+
+
             conn.commit()
-            return cursor.rowcount > 0
+            
+            return rows_affected > 0
+
         except Exception as e:
-            print(f"Lỗi cập nhật trạng thái đơn {order_id}:", e)
+            conn.rollback()
+            print(f"LỖI cap_nhat_trang_thai: {e}")
             return False
         finally:
             cursor.close()
@@ -317,4 +353,60 @@ class DonHangDao:
             return {"status": False, "data": []}
         finally:
             cursor.close();
+            conn.close()
+
+    def lay_don_hang_cua_seller(self, store_id):
+        conn = DBconnection().get_connection()
+        if not conn: return []
+        cursor = conn.cursor()
+        try:
+            # Lấy các đơn hàng có ít nhất 1 sản phẩm thuộc store này
+            sql = """
+            SELECT DISTINCT
+                o.OrderId, o.Status, o.ShippingFee, o.UserId,
+                u.FullName   AS CustomerName,
+                o.ReceiverName, o.ReceiverPhone, o.ShippingAddress,
+                o.PaymentMethod, o.SubTotal, o.DiscountAmount,
+                o.TotalAmount, o.CreatedAt
+            FROM Orders o
+            LEFT JOIN Users u ON o.UserId = u.UserId
+            INNER JOIN OrderItems oi ON o.OrderId = oi.OrderId
+            INNER JOIN Products p   ON oi.ProductId = p.ProductId
+            WHERE p.StoreId = ?
+            ORDER BY o.CreatedAt DESC
+            """
+            cursor.execute(sql, (store_id,))
+            rows = cursor.fetchall()
+            columns = [col[0] for col in cursor.description]
+            result = []
+
+            for row in rows:
+                don = dict(zip(columns, row))
+
+                # Chỉ lấy những OrderItems thuộc store này
+                cursor2 = conn.cursor()
+                cursor2.execute("""
+                    SELECT oi.OrderItemId, oi.OrderId, oi.ProductId,
+                           oi.ProductName, oi.Emoji, oi.Quantity,
+                           oi.UnitPrice, oi.TotalPrice
+                    FROM OrderItems oi
+                    INNER JOIN Products p ON oi.ProductId = p.ProductId
+                    WHERE oi.OrderId = ? AND p.StoreId = ?
+                """, (don['OrderId'], store_id))
+                item_rows = cursor2.fetchall()
+                item_columns = [col[0] for col in cursor2.description]
+                don['Items'] = [dict(zip(item_columns, ir)) for ir in item_rows]
+                cursor2.close()
+
+                if don.get('CreatedAt'):
+                    don['CreatedAt'] = str(don['CreatedAt'])
+
+                result.append(don)
+
+            return result
+        except Exception as e:
+            print("Lỗi lay_don_hang_cua_seller:", e)
+            return []
+        finally:
+            cursor.close()
             conn.close()

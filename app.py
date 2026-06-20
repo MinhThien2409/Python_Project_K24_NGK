@@ -428,5 +428,15 @@ def api_thong_ke_tong_quan():
 def api_doanh_thu_theo_thang():
     year = request.args.get('year', 2026, type=int)
     return jsonify(don_hang_bus.lay_doanh_thu_theo_thang(year))
+@app.route('/api/don-hang/cua-seller/<int:store_id>', methods=['GET'])
+def api_lay_don_hang_cua_seller(store_id):
+    return jsonify(don_hang_bus.lay_don_hang_cua_seller(store_id))
+@app.route('/api/users/<int:ma_user>/status', methods=['PUT'])
+def update_user_status(ma_user):
+    data   = request.json
+    status = data.get('status')  # 'active' hoặc 'banned'
+    if not status:
+        return jsonify({"status": False, "message": "Thiếu status!"})
+    return jsonify(user_bus.cap_nhat_trang_thai(ma_user, status))
 if __name__ == '__main__':
     app.run(debug=True, port=5000)

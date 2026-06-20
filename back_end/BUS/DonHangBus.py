@@ -53,3 +53,9 @@ class DonHangBus:
 
     def lay_doanh_thu_theo_thang(self, year):
         return self.dao.lay_doanh_thu_theo_thang(year)
+
+    def lay_don_hang_cua_seller(self, store_id):
+        if not store_id:
+            return {"status": False, "message": "Thiếu store_id!", "data": []}
+        danh_sach = self.dao.lay_don_hang_cua_seller(store_id)
+        return {"status": True, "data": danh_sach}

@@ -410,3 +410,23 @@ class DonHangDao:
         finally:
             cursor.close()
             conn.close()
+
+    def lay_store_ids_cua_san_pham(self, product_ids):
+        """Trả về danh sách StoreId duy nhất của các sản phẩm trong đơn"""
+        if not product_ids: return []
+        conn = DBconnection().get_connection()
+        if not conn: return []
+        cursor = conn.cursor()
+        try:
+            placeholders = ','.join(['?'] * len(product_ids))
+            cursor.execute(
+                f"SELECT DISTINCT StoreId FROM Products WHERE ProductId IN ({placeholders})",
+                tuple(product_ids)
+            )
+            return [row[0] for row in cursor.fetchall()]
+        except Exception as e:
+            print("Lỗi lay_store_ids_cua_san_pham:", e)
+            return []
+        finally:
+            cursor.close();
+            conn.close()

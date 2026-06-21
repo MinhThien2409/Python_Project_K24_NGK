@@ -7,7 +7,6 @@ class DonHangBus:
         self.dao = DonHangDao()
 
     def tao_don_hang(self, dh: DonHang):
-        # 1. Validation
         if not dh.ReceiverName or not dh.ReceiverPhone or not dh.ShippingAddress:
             return {"status": False, "message": "Vui lòng điền đầy đủ thông tin người nhận hàng!"}
 
@@ -17,15 +16,18 @@ class DonHangBus:
         if dh.TotalAmount <= 0:
             return {"status": False, "message": "Tổng tiền đơn hàng không hợp lệ!"}
 
-        # 2. Đảm bảo trạng thái mặc định
-        dh.Status = 'Pending'
+        # ✅ Chốt an toàn — đơn hàng chỉ chứa sản phẩm của 1 shop
+        product_ids = [item.ProductId for item in dh.Items]
+        store_ids = self.dao.lay_store_ids_cua_san_pham(product_ids)
+        if len(set(store_ids)) > 1:
+            return {"status": False,
+                    "message": "Đơn hàng chỉ được chứa sản phẩm từ 1 shop duy nhất!"}
 
-        # 3. Lưu vào Database — truyền cả dh lẫn dh.Items
+        dh.Status = 'Pending'
         new_order_id = self.dao.tao_don_hang(dh, dh.Items)
         if new_order_id:
             return {"status": True, "message": f"Đặt hàng thành công! Mã đơn: #{new_order_id}"}
-        else:
-            return {"status": False, "message": "Hệ thống bận, vui lòng thử lại sau!"}
+        return {"status": False, "message": "Hệ thống bận, vui lòng thử lại sau!"}
 
     def lay_don_hang_cua_toi(self, user_id):
         if not user_id:

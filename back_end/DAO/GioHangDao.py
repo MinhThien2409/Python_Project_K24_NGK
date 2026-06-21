@@ -145,3 +145,53 @@ class GioHangDao:
         finally:
             cursor.close();
             conn.close()
+
+    def lay_store_ids_trong_gio(self, cart_id):
+        """Lấy danh sách Shop (StoreId) đang có trong giỏ hàng"""
+        conn = DBconnection.get_connection()
+        if conn is None: return []
+        cursor = conn.cursor()
+        try:
+            cursor.execute("""
+                SELECT DISTINCT p.StoreId, s.StoreName
+                FROM CartItems ci
+                INNER JOIN Products p ON ci.ProductId = p.ProductId
+                LEFT JOIN Stores s ON p.StoreId = s.StoreId
+                WHERE ci.CartId = ?
+            """, (cart_id,))
+            return [{"store_id": r[0], "store_name": r[1]} for r in cursor.fetchall()]
+        except Exception as e:
+            print("Lỗi lay_store_ids_trong_gio:", e)
+            return []
+        finally:
+            cursor.close();
+            conn.close()
+
+    def lay_store_id_san_pham(self, product_id):
+        """Lấy StoreId của 1 sản phẩm"""
+        conn = DBconnection.get_connection()
+        if conn is None: return None
+        cursor = conn.cursor()
+        try:
+            cursor.execute("SELECT StoreId FROM Products WHERE ProductId = ?", (product_id,))
+            row = cursor.fetchone()
+            return row[0] if row else None
+        finally:
+            cursor.close();
+            conn.close()
+
+    def xoa_toan_bo_gio(self, cart_id):
+        """Xóa hết sản phẩm trong giỏ — dùng khi người dùng đổi sang shop khác"""
+        conn = DBconnection.get_connection()
+        if conn is None: return False
+        cursor = conn.cursor()
+        try:
+            cursor.execute("DELETE FROM CartItems WHERE CartId = ?", (cart_id,))
+            conn.commit()
+            return True
+        except Exception as e:
+            print("Lỗi xoa_toan_bo_gio:", e)
+            return False
+        finally:
+            cursor.close();
+            conn.close()

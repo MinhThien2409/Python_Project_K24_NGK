@@ -80,7 +80,7 @@ class SanPhamDao:
                 FROM Products p
                 LEFT JOIN Categories c ON p.CategoryId = c.CategoryId
                 LEFT JOIN Stores     s ON p.StoreId    = s.StoreId
-                WHERE p.StoreId = ?
+                WHERE p.StoreId = ? AND p.IsActive = 1
                 ORDER BY p.ProductId DESC
             """
             cursor.execute(sql, (store_id,))

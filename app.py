@@ -320,13 +320,19 @@ def update_user_role(ma_user):
 @app.route('/api/gio-hang/them', methods=['POST'])
 def api_them_vao_gio():
     data = request.json
-    user_id = data.get('UserId')
-    product_id = data.get('ProductId')
-    quantity = data.get('Quantity')
-    unit_price = data.get('UnitPrice')
-
-    result = cart_bus.xu_ly_them_vao_gio(user_id, product_id, quantity, unit_price)
+    result = cart_bus.xu_ly_them_vao_gio(
+        data.get('UserId'),
+        data.get('ProductId'),
+        data.get('Quantity'),
+        data.get('UnitPrice'),
+        data.get('Force', False)   # ← thêm
+    )
     return jsonify(result)
+
+@app.route('/api/gio-hang/xoa-tat-ca', methods=['POST'])
+def api_xoa_tat_ca_gio():
+    data = request.json
+    return jsonify(cart_bus.xoa_toan_bo_gio(data.get('UserId')))
 
 
 @app.route('/api/gio-hang/<int:user_id>', methods=['GET'])

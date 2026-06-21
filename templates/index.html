@@ -99,9 +99,14 @@
 
             <div class="filter-label" style="margin-top: 12px;">Khoảng giá</div>
             <div class="price-range">
-                <input type="text" id="priceMin" placeholder="Từ" />
-                <span>—</span>
-                <input type="text" id="priceMax" placeholder="Đến" />
+                <!-- Tìm 2 dòng này và thay thế -->
+<input type="text" id="priceMin" placeholder="Từ"
+       oninput="onPriceInput()"
+       style="text-align:right;" />
+<span>—</span>
+<input type="text" id="priceMax" placeholder="Đến"
+       oninput="onPriceInput()"
+       style="text-align:right;" />
             </div>
             <!-- Slider ẩn để code JS không bị lỗi -->
             <input type="range" id="priceSlider" min="0" max="100000000" step="100000" value="100000000" oninput="updatePriceSlider(this.value)" style="display:none;">

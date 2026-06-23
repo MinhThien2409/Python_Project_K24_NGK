@@ -83,3 +83,21 @@ class PhanQuyenBus:
 
     def xoa_role(self, role_id):
         return self.dao.xoa_role(role_id)
+
+    def cap_quyen_ngoai_le_batch(self, ma_user, danh_sach_quyen):
+        if not ma_user or not danh_sach_quyen:
+            return {"status": False, "message": "Thiếu thông tin tài khoản hoặc danh sách quyền!"}
+
+        is_success = self.dao.cap_quyen_ngoai_le_user_batch(ma_user, danh_sach_quyen)
+        if is_success:
+            return {"status": True, "message": f"Đã lưu cấu hình phân quyền thành công cho tài khoản ID: {ma_user}!"}
+        return {"status": False, "message": "Lỗi khi lưu phân quyền."}
+
+    def cap_nhat_quyen_batch(self, ma_nhom, danh_sach_quyen):
+        if not ma_nhom or not danh_sach_quyen:
+            return {"status": False, "message": "Thiếu mã nhóm hoặc danh sách quyền!"}
+
+        is_success = self.dao.dong_bo_quyen_xuong_user_batch(ma_nhom, danh_sach_quyen)
+        if is_success:
+            return {"status": True, "message": "Đã lưu cấu hình Nhóm và đồng bộ thành công các thành viên!"}
+        return {"status": False, "message": "Lỗi hệ thống đồng bộ quyền."}

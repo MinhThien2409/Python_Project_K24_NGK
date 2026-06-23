@@ -36,18 +36,22 @@ class UserBus:
         else:
             return {"status": False, "message": "Lỗi hệ thống khi lưu dữ liệu, vui lòng thử lại."}
 
-
     def dang_nhap(self, tendangnhap, mat_khau):
 
         if not tendangnhap or not mat_khau:
             return {"status": False, "message": "Vui lòng nhập tài khoản và mật khẩu!", "data": None}
 
-
         user = self.dao.dang_nhap(tendangnhap, mat_khau)
 
+        # ✅ Tài khoản bị khóa
+        if isinstance(user, dict) and user.get('banned'):
+            return {
+                "status": False,
+                "message": "Tài khoản của bạn đã bị khóa! Vui lòng liên hệ quản trị viên để được hỗ trợ.",
+                "data": None
+            }
 
         if user:
-
             return {
                 "status": True,
                 "message": f"Chào mừng {user.ten_user} trở lại!",
@@ -55,14 +59,13 @@ class UserBus:
                     "ma_user": user.ma_user,
                     "ten_user": user.ten_user,
                     "ma_nhom_quyen": user.ma_nhom_quyen,
-                    "dia_chi":user.dia_chi,
-                    "sdt":user.sdt,
-                    "cmnd":user.cmnd
+                    "dia_chi": user.dia_chi,
+                    "sdt": user.sdt,
+                    "cmnd": user.cmnd
                 }
             }
         else:
             return {"status": False, "message": "Tên đăng nhập hoặc mật khẩu không chính xác!", "data": None}
-
 
     def lay_danh_sach_user(self):
         danh_sach = self.dao.lay_danh_sach_user()

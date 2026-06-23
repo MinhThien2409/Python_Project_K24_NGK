@@ -16,7 +16,6 @@ class DonHangBus:
         if dh.TotalAmount <= 0:
             return {"status": False, "message": "Tổng tiền đơn hàng không hợp lệ!"}
 
-        # ✅ Chốt an toàn — đơn hàng chỉ chứa sản phẩm của 1 shop
         product_ids = [item.ProductId for item in dh.Items]
         store_ids = self.dao.lay_store_ids_cua_san_pham(product_ids)
         if len(set(store_ids)) > 1:
@@ -24,11 +23,20 @@ class DonHangBus:
                     "message": "Đơn hàng chỉ được chứa sản phẩm từ 1 shop duy nhất!"}
 
         dh.Status = 'Pending'
-        new_order_id = self.dao.tao_don_hang(dh, dh.Items)
-        if new_order_id:
-            return {"status": True, "message": f"Đặt hàng thành công! Mã đơn: #{new_order_id}"}
-        return {"status": False, "message": "Hệ thống bận, vui lòng thử lại sau!"}
+        result = self.dao.tao_don_hang(dh, dh.Items)
 
+        # ✅ Xử lý lỗi hết hàng trả về từ DAO
+        if isinstance(result, dict):
+            if result.get('error') == 'out_of_stock':
+                return {"status": False,
+                        "message": f"Sản phẩm '{result['product_name']}' chỉ còn {result['available']} sản phẩm trong kho!"}
+            if result.get('error') == 'not_found':
+                return {"status": False,
+                        "message": f"Không tìm thấy sản phẩm {result['product_name']}!"}
+
+        if result:
+            return {"status": True, "message": f"Đặt hàng thành công! Mã đơn: #{result}"}
+        return {"status": False, "message": "Hệ thống bận, vui lòng thử lại sau!"}
     def lay_don_hang_cua_toi(self, user_id):
         if not user_id:
             return {"status": False, "message": "Lỗi xác thực người dùng", "data": []}

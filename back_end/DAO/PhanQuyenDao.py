@@ -295,3 +295,91 @@ class PhanQuyenDao:
         finally:
             cursor.close()
             conn.close()
+
+    def cap_quyen_ngoai_le_user_batch(self, ma_user, danh_sach_quyen):
+        """Lưu TOÀN BỘ danh sách quyền cho 1 user trong DUY NHẤT 1 transaction"""
+        conn = DBconnection.get_connection()
+        if conn is None: return False
+        cursor = conn.cursor()
+        try:
+            for q in danh_sach_quyen:
+                ma_chuc_nang = q.get('ma_chuc_nang')
+                xem = q.get('xem', False)
+                them = q.get('them', False)
+                sua = q.get('sua', False)
+                xoa = q.get('xoa', False)
+
+                cursor.execute(
+                    "SELECT 1 FROM Permissions WHERE UserId=? AND ModuleId=?",
+                    (ma_user, ma_chuc_nang)
+                )
+                row = cursor.fetchone()
+
+                if row:
+                    cursor.execute("""
+                        UPDATE Permissions
+                        SET CanView=?, CanAdd=?, CanEdit=?, CanDelete=?, IsCustom=1
+                        WHERE UserId=? AND ModuleId=?
+                    """, (xem, them, sua, xoa, ma_user, ma_chuc_nang))
+                else:
+                    cursor.execute("""
+                        INSERT INTO Permissions(UserId, ModuleId, CanView, CanAdd, CanEdit, CanDelete, IsCustom)
+                        VALUES (?, ?, ?, ?, ?, ?, 1)
+                    """, (ma_user, ma_chuc_nang, xem, them, sua, xoa))
+
+            conn.commit()
+            return True
+        except Exception as e:
+            conn.rollback()
+            print("Lỗi cấp ngoại lệ (batch):", e)
+            return False
+        finally:
+            cursor.close()
+            conn.close()
+
+    def dong_bo_quyen_xuong_user_batch(self, ma_nhom, danh_sach_quyen):
+        """Đồng bộ TOÀN BỘ danh sách quyền nhóm xuống tất cả user, DUY NHẤT 1 transaction"""
+        conn = DBconnection.get_connection()
+        if conn is None: return False
+        cursor = conn.cursor()
+        try:
+            cursor.execute("SELECT UserId FROM Users WHERE Role_id=?", (ma_nhom,))
+            users = cursor.fetchall()
+
+            for u in users:
+                ma_user = u.UserId
+                for q in danh_sach_quyen:
+                    ma_chuc_nang = q.get('ma_chuc_nang')
+                    xem = q.get('xem', False)
+                    them = q.get('them', False)
+                    sua = q.get('sua', False)
+                    xoa = q.get('xoa', False)
+
+                    cursor.execute(
+                        "SELECT IsCustom FROM Permissions WHERE UserId=? AND ModuleId=?",
+                        (ma_user, ma_chuc_nang)
+                    )
+                    row = cursor.fetchone()
+
+                    if row:
+                        if not row.IsCustom:
+                            cursor.execute("""
+                                UPDATE Permissions
+                                SET CanView=?, CanAdd=?, CanEdit=?, CanDelete=?
+                                WHERE UserId=? AND ModuleId=? AND IsCustom=0
+                            """, (xem, them, sua, xoa, ma_user, ma_chuc_nang))
+                    else:
+                        cursor.execute("""
+                            INSERT INTO Permissions(UserId, ModuleId, CanView, CanAdd, CanEdit, CanDelete, IsCustom)
+                            VALUES (?, ?, ?, ?, ?, ?, 0)
+                        """, (ma_user, ma_chuc_nang, xem, them, sua, xoa))
+
+            conn.commit()
+            return True
+        except Exception as e:
+            conn.rollback()
+            print("Lỗi đồng bộ quyền (batch):", e)
+            return False
+        finally:
+            cursor.close()
+            conn.close()

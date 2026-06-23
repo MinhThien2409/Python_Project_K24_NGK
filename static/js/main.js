@@ -325,32 +325,51 @@ async function renderSellerOverview() {
 
       <!-- Sản phẩm bán chạy -->
       <div class="admin-card">
-        <h3 style="margin-bottom:14px;">🔥 Sản phẩm bán chạy nhất</h3>
-        ${topProducts.length === 0
-          ? `<div class="empty-state"><div class="icon">📦</div><p>Chưa có sản phẩm nào</p></div>`
-          : topProducts.map((p, i) => `
-            <div style="display:flex; align-items:center; gap:12px; padding:10px 0;
-                        border-bottom:1px solid var(--border);">
-              <div style="width:28px; height:28px; border-radius:50%; background:var(--primary-light);
-                          color:var(--primary); display:flex; align-items:center; justify-content:center;
-                          font-weight:800; font-size:13px; flex-shrink:0;">
-                ${i + 1}
-              </div>
-              <div style="font-size:24px;">${p.emoji || '📦'}</div>
-              <div style="flex:1; min-width:0;">
-                <div style="font-weight:600; font-size:14px; white-space:nowrap;
-                            overflow:hidden; text-overflow:ellipsis;">${p.name}</div>
-                <div style="font-size:12px; color:var(--text-secondary);">
-                  Đã bán: <b>${p.sold || 0}</b> · Còn: <b>${p.quantity || 0}</b>
+    <h3>🔥 Sản phẩm bán chạy nhất</h3>
+
+    <div class="seller-top-products">
+        ${topProducts.map((p,index)=>`
+            <div class="seller-product-card">
+                <div style="font-size:22px;font-weight:700;">
+                    ${index+1}
                 </div>
-              </div>
-              <div style="font-weight:700; color:var(--red); font-size:14px; flex-shrink:0;">
-                ${Number(p.price).toLocaleString('vi-VN')}đ
-              </div>
+
+                <div>
+    ${
+        p.image_url
+        ? `<img src="/static/${p.image_url}"
+                alt="${p.name}"
+                style="
+                    width:80px;
+                    height:80px;
+                    object-fit:cover;
+                    border-radius:10px;
+                    border:1px solid #ddd;
+                ">`
+        : `<img src="/static/images/no-image.png"
+                alt="No Image"
+                style="
+                    width:80px;
+                    height:80px;
+                    object-fit:cover;
+                    border-radius:10px;
+                    border:1px solid #ddd;
+                ">`
+    }
+</div>
+
+                <div class="seller-product-info">
+                    <h4>${p.name}</h4>
+                    <div>Đã bán: ${p.sold || 0}</div>
+                    <div>Còn: ${p.quantity || 0}</div>
+                    <div style="color:var(--red);font-weight:700;">
+                        ${Number(p.price).toLocaleString('vi-VN')}đ
+                    </div>
+                </div>
             </div>
-          `).join('')
-        }
-      </div>
+        `).join('')}
+    </div>
+</div>
 
       <!-- Cảnh báo hàng sắp hết -->
       ${sapHetHang > 0 ? `
@@ -401,24 +420,43 @@ async function renderSellerProducts() {
 
     tbody.innerHTML = result.data.map(p => `
         <tr>
-            <td style="font-size:28px; text-align:center;">${p.emoji || '📦'}</td>
-            <td>
-                <div style="font-weight:600;">${p.name}</div>
-                <div style="font-size:11px; color:var(--text-muted);">${p.category_name || ''}</div>
-            </td>
-            <td style="color:var(--red); font-weight:700;">
-                ${Number(p.price).toLocaleString('vi-VN')}đ
-            </td>
-            <td style="text-align:center; color:${p.quantity <= 5 ? 'var(--red)' : 'inherit'}">
-                ${p.quantity || 0}
-            </td>
-            <td style="text-align:center;">${p.sold || 0}</td>
-            <td>
-                <button class="admin-action-btn btn-edit" 
-                    onclick="openEditSellerProduct(${p.id})">✏️ Sửa</button>
-                <button class="admin-action-btn btn-delete" 
-                    onclick="deleteSellerProduct(${p.id}, '${p.name.replace(/'/g,"\\'")}')">🗑️ Xóa</button>
-            </td>
+            <td style="text-align:center;">
+  ${
+    p.image_url
+      ? `<img src="/static/${p.image_url}"
+              alt="${p.name}"
+              style="
+                width:60px;
+                height:60px;
+                object-fit:cover;
+                border-radius:8px;
+                border:1px solid #ddd;
+              ">`
+      : `<span style="font-size:28px;">${p.emoji || '📦'}</span>`
+  }
+</td>
+  <td>
+    <div style="font-weight:600;">${p.name}</div>
+    <div style="font-size:11px; color:var(--text-muted);">Danh mục: ${p.category_name || '—'}</div>
+  </td>
+  <td style="font-weight:700; color:var(--red);">
+    ${Number(p.price).toLocaleString('vi-VN')}đ
+    <div style="font-size:11px; color:var(--text-muted); font-weight:400;">
+      Còn: ${p.quantity || 0}
+    </div>
+  </td>
+  <td style="font-size:12px; color:var(--text-muted);">
+    Đã bán: ${p.sold || 0}
+  </td>
+  <td style="font-size:12px; color:var(--text-muted);">
+    ${p.rating ? `⭐ ${p.rating}` : '—'}
+  </td>
+  <td>
+    <button class="admin-action-btn btn-edit"
+      onclick="openEditSellerProduct(${p.id})">
+      ✏️ Sửa
+    </button>
+
         </tr>
     `).join('');
 }
@@ -1105,7 +1143,21 @@ async function initAdminDashboard() {
                       font-weight:800; font-size:12px; flex-shrink:0;">
             ${i + 1}
           </div>
-          <div style="font-size:22px; flex-shrink:0;">${p.emoji}</div>
+          <div style="width:40px;height:40px;flex-shrink:0;">
+            ${
+              p.image_url
+                ? `<img src="/static/${p.image_url}"
+                      alt="${p.name}"
+                      style="
+                        width:40px;
+                        height:40px;
+                        object-fit:cover;
+                        border-radius:8px;
+                        border:1px solid #ddd;
+                      ">`
+                : `<span style="font-size:22px;">${p.emoji || '📦'}</span>`
+            }
+          </div>
           <div style="flex:1; min-width:0;">
             <div style="font-weight:600; font-size:13px; white-space:nowrap;
                         overflow:hidden; text-overflow:ellipsis;">${p.name}</div>
@@ -1455,7 +1507,15 @@ function renderUserProducts(arr) {
 
   container.innerHTML = pageItems.map(p => `
     <div class="product-card" onclick="openProductDetail(${p.id})">
-      <div class="card-img">${p.emoji || '📦'}</div>
+      <div class="card-img">
+        ${
+          p.image_url
+            ? `<img src="/static/${p.image_url}"
+                    alt="${p.name}"
+                    style="width:100%;height:100%;object-fit:cover;">`
+            : (p.emoji || '📦')
+        }
+      </div>
       <div class="card-body">
         <div class="card-title">${p.name}</div>
         <div style="font-size:12px; color:var(--text-muted); margin:2px 0 6px;
@@ -1580,7 +1640,21 @@ async function renderAdminProducts() {
 
     tbody.innerHTML = result.data.map(p => `
       <tr>
-        <td style="font-size:28px; text-align:center;">${p.emoji || '📦'}</td>
+        <td style="text-align:center;">
+          ${
+            p.image_url
+              ? `<img src="/static/${p.image_url}"
+                    alt="${p.name}"
+                    style="
+                        width:50px;
+                        height:50px;
+                        object-fit:cover;
+                        border-radius:8px;
+                        border:1px solid #ddd;
+                    ">`
+              : `<span style="font-size:28px">${p.emoji || '📦'}</span>`
+          }
+        </td>
         <td>
           <div style="font-weight:600;">${p.name}</div>
           <div style="font-size:11px; color:var(--text-muted);">${p.description || ''}</div>
@@ -2486,6 +2560,7 @@ async function loadCartFromServer() {
         ProductId  : item.ProductId   || item.product_id,
         ProductName: item.ProductName || item.product_name || item.name || `Sản phẩm #${item.ProductId || item.product_id}`,
         Emoji      : item.Emoji       || item.emoji        || '📦',
+        ImageUrl  : item.ImageUrl || item.image_url || '',
         Quantity   : item.Quantity    || item.quantity     || 1,
         UnitPrice  : item.UnitPrice   || item.unit_price   || item.price || 0,
         TotalPrice : (item.Quantity   || item.quantity || 1) *
@@ -2635,8 +2710,17 @@ function renderCartItems() {
                 border-bottom:1px solid var(--border); align-items:flex-start;">
 
       <!-- Emoji sản phẩm -->
-      <div style="font-size:36px; flex-shrink:0;">${item.Emoji || '📦'}</div>
-
+      <div style="width:60px;height:60px;flex-shrink:0;">
+        ${
+          item.ImageUrl
+            ? `<img src="/static/${item.ImageUrl}"
+                    style="width:60px;
+                          height:60px;
+                          object-fit:cover;
+                          border-radius:8px;">`
+            : (item.Emoji || '📦')
+        }
+      </div>
       <!-- Tên + điều chỉnh số lượng -->
       <div style="flex:1; min-width:0;">
         <div style="font-weight:600; font-size:14px; margin-bottom:4px;
@@ -2858,7 +2942,7 @@ function openCheckoutModal() {
   const summaryEl = document.getElementById('checkoutCartSummary');
   summaryEl.innerHTML = cart.map(item => `
     <div style="display:flex; justify-content:space-between; padding:4px 0; border-bottom:1px solid var(--border); font-size:12px;">
-      <span>${item.Emoji || '📦'} ${item.ProductName || 'Sản phẩm #' + item.ProductId} x${item.Quantity}</span>
+      <span>${item.ProductName} x${item.Quantity}</span>
       <span style="font-weight:600;">${(item.Quantity * item.UnitPrice).toLocaleString('vi-VN')}đ</span>
     </div>
   `).join('');
@@ -3325,16 +3409,58 @@ async function openProductDetail(productId) {
     content.innerHTML = `
       <div style="display:flex; gap:24px; flex-wrap:wrap;">
 
-        <!-- Ảnh / Emoji sản phẩm -->
-        <div style="flex:0 0 220px; display:flex; align-items:center; justify-content:center;
-                    background:var(--bg); border-radius:12px; height:220px; font-size:90px;
-                    position:relative;">
-          ${p.emoji || '📦'}
-          ${discountPercent > 0 ? `
-            <span style="position:absolute; top:10px; left:10px; background:var(--red); color:white;
-                         font-size:12px; font-weight:700; padding:3px 8px; border-radius:6px;">
-              -${discountPercent}%
-            </span>` : ''}
+        <!-- Ảnh sản phẩm -->
+        <div style="
+            flex:0 0 220px;
+            height:220px;
+            background:var(--bg);
+            border-radius:12px;
+            overflow:hidden;
+            position:relative;
+        ">
+
+          ${
+            p.image_url
+              ? `<img
+                    src="/static/${p.image_url}"
+                    alt="${p.name}"
+                    style="
+                      width:100%;
+                      height:100%;
+                      object-fit:contain;
+                      padding:10px;
+                    "
+                >`
+              : `<div style="
+                    width:100%;
+                    height:100%;
+                    display:flex;
+                    align-items:center;
+                    justify-content:center;
+                    font-size:90px;
+                ">
+                  ${p.emoji || '📦'}
+                </div>`
+          }
+
+          ${
+            discountPercent > 0
+              ? `<span style="
+                    position:absolute;
+                    top:10px;
+                    left:10px;
+                    background:var(--red);
+                    color:white;
+                    font-size:12px;
+                    font-weight:700;
+                    padding:3px 8px;
+                    border-radius:6px;
+                ">
+                    -${discountPercent}%
+                </span>`
+              : ''
+          }
+
         </div>
 
         <!-- Thông tin chính -->
@@ -3470,3 +3596,53 @@ function formatPriceInputs() {
 loadCategories();
 loadProducts();
 khoiPhucDangNhap();
+
+// SCRIPT ĐIỀU KHIỂN SLIDER BANNER CHẠY QUA LẠI
+let currentSlideIndex = 0;
+const slides = document.querySelectorAll('.user-hero-slide');
+const dots = document.querySelectorAll('.dot');
+
+function showSlide(index) {
+    if (slides.length === 0) return;
+
+    // Reset chỉ số nếu vượt quá số lượng slide
+    if (index >= slides.length) currentSlideIndex = 0;
+    if (index < 0) currentSlideIndex = slides.length - 1;
+
+    // Ẩn tất cả các slide và gỡ class active ở các chấm tròn
+    slides.forEach(slide => slide.classList.remove('active'));
+    dots.forEach(dot => dot.classList.remove('active'));
+
+    // Hiển thị slide và chấm tròn tương ứng được kích hoạt
+    slides[currentSlideIndex].classList.add('active');
+    dots[currentSlideIndex].classList.add('active');
+}
+
+function nextSlide() {
+    currentSlideIndex++;
+    showSlide(currentSlideIndex);
+}
+
+function prevSlide() {
+    currentSlideIndex--;
+    showSlide(currentSlideIndex);
+}
+
+function currentSlide(index) {
+    currentSlideIndex = index;
+    showSlide(currentSlideIndex);
+}
+
+// Lắng nghe sự kiện click vào 2 nút mũi tên Trái / Phải
+document.querySelector('.next-arrow')?.addEventListener('click', nextSlide);
+document.querySelector('.prev-arrow')?.addEventListener('click', prevSlide);
+
+// THIẾT LẬP TỰ ĐỘNG CHẠY: Cứ mỗi 4 giây (4000ms) banner tự động chuyển ảnh
+let autoSlideInterval = setInterval(nextSlide, 4000);
+
+// Dừng tự động chạy khi người dùng di chuột vào banner, thả ra lại chạy tiếp
+const sliderContainer = document.querySelector('.user-slider-container');
+sliderContainer?.addEventListener('mouseenter', () => clearInterval(autoSlideInterval));
+sliderContainer?.addEventListener('mouseleave', () => {
+    autoSlideInterval = setInterval(nextSlide, 4000);
+});

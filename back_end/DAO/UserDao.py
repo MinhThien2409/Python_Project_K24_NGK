@@ -38,24 +38,29 @@ class UserDao:
 
         try:
             sql = """
-                SELECT UserId, FullName, Role_id ,Address,Phone,NationalId
+                SELECT UserId, FullName, Role_id, Address, Phone, NationalId,
+                       COALESCE(trang_thai, 'active') AS trang_thai
                 FROM Users 
                 WHERE Username = ? AND Password = ?
             """
             cursor.execute(sql, (username, password))
             row = cursor.fetchone()
 
-            if row:
+            if not row:
+                return None
 
-                return User(
-                    ma_user=row.UserId,
-                    ten_user=row.FullName,
-                    ma_nhom_quyen=row.Role_id,
-                    dia_chi=row.Address,
-                    sdt=row.Phone,
-                    cmnd=row.NationalId
-                )
-            return None
+            # ✅ Tài khoản đã bị khóa → không cho đăng nhập
+            if row.trang_thai == 'banned':
+                return {"banned": True}
+
+            return User(
+                ma_user=row.UserId,
+                ten_user=row.FullName,
+                ma_nhom_quyen=row.Role_id,
+                dia_chi=row.Address,
+                sdt=row.Phone,
+                cmnd=row.NationalId
+            )
         except Exception as e:
             print("Lỗi đăng nhập:", e)
             return None

@@ -14,10 +14,6 @@ class DonHangDao:
         if not conn: return False
         cursor = conn.cursor()
         try:
-            # Sinh mã voucher unique nếu không có
-            # Tránh lỗi UNIQUE KEY khi nhiều đơn cùng NULL
-            voucher_code = order.VoucherCode if order.VoucherCode else None
-
             sql_order = """
             INSERT INTO Orders (Status, ShippingFee, UserId, ReceiverName,
                                 ReceiverPhone, ShippingAddress, PaymentMethod,
@@ -46,16 +42,42 @@ class DonHangDao:
                                     Quantity, UnitPrice, TotalPrice)
             VALUES (?, ?, ?, ?, ?, ?, ?)
             """
+            # ✅ Lệnh trừ kho — atomic, có điều kiện Quantity >= ? để không bị âm
+            sql_tru_kho = """
+            UPDATE Products 
+            SET Quantity = Quantity - ? 
+            WHERE ProductId = ? AND Quantity >= ?
+            """
+
             for item in order_items:
+                qty = int(item.Quantity or 0)
+
                 cursor.execute(sql_item, (
                     int(new_order_id),
                     int(item.ProductId),
                     str(item.ProductName or f'Sản phẩm #{item.ProductId}'),
                     str(item.Emoji or '📦'),
-                    int(item.Quantity or 0),
+                    qty,
                     float(item.UnitPrice or 0),
                     float(item.TotalPrice or 0)
                 ))
+
+                # ✅ Trừ tồn kho ngay khi đặt hàng thành công
+                cursor.execute(sql_tru_kho, (qty, int(item.ProductId), qty))
+
+                if cursor.rowcount == 0:
+                    # Không đủ hàng → lấy thông tin báo lỗi rồi hủy toàn bộ đơn
+                    cursor.execute(
+                        "SELECT ProductName, Quantity FROM Products WHERE ProductId = ?",
+                        (item.ProductId,)
+                    )
+                    info = cursor.fetchone()
+                    conn.rollback()
+                    if info:
+                        return {"error": "out_of_stock",
+                                "product_name": info.ProductName,
+                                "available": info.Quantity}
+                    return {"error": "not_found", "product_name": f"#{item.ProductId}"}
 
             conn.commit()
             return new_order_id
@@ -123,23 +145,19 @@ class DonHangDao:
         if not conn: return False
         cursor = conn.cursor()
         try:
-            # Lấy trạng thái hiện tại
             cursor.execute("SELECT Status FROM Orders WHERE OrderId = ?", (order_id,))
             row = cursor.fetchone()
             if not row:
-
                 return False
 
             current_status = row[0]
             print(f"Đơn #{order_id}: {current_status} → {new_status}")
 
-            # Cập nhật trạng thái (bỏ UpdatedAt nếu cột không tồn tại)
             cursor.execute(
                 "UPDATE Orders SET Status = ? WHERE OrderId = ?",
                 (new_status, order_id)
             )
             rows_affected = cursor.rowcount
-
 
             # Cộng SoldCount khi hoàn thành
             if new_status == 'Completed' and current_status != 'Completed':
@@ -147,19 +165,25 @@ class DonHangDao:
                     "SELECT ProductId, Quantity FROM OrderItems WHERE OrderId = ?",
                     (order_id,)
                 )
-                items = cursor.fetchall()
-
-                for item in items:
-                    product_id = item[0]
-                    quantity = item[1]
+                for item in cursor.fetchall():
                     cursor.execute(
                         "UPDATE Products SET SoldCount = ISNULL(SoldCount, 0) + ? WHERE ProductId = ?",
-                        (quantity, product_id)
+                        (item[1], item[0])
                     )
 
+            # ✅ Hoàn lại tồn kho khi đơn bị hủy
+            if new_status == 'Cancelled' and current_status != 'Cancelled':
+                cursor.execute(
+                    "SELECT ProductId, Quantity FROM OrderItems WHERE OrderId = ?",
+                    (order_id,)
+                )
+                for item in cursor.fetchall():
+                    cursor.execute(
+                        "UPDATE Products SET Quantity = Quantity + ? WHERE ProductId = ?",
+                        (item[1], item[0])
+                    )
 
             conn.commit()
-            
             return rows_affected > 0
 
         except Exception as e:

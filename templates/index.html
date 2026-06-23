@@ -80,6 +80,66 @@
     </div>
   </header>
 
+
+<div class="user-hero-banner">
+    <div class="user-slider-container">
+    <div class="user-slider-wrapper">
+
+        <div class="user-hero-slide active">
+            <div class="user-banner-content">
+                <span class="user-banner-tag">🔥 FLASH SALE XẢ KHO</span>
+                <h2>BST THỜI TRANG ĐỘC QUYỀN</h2>
+                <p>Giảm ngay đến 50% cho các sản phẩm Local Brand siêu hot. Số lượng có hạn, săn ngay kẻo lỡ!</p>
+                <a  class="user-banner-btn">🛍️ Săn Sale Ngay</a>
+            </div>
+            <div class="user-banner-visual"><span class="banner-fashion-icon">🧥</span></div>
+        </div>
+
+        <div class="user-hero-slide">
+            <div class="user-banner-content">
+                <span class="user-banner-tag" style="border-color: #00E5FF; color: #00E5FF; background: rgba(0,229,255,0.1);">✨ NEW ARRIVALS</span>
+                <h2>ÁO SƠ MI & POLO LỊCH LÃM</h2>
+                <p>Chất liệu Cotton Premium thoáng mát, form dáng suông hiện đại tôn dáng cho ngày hè năng động.</p>
+                <a  class="user-banner-btn">👕 Xem Bộ Sưu Tập</a>
+            </div>
+            <div class="user-banner-visual"><span class="banner-fashion-icon">👔</span></div>
+        </div>
+
+        <div class="user-hero-slide">
+            <div class="user-banner-content">
+                <span class="user-banner-tag" style="border-color: #FF007F; color: #FF007F; background: rgba(255,0,127,0.1);">🔥 STREETWEAR STYLE</span>
+                <h2>XU HƯỚNG JEANS & BAGGY ĐẬM CHẤT</h2>
+                <p>Bứt phá phong cách cùng những mẫu quần Baggy Jeans rách gối cá tính, bền bỉ và dễ phối đồ.</p>
+                <a  class="user-banner-btn">👖 Khám Phá Ngay</a>
+            </div>
+            <div class="user-banner-visual"><span class="banner-fashion-icon">👖</span></div>
+        </div>
+
+        <div class="user-hero-slide">
+            <div class="user-banner-content">
+                <span class="user-banner-tag">🎁 MEMBER PRIVILEGE</span>
+                <h2>ĐĂNG KÝ THÀNH VIÊN - NHẬN VOUCHER 100K</h2>
+                <p>Trở thành VIP của An Tâm Shop ngay hôm nay để nhận đặc quyền miễn phí vận chuyển trọn đời.</p>
+                <a  class="user-banner-btn">👑 Đăng Ký Ngay</a>
+            </div>
+            <div class="user-banner-visual"><span class="banner-fashion-icon">🎒</span></div>
+        </div>
+
+    </div>
+
+    <button class="slider-arrow prev-arrow">❮</button>
+    <button class="slider-arrow next-arrow">❯</button>
+
+    <div class="slider-dots">
+        <span class="dot active" onclick="currentSlide(0)"></span>
+        <span class="dot" onclick="currentSlide(1)"></span>
+        <span class="dot" onclick="currentSlide(2)"></span>
+        <span class="dot" onclick="currentSlide(3)"></span>
+    </div>
+</div>
+</div>
+
+
   <nav>
     <div class="nav-inner" id="mainNavInner">
       <!-- Sẽ được Javascript render tự động -->
@@ -169,31 +229,31 @@
         <div class="footer-col">
           <h4>Về Pobby </h4>
           <ul class="footer-links">
-            <li><a href="#">Giới thiệu</a></li>
-            <li><a href="#">Tuyển dụng</a></li>
-            <li><a href="#">Tin tức</a></li>
-            <li><a href="#">Đối tác</a></li>
-            <li><a href="#">Liên hệ</a></li>
+            <li>Giới thiệu</li>
+            <li>Tuyển dụng</li>
+            <li>Tin tức</li>
+            <li>Đối tác</li>
+            <li>Liên hệ</li>
           </ul>
         </div>
         <div class="footer-col">
           <h4>Hỗ trợ</h4>
           <ul class="footer-links">
-            <li><a href="#">Trung tâm trợ giúp</a></li>
-            <li><a href="#">Hướng dẫn mua hàng</a></li>
-            <li><a href="#">Chính sách đổi trả</a></li>
-            <li><a href="#">Bảo mật thông tin</a></li>
-            <li><a href="#">Điều khoản dịch vụ</a></li>
+            <li>Trung tâm trợ giúp</li>
+            <li>Hướng dẫn mua hàng</li>
+            <li>Chính sách đổi trả</li>
+            <li>Bảo mật thông tin</li>
+            <li>Điều khoản dịch vụ</li>
           </ul>
         </div>
         <div class="footer-col">
           <h4>Bán hàng</h4>
           <ul class="footer-links">
-            <li><a href="#" onclick="openSellerRegisterModal();return false;">Đăng ký bán hàng</a></li>
-            <li><a href="#">Hướng dẫn bán hàng</a></li>
-            <li><a href="#">Quảng cáo</a></li>
-            <li><a href="#">Chính sách hoa hồng</a></li>
-            <li><a href="#">Flash sale cho shop</a></li>
+            <li>Đăng ký bán hàng</li>
+            <li>Hướng dẫn bán hàng</li>
+            <li>Quảng cáo</li>
+            <li>Chính sách hoa hồng</li>
+            <li>Flash sale cho shop</li>
           </ul>
         </div>
       </div>
@@ -833,7 +893,7 @@
         <select id="selCat"></select>
       </div>
       <div class="form-group"><label>Mô tả gian hàng</label><textarea id="sellerDesc" rows="3"></textarea></div>
-      
+
       <button type="submit" class="btn-submit" style="width:100%;">Gửi yêu cầu xét duyệt</button>
     </form>
   </div>
@@ -856,7 +916,7 @@
         <div class="form-group" style="flex:1;"><label>Đánh giá (0-5)</label><input type="number" id="prodRating" step="0.1" max="5" value="4.5"></div>
       </div>
       <!-- Thay thế form-group prodEmoji hiện tại -->
-<div class="form-group">
+<!--<div class="form-group">
   <label>Biểu tượng sản phẩm (Emoji đại diện)</label>
   <div style="display:flex; gap:8px; align-items:center;">
     <input type="text" id="prodEmoji" placeholder="Nhập hoặc chọn emoji..."
@@ -866,7 +926,7 @@
       😀
     </button>
   </div>
-  <!-- Bảng emoji -->
+  Bảng emoji
   <div id="emojiPicker" style="display:none; background:var(--white); border:1px solid var(--border); border-radius:10px; padding:10px; margin-top:6px; display:none;">
     <div style="font-size:11px; font-weight:700; color:var(--text-muted); margin-bottom:6px;">ĐIỆN TỬ</div>
     <div class="emoji-grid">
@@ -892,6 +952,39 @@
     <div class="emoji-grid">
       📦 🎁 💊 🧴 📚 🖊️ 🎵 🎨 🧸 🪆 🎪 🎠 🎡 🌟 💎 🏆
     </div>
+  </div>
+</div>-->
+<div class="form-group">
+  <label>Ảnh sản phẩm</label>
+
+  <input
+    type="file"
+    id="prodImage"
+    accept="image/*"
+    onchange="previewProductImage(event)"
+    style="
+      width:100%;
+      padding:10px;
+      border:1px solid var(--border);
+      border-radius:8px;
+      background:var(--bg);
+    "
+  >
+
+  <div id="productImagePreview"
+       style="
+          margin-top:12px;
+          width:160px;
+          height:160px;
+          border:2px dashed var(--border);
+          border-radius:12px;
+          display:flex;
+          align-items:center;
+          justify-content:center;
+          overflow:hidden;
+          color:var(--text-muted);
+       ">
+      Chưa chọn ảnh
   </div>
 </div>
       <div class="form-group"><label>Nhà bán hàng (Thương hiệu)</label><input type="text" id="prodShop" required></div>

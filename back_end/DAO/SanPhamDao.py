@@ -16,7 +16,7 @@ class SanPhamDao:
                 SELECT
                     p.ProductId, p.ProductName, p.Description,
                     p.Price, p.OldPrice, p.Quantity,
-                    p.Rating, p.SoldCount, p.Emoji,
+                    p.Rating, p.SoldCount, p.Emoji, p.ImageUrl,
                     p.CategoryId, p.StoreId, p.IsActive,
                     c.CategoryName,
                     s.StoreName
@@ -45,7 +45,7 @@ class SanPhamDao:
                 SELECT
                     p.ProductId, p.ProductName, p.Description,
                     p.Price, p.OldPrice, p.Quantity,
-                    p.Rating, p.SoldCount, p.Emoji,
+                    p.Rating, p.SoldCount, p.Emoji, p.ImageUrl,
                     p.CategoryId, p.StoreId, p.IsActive,
                     c.CategoryName,
                     s.StoreName
@@ -73,7 +73,7 @@ class SanPhamDao:
                 SELECT
                     p.ProductId, p.ProductName, p.Description,
                     p.Price, p.OldPrice, p.Quantity,
-                    p.Rating, p.SoldCount, p.Emoji,
+                    p.Rating, p.SoldCount, p.Emoji, p.ImageUrl,
                     p.CategoryId, p.StoreId, p.IsActive,
                     c.CategoryName,
                     s.StoreName
@@ -102,7 +102,7 @@ class SanPhamDao:
                 SELECT TOP {top}
                     p.ProductId, p.ProductName, p.Description,
                     p.Price, p.OldPrice, p.Quantity,
-                    p.Rating, p.SoldCount, p.Emoji,
+                    p.Rating, p.SoldCount, p.Emoji, p.ImageUrl,
                     p.CategoryId, p.StoreId, p.IsActive,
                     c.CategoryName,
                     s.StoreName
@@ -132,14 +132,14 @@ class SanPhamDao:
             sql = """
                 INSERT INTO Products
                     (ProductName, Description, Price, OldPrice,
-                     Quantity, Rating, SoldCount, Emoji,
+                     Quantity, Rating, SoldCount, Emoji, ImageUrl,
                      CategoryId, StoreId, IsActive)
                 OUTPUT INSERTED.ProductId
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """
             cursor.execute(sql, (
                 sp.ProductName, sp.Description, sp.Price, sp.OldPrice,
-                sp.Quantity,    sp.Rating,      sp.SoldCount, sp.Emoji,
+                sp.Quantity,    sp.Rating,      sp.SoldCount, sp.Emoji, sp.ImageUrl,
                 sp.CategoryId,  sp.StoreId,     sp.IsActive
             ))
             row = cursor.fetchone()
@@ -163,7 +163,7 @@ class SanPhamDao:
                 SET ProductName = ?, Description = ?,
                     Price       = ?, OldPrice    = ?,
                     Quantity    = ?, Rating      = ?,
-                    Emoji       = ?, CategoryId  = ?,
+                    Emoji       = ?, ImageUrl = ?, CategoryId  = ?,
                     StoreId     = ?, IsActive    = ?
                 WHERE ProductId = ?
             """
@@ -171,7 +171,7 @@ class SanPhamDao:
                 sp.ProductName, sp.Description,
                 sp.Price,       sp.OldPrice,
                 sp.Quantity,    sp.Rating,
-                sp.Emoji,       sp.CategoryId,
+                sp.Emoji,  sp.ImageUrl,     sp.CategoryId,
                 sp.StoreId,     sp.IsActive,
                 sp.ProductId
             ))
@@ -239,6 +239,7 @@ class SanPhamDao:
             "rating"       : float(row.Rating)  if row.Rating   else 4.5,
             "sold"         : row.SoldCount      or 0,
             "emoji"        : row.Emoji          or "📦",
+            "image_url"    : row.ImageUrl,
             "category_id"  : row.CategoryId,
             "category_name": row.CategoryName   or "",
             "store_id"     : row.StoreId,

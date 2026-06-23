@@ -33,7 +33,7 @@ class SanPhamBus:
     # ─── THÊM SẢN PHẨM ──────────────────────────────────────────────────────
 
     def them_san_pham(self, ten, mo_ta, gia, gia_goc,
-                     so_luong, rating, emoji,
+                     so_luong, rating, emoji,image_url,
                      category_id, store_id):
         # Validate
         if not ten or not ten.strip():
@@ -56,6 +56,7 @@ class SanPhamBus:
             Rating      = float(rating) if rating else 4.5,
             SoldCount   = 0,
             Emoji       = emoji or "📦",
+            ImageUrl    = image_url or None,
             CategoryId  = int(category_id),
             StoreId     = int(store_id),
             IsActive    = 1
@@ -71,7 +72,7 @@ class SanPhamBus:
     # ─── SỬA SẢN PHẨM ───────────────────────────────────────────────────────
 
     def sua_san_pham(self, product_id, ten, mo_ta, gia, gia_goc,
-                     so_luong, rating, emoji, category_id, store_id):
+                     so_luong, rating, emoji,image_url, category_id, store_id):
         if not product_id:
             return {"status": False, "message": "Thiếu ID sản phẩm!"}
         if not ten or not ten.strip():
@@ -88,6 +89,7 @@ class SanPhamBus:
             Quantity    = int(so_luong) if so_luong is not None else 0,
             Rating      = float(rating) if rating else 4.5,
             Emoji       = emoji or "📦",
+            ImageUrl    = image_url or None,
             CategoryId  = int(category_id),
             StoreId     = int(store_id),
             IsActive    = 1

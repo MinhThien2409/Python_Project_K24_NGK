@@ -10,6 +10,7 @@ class SanPham:
         Rating       = 4.5,
         SoldCount    = 0,
         Emoji        = None,
+        ImageUrl = None,
         CategoryId   = None,
         StoreId      = None,
         IsActive     = 1
@@ -23,6 +24,7 @@ class SanPham:
         self.Rating      = Rating
         self.SoldCount   = SoldCount
         self.Emoji       = Emoji
+        self.ImageUrl = ImageUrl
         self.CategoryId  = CategoryId
         self.StoreId     = StoreId
         self.IsActive    = IsActive

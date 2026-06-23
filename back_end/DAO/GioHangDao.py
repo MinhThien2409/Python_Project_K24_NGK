@@ -90,12 +90,13 @@ class GioHangDao:
         cursor = conn.cursor()
         try:
             sql = """
-            SELECT ci.CartId AS CartId, 
-            ci.ProductId AS ProductId, 
-            ci.Quantity AS Quantity, 
-            ci.UnitPrice AS UnitPrice,
-            p.ProductName AS ProductName, 
-            p.Emoji AS Emoji
+            SELECT ci.CartId AS CartId,
+                ci.ProductId AS ProductId,
+                ci.Quantity AS Quantity,
+                ci.UnitPrice AS UnitPrice,
+                p.ProductName AS ProductName,
+                p.Emoji AS Emoji,
+                p.ImageUrl AS ImageUrl
             FROM CartItems ci
             LEFT JOIN Products p ON ci.ProductId = p.ProductId
             WHERE ci.CartId = ?

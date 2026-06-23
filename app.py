@@ -114,21 +114,23 @@ def save_permissions_api():
     if not ma_user:
         return jsonify({"status": False, "message": "Vui lòng chọn tài khoản cần phân quyền!"})
 
-    for quyen in danh_sach_quyen:
-        res = phan_quyen_bus.cap_quyen_ngoai_le(
-            ma_user      = ma_user,
-            ma_chuc_nang = quyen.get('ma_chuc_nang'),
-            xem          = quyen.get('xem',  False),
-            them         = quyen.get('them', False),
-            sua          = quyen.get('sua',  False),
-            xoa          = quyen.get('xoa',  False)
-        )
-        if not res['status']:
-            return jsonify({"status": False, "message": "Có lỗi xảy ra trong quá trình lưu quyền."})
-
-    return jsonify({"status": True, "message": "Đã lưu cấu hình phân quyền thành công!"})
+    return jsonify(phan_quyen_bus.cap_quyen_ngoai_le_batch(ma_user, danh_sach_quyen))
 
 
+@app.route('/api/cap-quyen-nhom', methods=['POST'])
+def cap_quyen_nhom():
+    try:
+        data        = request.get_json()
+        role_id     = data.get('role_id')
+        permissions = data.get('permissions', [])
+
+        if not role_id:
+            return jsonify({"status": False, "message": "Thiếu role_id!"}), 400
+
+        return jsonify(phan_quyen_bus.cap_nhat_quyen_batch(role_id, permissions))
+
+    except Exception as e:
+        return jsonify({"status": False, "message": f"Lỗi server: {str(e)}"}), 500
 @app.route('/api/quyen-cua-user/<int:ma_user>', methods=['GET'])
 def get_user_permissions_api(ma_user):
     return jsonify(phan_quyen_bus.lay_quyen_cua_user(ma_user))
@@ -142,35 +144,6 @@ def quyen_cua_nhom(ma_nhom):
         return jsonify({"status": False, "message": f"Lỗi server: {str(e)}"}), 500
 
 
-@app.route('/api/cap-quyen-nhom', methods=['POST'])
-def cap_quyen_nhom():
-    try:
-        data        = request.get_json()
-        role_id     = data.get('role_id')
-        permissions = data.get('permissions', [])
-
-        if not role_id:
-            return jsonify({"status": False, "message": "Thiếu role_id!"}), 400
-
-        loi = []
-        for p in permissions:
-            result = phan_quyen_bus.cap_nhat_quyen(
-                ma_nhom      = role_id,
-                ma_chuc_nang = p.get('ma_chuc_nang'),
-                xem          = p.get('xem',  False),
-                them         = p.get('them', False),
-                sua          = p.get('sua',  False),
-                xoa          = p.get('xoa',  False)
-            )
-            if not result['status']:
-                loi.append(p.get('ma_chuc_nang'))
-
-        if loi:
-            return jsonify({"status": False, "message": f"Lỗi khi lưu chức năng ID: {loi}"})
-        return jsonify({"status": True, "message": f"Đã lưu quyền cho nhóm ID {role_id} thành công!"})
-
-    except Exception as e:
-        return jsonify({"status": False, "message": f"Lỗi server: {str(e)}"}), 500
 
 
 @app.route('/api/ap-dung-quyen-nhom-cho-user', methods=['POST'])
@@ -277,6 +250,7 @@ def add_product():
         so_luong    = d.get('quantity'),
         rating      = d.get('rating'),
         emoji       = d.get('emoji'),
+        image_url=d.get('image_url'),
         category_id = d.get('category_id'),
         store_id    = d.get('store_id', 1)
     ))
@@ -294,6 +268,7 @@ def update_product(product_id):
         so_luong    = d.get('quantity'),
         rating      = d.get('rating'),
         emoji       = d.get('emoji'),
+        image_url=d.get('image_url'),
         category_id = d.get('category_id'),
         store_id    = d.get('store_id', 1)
     ))

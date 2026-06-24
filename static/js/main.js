@@ -325,51 +325,83 @@ async function renderSellerOverview() {
 
       <!-- Sản phẩm bán chạy -->
       <div class="admin-card">
-    <h3>🔥 Sản phẩm bán chạy nhất</h3>
+        <h3 style="margin-bottom:14px;">🔥 Sản phẩm bán chạy nhất</h3>
 
-    <div class="seller-top-products">
-        ${topProducts.map((p,index)=>`
-            <div class="seller-product-card">
-                <div style="font-size:22px;font-weight:700;">
-                    ${index+1}
+        ${topProducts.length === 0
+          ? `<div class="empty-state"><div class="icon">📦</div><p>Chưa có sản phẩm nào</p></div>`
+          : topProducts.map((p, i) => `
+            <div style="
+                display:flex;
+                align-items:center;
+                gap:12px;
+                padding:10px 0;
+                border-bottom:1px solid var(--border);
+            ">
+              
+              <div style="
+                  width:28px;
+                  height:28px;
+                  border-radius:50%;
+                  background:var(--primary-light);
+                  color:var(--primary);
+                  display:flex;
+                  align-items:center;
+                  justify-content:center;
+                  font-weight:800;
+                  font-size:13px;
+                  flex-shrink:0;
+              ">
+                ${i + 1}
+              </div>
+
+              <div style="width:60px;height:60px;flex-shrink:0;">
+                ${
+                  p.image_url
+                    ? `<img src="/static/${p.image_url}"
+                          alt="${p.name}"
+                          style="
+                            width:60px;
+                            height:60px;
+                            object-fit:cover;
+                            border-radius:8px;
+                            border:1px solid #ddd;
+                          ">`
+                    : `<span style="font-size:32px;">${p.emoji || '📦'}</span>`
+                }
+              </div>
+
+              <div style="flex:1; min-width:0;">
+                <div style="
+                    font-weight:600;
+                    font-size:14px;
+                    white-space:nowrap;
+                    overflow:hidden;
+                    text-overflow:ellipsis;
+                ">
+                  ${p.name}
                 </div>
 
-                <div>
-    ${
-        p.image_url
-        ? `<img src="/static/${p.image_url}"
-                alt="${p.name}"
-                style="
-                    width:80px;
-                    height:80px;
-                    object-fit:cover;
-                    border-radius:10px;
-                    border:1px solid #ddd;
-                ">`
-        : `<img src="/static/images/no-image.png"
-                alt="No Image"
-                style="
-                    width:80px;
-                    height:80px;
-                    object-fit:cover;
-                    border-radius:10px;
-                    border:1px solid #ddd;
-                ">`
-    }
-</div>
-
-                <div class="seller-product-info">
-                    <h4>${p.name}</h4>
-                    <div>Đã bán: ${p.sold || 0}</div>
-                    <div>Còn: ${p.quantity || 0}</div>
-                    <div style="color:var(--red);font-weight:700;">
-                        ${Number(p.price).toLocaleString('vi-VN')}đ
-                    </div>
+                <div style="
+                    font-size:12px;
+                    color:var(--text-secondary);
+                ">
+                  Đã bán: <b>${p.sold || 0}</b> · Còn: <b>${p.quantity || 0}</b>
                 </div>
+              </div>
+
+              <div style="
+                  font-weight:700;
+                  color:var(--red);
+                  font-size:14px;
+                  flex-shrink:0;
+              ">
+                ${Number(p.price).toLocaleString('vi-VN')}đ
+              </div>
+
             </div>
-        `).join('')}
-    </div>
-</div>
+          `).join('')
+        }
+      </div>
 
       <!-- Cảnh báo hàng sắp hết -->
       ${sapHetHang > 0 ? `
@@ -421,42 +453,37 @@ async function renderSellerProducts() {
     tbody.innerHTML = result.data.map(p => `
         <tr>
             <td style="text-align:center;">
-  ${
-    p.image_url
-      ? `<img src="/static/${p.image_url}"
-              alt="${p.name}"
-              style="
-                width:60px;
-                height:60px;
-                object-fit:cover;
-                border-radius:8px;
-                border:1px solid #ddd;
-              ">`
-      : `<span style="font-size:28px;">${p.emoji || '📦'}</span>`
-  }
-</td>
-  <td>
-    <div style="font-weight:600;">${p.name}</div>
-    <div style="font-size:11px; color:var(--text-muted);">Danh mục: ${p.category_name || '—'}</div>
-  </td>
-  <td style="font-weight:700; color:var(--red);">
-    ${Number(p.price).toLocaleString('vi-VN')}đ
-    <div style="font-size:11px; color:var(--text-muted); font-weight:400;">
-      Còn: ${p.quantity || 0}
-    </div>
-  </td>
-  <td style="font-size:12px; color:var(--text-muted);">
-    Đã bán: ${p.sold || 0}
-  </td>
-  <td style="font-size:12px; color:var(--text-muted);">
-    ${p.rating ? `⭐ ${p.rating}` : '—'}
-  </td>
-  <td>
-    <button class="admin-action-btn btn-edit"
-      onclick="openEditSellerProduct(${p.id})">
-      ✏️ Sửa
-    </button>
-
+              ${
+                p.image_url
+                  ? `<img src="/static/${p.image_url}"
+                          alt="${p.name}"
+                          style="
+                            width:60px;
+                            height:60px;
+                            object-fit:cover;
+                            border-radius:8px;
+                            border:1px solid #ddd;
+                          ">`
+                  : `<span style="font-size:28px;">${p.emoji || '📦'}</span>`
+              }
+            </td>
+            <td>
+                <div style="font-weight:600;">${p.name}</div>
+                <div style="font-size:11px; color:var(--text-muted);">${p.category_name || ''}</div>
+            </td>
+            <td style="color:var(--red); font-weight:700;">
+                ${Number(p.price).toLocaleString('vi-VN')}đ
+            </td>
+            <td style="text-align:center; color:${p.quantity <= 5 ? 'var(--red)' : 'inherit'}">
+                ${p.quantity || 0}
+            </td>
+            <td style="text-align:center;">${p.sold || 0}</td>
+            <td>
+                <button class="admin-action-btn btn-edit" 
+                    onclick="openEditSellerProduct(${p.id})">✏️ Sửa</button>
+                <button class="admin-action-btn btn-delete" 
+                    onclick="deleteSellerProduct(${p.id}, '${p.name.replace(/'/g,"\\'")}')">🗑️ Xóa</button>
+            </td>
         </tr>
     `).join('');
 }
@@ -3556,7 +3583,7 @@ function clearUserFilters() {
   document.getElementById('userSearchInput').value = '';
   document.getElementById('priceMin').value = '';
   document.getElementById('priceMax').value = '';
-  
+
 document.getElementById('priceMin').dataset.rawValue = '';
 document.getElementById('priceMax').dataset.rawValue = '';
   document.getElementById('chkInStock').checked = false;
@@ -3596,53 +3623,3 @@ function formatPriceInputs() {
 loadCategories();
 loadProducts();
 khoiPhucDangNhap();
-
-// SCRIPT ĐIỀU KHIỂN SLIDER BANNER CHẠY QUA LẠI
-let currentSlideIndex = 0;
-const slides = document.querySelectorAll('.user-hero-slide');
-const dots = document.querySelectorAll('.dot');
-
-function showSlide(index) {
-    if (slides.length === 0) return;
-
-    // Reset chỉ số nếu vượt quá số lượng slide
-    if (index >= slides.length) currentSlideIndex = 0;
-    if (index < 0) currentSlideIndex = slides.length - 1;
-
-    // Ẩn tất cả các slide và gỡ class active ở các chấm tròn
-    slides.forEach(slide => slide.classList.remove('active'));
-    dots.forEach(dot => dot.classList.remove('active'));
-
-    // Hiển thị slide và chấm tròn tương ứng được kích hoạt
-    slides[currentSlideIndex].classList.add('active');
-    dots[currentSlideIndex].classList.add('active');
-}
-
-function nextSlide() {
-    currentSlideIndex++;
-    showSlide(currentSlideIndex);
-}
-
-function prevSlide() {
-    currentSlideIndex--;
-    showSlide(currentSlideIndex);
-}
-
-function currentSlide(index) {
-    currentSlideIndex = index;
-    showSlide(currentSlideIndex);
-}
-
-// Lắng nghe sự kiện click vào 2 nút mũi tên Trái / Phải
-document.querySelector('.next-arrow')?.addEventListener('click', nextSlide);
-document.querySelector('.prev-arrow')?.addEventListener('click', prevSlide);
-
-// THIẾT LẬP TỰ ĐỘNG CHẠY: Cứ mỗi 4 giây (4000ms) banner tự động chuyển ảnh
-let autoSlideInterval = setInterval(nextSlide, 4000);
-
-// Dừng tự động chạy khi người dùng di chuột vào banner, thả ra lại chạy tiếp
-const sliderContainer = document.querySelector('.user-slider-container');
-sliderContainer?.addEventListener('mouseenter', () => clearInterval(autoSlideInterval));
-sliderContainer?.addEventListener('mouseleave', () => {
-    autoSlideInterval = setInterval(nextSlide, 4000);
-});

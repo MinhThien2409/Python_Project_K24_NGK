@@ -1,26 +1,38 @@
-from back_end.Model.GianHang import GianHang
-from back_end.Model.YeuCau import YeuCau
 from back_end.DAO.GianHangDao import GianHangDao
+from back_end.DAO.UserDao import UserDao
+from back_end.Model.YeuCau import YeuCau
 
 class GianHangBus:
     def __init__(self):
         self.dao = GianHangDao()
+        self.user_dao = UserDao()
 
     def dang_ky_gian_hang(self, req: YeuCau):
         """Gửi đơn đăng ký → SellerRequests (chờ Admin duyệt)"""
         if not req.ShopName or not req.UserId:
-            return {"status": False,
-                    "message": "Tên cửa hàng và UserId không được để trống!"}
-        if not req.NationalId:
-            return {"status": False,
-                    "message": "Vui lòng nhập số CMND/CCCD!"}
+            return {"status": False, "message": "Tên cửa hàng và UserId không được để trống!"}
 
-        ok = self.dao.gui_yeu_cau_ban_hang(req)
+        # ✅ Tự động lấy NationalId từ hồ sơ user
+        user_info = self.user_dao.lay_thong_tin_user(req.UserId)
+        if not user_info:
+            return {"status": False, "message": "Không tìm thấy thông tin tài khoản!"}
+
+        thieu = []
+        if not user_info.get('FullName'):   thieu.append('Họ tên')
+        if not user_info.get('Phone'):      thieu.append('Số điện thoại')
+        if not user_info.get('Address'):    thieu.append('Địa chỉ')
+        if not user_info.get('NationalId'): thieu.append('CMND/CCCD')
+
+        if thieu:
+            return {"status": False,
+                    "message": f"Vui lòng cập nhật đầy đủ thông tin trước khi đăng ký! Còn thiếu: {', '.join(thieu)}"}
+
+        req.NationalId = user_info.get('NationalId')  # gán tự động, không cần user nhập lại
+
+        ok = self.dao.gui_yeu_cau_ban_hang(req)  # gọi DAO, hàm này vẫn đúng tên
         if ok:
-            return {"status": True,
-                    "message": "Đã gửi yêu cầu! Admin sẽ xét duyệt trong 24h."}
-        return {"status": False,
-                "message": "Lỗi hệ thống, vui lòng thử lại!"}
+            return {"status": True, "message": "Đã gửi yêu cầu! Admin sẽ xét duyệt trong 24h."}
+        return {"status": False, "message": "Lỗi hệ thống, vui lòng thử lại!"}
 
     def lay_danh_sach_yeu_cau(self):
         data = self.dao.lay_danh_sach_yeu_cau()
@@ -31,8 +43,7 @@ class GianHangBus:
             return {"status": False, "message": "Thiếu mã yêu cầu!"}
         ok = self.dao.duyet_yeu_cau(request_id, reviewed_by)
         if ok:
-            return {"status": True,
-                    "message": "Đã duyệt! Gian hàng đã được mở và tài khoản đã được cấp quyền Seller."}
+            return {"status": True, "message": "Đã duyệt! Gian hàng đã được mở và tài khoản đã được cấp quyền Seller."}
         return {"status": False, "message": "Lỗi khi duyệt yêu cầu!"}
 
     def tu_choi_yeu_cau(self, request_id, reviewed_by, ly_do):
@@ -48,42 +59,3 @@ class GianHangBus:
         if store:
             return {"status": True, "data": store}
         return {"status": False, "message": "Bạn chưa có gian hàng!"}
-
-    from back_end.BUS.UserBus import UserBus
-
-    class GianHangBus:
-        def __init__(self):
-            self.dao = GianHangDao()
-            self.user_bus = UserBus()
-
-        def dang_ky_gian_hang(self, req: YeuCau):
-            if not req.ShopName or not req.UserId:
-                return {"status": False,
-                        "message": "Tên cửa hàng và UserId không được để trống!"}
-
-            # ✅ Lấy thông tin tài khoản để kiểm tra & tự điền CMND
-            user_info = self.user_bus.lay_thong_tin_user(req.UserId)
-            if not user_info:
-                return {"status": False, "message": "Không tìm thấy thông tin tài khoản!"}
-
-            # Đổi tên cột bên dưới khớp với schema thật (FullName/ten_user, Address/dia_chi...)
-            thieu = []
-            if not user_info.get('FullName'):    thieu.append('Họ tên')
-            if not user_info.get('Phone'):       thieu.append('Số điện thoại')
-            if not user_info.get('Address'):     thieu.append('Địa chỉ')
-            if not user_info.get('NationalId'):  thieu.append('CMND/CCCD')
-
-            if thieu:
-                return {"status": False,
-                        "message": f"Vui lòng cập nhật đầy đủ thông tin tài khoản trước khi đăng ký bán hàng! Còn thiếu: {', '.join(thieu)}"}
-
-            # ✅ Tự động lấy CMND từ hồ sơ — không cần người dùng nhập lại
-            req.NationalId = user_info.get('NationalId')
-
-            ok = self.dao.gui_yeu_cau_ban_hang(req)
-            if ok:
-                return {"status": True,
-                        "message": "Đã gửi yêu cầu! Admin sẽ xét duyệt trong 24h."}
-            return {"status": False, "message": "Lỗi hệ thống, vui lòng thử lại!"}
-
-        # ... các hàm khác giữ nguyên

@@ -80,66 +80,6 @@
     </div>
   </header>
 
-
-<div class="user-hero-banner">
-    <div class="user-slider-container">
-    <div class="user-slider-wrapper">
-
-        <div class="user-hero-slide active">
-            <div class="user-banner-content">
-                <span class="user-banner-tag">🔥 FLASH SALE XẢ KHO</span>
-                <h2>BST THỜI TRANG ĐỘC QUYỀN</h2>
-                <p>Giảm ngay đến 50% cho các sản phẩm Local Brand siêu hot. Số lượng có hạn, săn ngay kẻo lỡ!</p>
-                <a  class="user-banner-btn">🛍️ Săn Sale Ngay</a>
-            </div>
-            <div class="user-banner-visual"><span class="banner-fashion-icon">🧥</span></div>
-        </div>
-
-        <div class="user-hero-slide">
-            <div class="user-banner-content">
-                <span class="user-banner-tag" style="border-color: #00E5FF; color: #00E5FF; background: rgba(0,229,255,0.1);">✨ NEW ARRIVALS</span>
-                <h2>ÁO SƠ MI & POLO LỊCH LÃM</h2>
-                <p>Chất liệu Cotton Premium thoáng mát, form dáng suông hiện đại tôn dáng cho ngày hè năng động.</p>
-                <a  class="user-banner-btn">👕 Xem Bộ Sưu Tập</a>
-            </div>
-            <div class="user-banner-visual"><span class="banner-fashion-icon">👔</span></div>
-        </div>
-
-        <div class="user-hero-slide">
-            <div class="user-banner-content">
-                <span class="user-banner-tag" style="border-color: #FF007F; color: #FF007F; background: rgba(255,0,127,0.1);">🔥 STREETWEAR STYLE</span>
-                <h2>XU HƯỚNG JEANS & BAGGY ĐẬM CHẤT</h2>
-                <p>Bứt phá phong cách cùng những mẫu quần Baggy Jeans rách gối cá tính, bền bỉ và dễ phối đồ.</p>
-                <a  class="user-banner-btn">👖 Khám Phá Ngay</a>
-            </div>
-            <div class="user-banner-visual"><span class="banner-fashion-icon">👖</span></div>
-        </div>
-
-        <div class="user-hero-slide">
-            <div class="user-banner-content">
-                <span class="user-banner-tag">🎁 MEMBER PRIVILEGE</span>
-                <h2>ĐĂNG KÝ THÀNH VIÊN - NHẬN VOUCHER 100K</h2>
-                <p>Trở thành VIP của An Tâm Shop ngay hôm nay để nhận đặc quyền miễn phí vận chuyển trọn đời.</p>
-                <a  class="user-banner-btn">👑 Đăng Ký Ngay</a>
-            </div>
-            <div class="user-banner-visual"><span class="banner-fashion-icon">🎒</span></div>
-        </div>
-
-    </div>
-
-    <button class="slider-arrow prev-arrow">❮</button>
-    <button class="slider-arrow next-arrow">❯</button>
-
-    <div class="slider-dots">
-        <span class="dot active" onclick="currentSlide(0)"></span>
-        <span class="dot" onclick="currentSlide(1)"></span>
-        <span class="dot" onclick="currentSlide(2)"></span>
-        <span class="dot" onclick="currentSlide(3)"></span>
-    </div>
-</div>
-</div>
-
-
   <nav>
     <div class="nav-inner" id="mainNavInner">
       <!-- Sẽ được Javascript render tự động -->
@@ -916,7 +856,7 @@
         <div class="form-group" style="flex:1;"><label>Đánh giá (0-5)</label><input type="number" id="prodRating" step="0.1" max="5" value="4.5"></div>
       </div>
       <!-- Thay thế form-group prodEmoji hiện tại -->
-<!--<div class="form-group">
+<div class="form-group">
   <label>Biểu tượng sản phẩm (Emoji đại diện)</label>
   <div style="display:flex; gap:8px; align-items:center;">
     <input type="text" id="prodEmoji" placeholder="Nhập hoặc chọn emoji..."
@@ -926,7 +866,7 @@
       😀
     </button>
   </div>
-  Bảng emoji
+  <!-- Bảng emoji -->
   <div id="emojiPicker" style="display:none; background:var(--white); border:1px solid var(--border); border-radius:10px; padding:10px; margin-top:6px; display:none;">
     <div style="font-size:11px; font-weight:700; color:var(--text-muted); margin-bottom:6px;">ĐIỆN TỬ</div>
     <div class="emoji-grid">
@@ -952,39 +892,6 @@
     <div class="emoji-grid">
       📦 🎁 💊 🧴 📚 🖊️ 🎵 🎨 🧸 🪆 🎪 🎠 🎡 🌟 💎 🏆
     </div>
-  </div>
-</div>-->
-<div class="form-group">
-  <label>Ảnh sản phẩm</label>
-
-  <input
-    type="file"
-    id="prodImage"
-    accept="image/*"
-    onchange="previewProductImage(event)"
-    style="
-      width:100%;
-      padding:10px;
-      border:1px solid var(--border);
-      border-radius:8px;
-      background:var(--bg);
-    "
-  >
-
-  <div id="productImagePreview"
-       style="
-          margin-top:12px;
-          width:160px;
-          height:160px;
-          border:2px dashed var(--border);
-          border-radius:12px;
-          display:flex;
-          align-items:center;
-          justify-content:center;
-          overflow:hidden;
-          color:var(--text-muted);
-       ">
-      Chưa chọn ảnh
   </div>
 </div>
       <div class="form-group"><label>Nhà bán hàng (Thương hiệu)</label><input type="text" id="prodShop" required></div>

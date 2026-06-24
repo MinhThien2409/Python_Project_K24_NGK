@@ -280,6 +280,7 @@ class DonHangDao:
                     p.ProductId,
                     p.ProductName,
                     p.Emoji,
+                    p.ImageUrl,
                     p.SoldCount,
                     p.Price,
                     c.CategoryName  
@@ -320,6 +321,7 @@ class DonHangDao:
                             "id": r.ProductId,
                             "name": r.ProductName,
                             "emoji": r.Emoji or '📦',
+                            "image_url": r.ImageUrl,
                             "sold": r.SoldCount or 0,
                             "price": float(r.Price),
                             "category": r.CategoryName or '—'

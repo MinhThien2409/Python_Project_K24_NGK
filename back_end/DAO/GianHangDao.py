@@ -198,6 +198,7 @@ class GianHangDao:
             )
             row = cursor.fetchone()
             if not row: return None
+            cursor= conn.cursor()
             return {
                 "store_id": row.StoreId,
                 "store_name": row.StoreName,

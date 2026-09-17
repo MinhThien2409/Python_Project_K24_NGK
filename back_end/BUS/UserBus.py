@@ -1,5 +1,6 @@
 from back_end.Model.User import User
 from back_end.DAO.UserDao import UserDao
+import secrets
 
 
 class UserBus:
@@ -112,23 +113,103 @@ class UserBus:
     def lay_thong_tin_user(self, ma_user):
         return self.dao.lay_thong_tin_user(ma_user)
 
-    def cap_nhat_trang_thai(self, ma_user, trang_thai):
+    def lay_ten_vai_tro_theo_id(self, role_id):
+        return self.dao.lay_ten_vai_tro_theo_id(role_id)
+
+    def kiem_tra_quyen_quan_ly(self, nguoi_thao_tac_id):
+        """Kiểm tra người thao tác là Admin/Quản lý đang hoạt động (FR-012)."""
+        if not nguoi_thao_tac_id:
+            return {"status": False, "message": "Bạn chưa đăng nhập!", "data": None}
+        thong_tin = self.dao.lay_thong_tin_user(nguoi_thao_tac_id)
+        if not thong_tin:
+            return {"status": False, "message": "Tài khoản không tồn tại!", "data": None}
+        if thong_tin.get("trang_thai") == "banned":
+            return {"status": False,
+                    "message": "Tài khoản của bạn đã bị khóa! Vui lòng liên hệ quản trị viên để được hỗ trợ.",
+                    "data": None}
+        role_id = thong_tin.get("Role_Id") or thong_tin.get("Role_id") or thong_tin.get("role_id")
+        ten_vai_tro = self.dao.lay_ten_vai_tro_theo_id(role_id)
+        if ten_vai_tro is None:
+            return {"status": False, "message": "Dữ liệu vai trò không hợp lệ!", "data": None}
+        if ten_vai_tro not in ("Admin", "Quản lý"):
+            return {"status": False, "message": "Bạn không có quyền thực hiện chức năng này!", "data": None}
+        return {"status": True, "message": "", "data": {"ma_user": nguoi_thao_tac_id, "ten_vai_tro": ten_vai_tro}}
+
+    def kiem_tra_nguoi_dung_hoat_dong(self, nguoi_thao_tac_id):
+        """Kiểm tra người dùng đã đăng nhập và không bị khóa (FR-009)."""
+        if not nguoi_thao_tac_id:
+            return {"status": False, "message": "Bạn chưa đăng nhập!", "data": None}
+        thong_tin = self.dao.lay_thong_tin_user(nguoi_thao_tac_id)
+        if not thong_tin:
+            return {"status": False, "message": "Tài khoản không tồn tại!", "data": None}
+        if thong_tin.get("trang_thai") == "banned":
+            return {"status": False,
+                    "message": "Tài khoản của bạn đã bị khóa! Vui lòng liên hệ quản trị viên để được hỗ trợ.",
+                    "data": None}
+        return {"status": True, "message": "", "data": {"ma_user": nguoi_thao_tac_id}}
+
+    def cap_nhat_trang_thai(self, nguoi_thao_tac_id, ma_user, trang_thai):
+        """Khóa/mở khóa tài khoản: chặn Admin, Quản lý và chính người thao tác (FR-008)."""
         if not ma_user:
             return {"status": False, "message": "Thiếu mã user!"}
         if trang_thai not in ('active', 'banned'):
             return {"status": False, "message": "Trạng thái không hợp lệ!"}
 
-        # Không ai có quyền khóa tài khoản Admin (FR-009) — kiểm tra trước khi ghi
         thong_tin = self.dao.lay_thong_tin_user(ma_user)
         if not thong_tin:
-            return {"status": False, "message": "Không tìm thấy người dùng!"}
+            return {"status": False, "message": "Tài khoản không tồn tại!"}
+
+        # Không được thao tác lên chính tài khoản của mình
+        if nguoi_thao_tac_id == ma_user:
+            return {"status": False,
+                    "message": "Bạn không thể khóa/mở khóa chính tài khoản của mình!"}
+
+        # Không ai có quyền khóa tài khoản Admin (FR-008) — kiểm tra trước khi ghi
         role_id = thong_tin.get("Role_Id") or thong_tin.get("Role_id") or thong_tin.get("role_id")
         ten_vai_tro = self.dao.lay_ten_vai_tro_theo_id(role_id)
         if trang_thai == 'banned' and ten_vai_tro == "Admin":
             return {"status": False, "message": "Không ai có quyền khóa tài khoản Admin!"}
+        if trang_thai == 'banned' and ten_vai_tro == "Quản lý":
+            return {"status": False, "message": "Không thể khóa tài khoản Quản lý!"}
 
         ok = self.dao.cap_nhat_trang_thai(ma_user, trang_thai)
         if ok:
             label = "Đã khóa tài khoản!" if trang_thai == 'banned' else "Đã mở khóa tài khoản!"
             return {"status": True, "message": label}
         return {"status": False, "message": "Lỗi cập nhật trạng thái."}
+
+    def cap_lai_mat_khau(self, nguoi_thao_tac_id, ma_user, mat_khau_moi=None):
+        """Cấp lại mật khẩu cho user (FR-010/FR-011): sinh ngẫu nhiên hoặc dùng mật
+        khẩu Quản lý nhập (≥ 6 ký tự); chặn mục tiêu là Admin; trả mật khẩu mới
+        đúng một lần trong data."""
+        thong_tin = self.dao.lay_thong_tin_user(ma_user)
+        if not thong_tin:
+            return {"status": False, "message": "Tài khoản không tồn tại!", "data": None}
+
+        role_id = thong_tin.get("Role_Id") or thong_tin.get("Role_id") or thong_tin.get("role_id")
+        ten_vai_tro = self.dao.lay_ten_vai_tro_theo_id(role_id)
+        if ten_vai_tro == "Admin":
+            return {"status": False,
+                    "message": "Không thể cấp lại mật khẩu cho tài khoản Admin!",
+                    "data": None}
+
+        if not mat_khau_moi:
+            mat_khau_moi = secrets.token_urlsafe(6)[:8]
+        elif len(mat_khau_moi) < 6:
+            return {"status": False,
+                    "message": "Mật khẩu phải có ít nhất 6 ký tự!",
+                    "data": None}
+
+        ok = self.dao.cap_nhat_mat_khau(ma_user, mat_khau_moi)
+        if not ok:
+            return {"status": False, "message": "Lỗi cập nhật mật khẩu!", "data": None}
+
+        return {
+            "status": True,
+            "message": "Đã cấp lại mật khẩu! Hãy chuyển mật khẩu dưới đây cho người dùng.",
+            "data": {
+                "ma_user": ma_user,
+                "ten_user": thong_tin.get("FullName"),
+                "mat_khau_moi": mat_khau_moi
+            }
+        }

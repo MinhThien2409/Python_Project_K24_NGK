@@ -44,17 +44,14 @@ async function khoiPhucDangNhap() {
   try {
     currentUser = JSON.parse(saved);
 
-    // ✅ Kiểm tra lại trạng thái tài khoản với server (phòng trường hợp đã bị khóa)
-    const res    = await fetch('http://localhost:5000/api/users');
+    // ✅ Hỏi server phiên hiện tại (FR-009): hợp lệ + trạng thái tài khoản
+    const res    = await fetch('http://localhost:5000/api/phien');
     const result = await res.json();
-    if (result.status) {
-      const userMoi = result.data.find(u => u.ma_user === currentUser.ma_user);
-      if (userMoi && userMoi.trang_thai === 'banned') {
-        showToast('🔒 Tài khoản của bạn đã bị khóa!');
-        xoaDangNhap();
-        currentUser = null;
-        return;
-      }
+    if (!result.status || (result.data && result.data.trang_thai === 'banned')) {
+      showToast('🔒 ' + (result.message || 'Phiên đăng nhập đã hết hạn!'));
+      xoaDangNhap();
+      currentUser = null;
+      return;
     }
 
     updateHeaderForUser();
@@ -789,7 +786,14 @@ function goToUser() {
 }
 
 // CẬP NHẬT HÀM ĐĂNG XUẤT
-function handleLogout() {
+async function handleLogout() {
+  // Xóa phiên phía server trước khi xóa localStorage (FR-009)
+  try {
+    await fetch('http://localhost:5000/api/dang-xuat', { method: 'POST' });
+  } catch (e) {
+    console.error('Lỗi đăng xuất phía server:', e);
+  }
+
   currentUser = null;
   xoaDangNhap();
 
@@ -1169,10 +1173,15 @@ async function renderAdminSellers() {
   try {
     const res    = await fetch('http://localhost:5000/api/seller-requests');
     const result = await res.json();
+
+    if (!result.status) {
+      showToast('❌ ' + (result.message || 'Không thể tải danh sách yêu cầu người bán!'));
+      return;
+    }
     const tbody  = document.getElementById('tblAdminSellersBody');
 
-    if (!result.status || !result.data.length) {
-      tbody.innerHTML = `<tr><td colspan="7" style="text-align:center; color:var(--text-muted);">Chưa có yêu cầu nào</td></tr>`;
+    if (!result.data || !result.data.length) {
+      tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; color:var(--text-muted);">Chưa có yêu cầu nào</td></tr>`;
       return;
     }
 
@@ -1187,6 +1196,9 @@ async function renderAdminSellers() {
           ${r.status === 'pending'  ? '<span class="badge-status status-pending">Chờ duyệt</span>'   : ''}
           ${r.status === 'approved' ? '<span class="badge-status status-confirmed">Đã duyệt</span>'  : ''}
           ${r.status === 'rejected' ? '<span class="badge-status status-cancelled">Từ chối</span>'   : ''}
+        </td>
+        <td style="max-width:160px; font-size:12px; color:var(--text-secondary);">
+          ${r.status === 'rejected' ? (r.reject_reason || '—') : '—'}
         </td>
         <td>
           ${r.status === 'pending' ? `
@@ -1209,30 +1221,30 @@ async function renderAdminSellers() {
 async function duyetSeller(request_id) {
   if (!confirm('Xác nhận duyệt yêu cầu này? Tài khoản sẽ được cấp quyền Seller.')) return;
   try {
-    const res    = await fetch(`http://localhost:5000/api/duyet-seller/${request_id}`, {
+    const res = await fetch(`http://localhost:5000/api/duyet-seller/${request_id}`, {
       method : 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body   : JSON.stringify({ reviewed_by: currentUser?.ma_user })
+      body   : JSON.stringify({}) // ReviewedBy lấy từ session phía server
     });
     const result = await res.json();
     showToast(result.status ? '✅ ' + result.message : '❌ ' + result.message);
-    if (result.status) renderAdminSellers(); // Reload bảng
+    renderAdminSellers(); // Reload bảng
   } catch (e) {
     showToast('❌ Lỗi kết nối!');
   }
 }
 
 async function tuChoiSeller(request_id) {
-  const ly_do = prompt('Lý do từ chối (tuỳ chọn):') ?? '';
+  const ly_do = prompt('Lý do từ chối (bắt buộc):') ?? '';
   try {
-    const res    = await fetch(`http://localhost:5000/api/tu-choi-seller/${request_id}`, {
+    const res = await fetch(`http://localhost:5000/api/tu-choi-seller/${request_id}`, {
       method : 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body   : JSON.stringify({ reviewed_by: currentUser?.ma_user, ly_do })
+      body   : JSON.stringify({ ly_do }) // ReviewedBy lấy từ session phía server
     });
     const result = await res.json();
     showToast(result.status ? '✅ ' + result.message : '❌ ' + result.message);
-    if (result.status) renderAdminSellers();
+    renderAdminSellers();
   } catch (e) {
     showToast('❌ Lỗi kết nối!');
   }
@@ -1690,25 +1702,30 @@ async function deleteSellerProduct(productId, productName) {
 }
 
 // ─── RENDER DANH MỤC ADMIN ───────────────────────────────────────────────────
+function hienThiMessageDanhMuc(message, ok) {
+  const el = document.getElementById('catMessage');
+  if (!el) return;
+  el.style.display = 'block';
+  el.textContent = message;
+  el.style.color = ok ? 'var(--green)' : 'var(--red)';
+}
 async function renderAdminCategories() {
   const tbody = document.getElementById('tblCategoriesBody');
-  tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; padding:20px; color:var(--text-muted);">Đang tải...</td></tr>`;
+  tbody.innerHTML = `<tr><td colspan="3" style="text-align:center; padding:20px; color:var(--text-muted);">Đang tải...</td></tr>`;
 
   try {
     const res    = await fetch('http://localhost:5000/api/categories');
     const result = await res.json();
 
     if (!result.status || !result.data.length) {
-      tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; color:var(--text-muted);">Chưa có danh mục nào</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="3" style="text-align:center; color:var(--text-muted);">Chưa có danh mục nào</td></tr>`;
       return;
     }
 
     tbody.innerHTML = result.data.map(c => `
       <tr>
-        <td style="font-size:20px; text-align:center;">📁</td>
         <td style="font-weight:600;">${c.name}</td>
         <td><code style="background:var(--bg); padding:2px 6px; border-radius:4px; font-size:12px;">${c.id}</code></td>
-        <td style="text-align:center;">—</td>
         <td>
           <button class="admin-action-btn btn-edit" onclick="editCategory(${c.id}, '${c.name.replace(/'/g, "\\'")}')">✏️ Sửa</button>
           <button class="admin-action-btn btn-delete" onclick="deleteCategory(${c.id}, '${c.name.replace(/'/g, "\\'")}')">🗑️ Xóa</button>
@@ -1717,14 +1734,14 @@ async function renderAdminCategories() {
     `).join('');
 
   } catch (e) {
-    tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; color:var(--red);">❌ Lỗi tải dữ liệu</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="3" style="text-align:center; color:var(--red);">❌ Lỗi tải dữ liệu</td></tr>`;
   }
 }
 
 // ─── THÊM DANH MỤC ───────────────────────────────────────────────────────────
 async function addCategory() {
   const name = document.getElementById('newCatName').value.trim();
-  if (!name) { showToast('⚠️ Tên danh mục không được trống!'); return; }
+  if (!name) { hienThiMessageDanhMuc('⚠️ Tên danh mục không được trống!', false); return; }
 
   try {
     const res    = await fetch('http://localhost:5000/api/categories', {
@@ -1735,18 +1752,16 @@ async function addCategory() {
     const result = await res.json();
 
     if (result.status) {
-      showToast('✅ ' + result.message);
-      document.getElementById('newCatName').value  = '';
-      document.getElementById('newCatEmoji').value = '';
-      document.getElementById('newCatSlug').value  = '';
+      hienThiMessageDanhMuc(result.message, true);
+      document.getElementById('newCatName').value = '';
       renderAdminCategories();
       loadCategories(); // Cập nhật dropdown khắp nơi
     } else {
-      showToast('❌ ' + result.message);
+      hienThiMessageDanhMuc(result.message, false);
     }
 
   } catch (e) {
-    showToast('❌ Lỗi kết nối!');
+    hienThiMessageDanhMuc('❌ Lỗi kết nối!', false);
   }
 }
 
@@ -1764,38 +1779,38 @@ async function editCategory(categoryId, currentName) {
     const result = await res.json();
 
     if (result.status) {
-      showToast('✅ ' + result.message);
+      hienThiMessageDanhMuc(result.message, true);
       renderAdminCategories();
       loadCategories();
     } else {
-      showToast('❌ ' + result.message);
+      hienThiMessageDanhMuc(result.message, false);
     }
 
   } catch (e) {
-    showToast('❌ Lỗi kết nối!');
+    hienThiMessageDanhMuc('❌ Lỗi kết nối!', false);
   }
 }
 
 // ─── XÓA DANH MỤC ────────────────────────────────────────────────────────────
 async function deleteCategory(categoryId, categoryName) {
-  if (!confirm(`Xóa danh mục "${categoryName}"?\nCác sản phẩm thuộc danh mục này có thể bị ảnh hưởng!`)) return;
+  if (!confirm(`Xóa danh mục "${categoryName}"?`)) return;
 
   try {
-    const res    = await fetch(`http://localhost:5000/api/categories/${categoryId}`, {
+    const res = await fetch(`http://localhost:5000/api/categories/${categoryId}`, {
       method: 'DELETE'
     });
     const result = await res.json();
 
     if (result.status) {
-      showToast('✅ ' + result.message);
+      hienThiMessageDanhMuc(result.message, true);
       renderAdminCategories();
       loadCategories();
     } else {
-      showToast('❌ ' + result.message);
+      hienThiMessageDanhMuc(result.message, false);
     }
 
   } catch (e) {
-    showToast('❌ Lỗi kết nối!');
+    hienThiMessageDanhMuc('❌ Lỗi kết nối!', false);
   }
 }
 function openAddSellerProductModal() {
@@ -1890,13 +1905,11 @@ async function renderAdminUsers() {
       const roleCls  = getRoleCls(u.ma_nhom_quyen);
       const isMe     = u.ma_user === currentUser?.ma_user;
 
-      // ✅ Đọc trang_thai từ backend
+      // ✅ Đọc trang_thai từ backend — dùng class design system sẵn có
       const isBanned   = u.trang_thai === 'banned';
       const statusHtml = isBanned
-        ? `<span style="background:#fee2e2; color:#dc2626; padding:3px 10px;
-                        border-radius:99px; font-size:11px; font-weight:700;">🔒 Đã khóa</span>`
-        : `<span style="background:#dcfce7; color:#16a34a; padding:3px 10px;
-                        border-radius:99px; font-size:11px; font-weight:700;">✅ Hoạt động</span>`;
+        ? `<span class="user-status-banned">🔒 Đã khóa</span>`
+        : `<span class="user-status-active">✅ Hoạt động</span>`;
 
       return `
         <tr style="${isBanned ? 'opacity:0.6;' : ''}">
@@ -2734,14 +2747,10 @@ async function openEditUserModal(ma_user, ten_user, ma_nhom_quyen, currentStatus
     </div>
   `;
 
-  // Dropdown vai trò — 4 vai trò chuẩn tĩnh (không còn API /api/roles)
-  const roleSelect = document.getElementById('editUserRole');
-  if (roleSelect) {
-    roleSelect.innerHTML = VAI_TRO_CHUAN.map(r => `
-      <option value="${r.RoleId}" ${r.RoleId === ma_nhom_quyen ? 'selected' : ''}>
-        ${r.RoleName}
-      </option>
-    `).join('');
+  // Vai trò hiển thị chỉ đọc — không cho sửa role qua modal (feature 002)
+  const roleInput = document.getElementById('editUserRoleReadonly');
+  if (roleInput) {
+    roleInput.value = getRoleName(ma_nhom_quyen);
   }
 
   // ✅ Set đúng trạng thái hiện tại
@@ -2782,6 +2791,58 @@ async function handleSaveUserRole() {
     showToast('❌ Lỗi kết nối!');
   }
 }
+
+// ─── CẤP LẠI MẬT KHẨU (FR-010 / FR-011) ─────────────────────────────────────
+function moModalCapLaiMatKhau() {
+  const ma_user = document.getElementById('editUserId').value;
+  if (!ma_user) { showToast('⚠️ Thiếu thông tin!'); return; }
+
+  document.getElementById('resetUserId').value = ma_user;
+  document.getElementById('resetUserInfo').innerHTML =
+    document.getElementById('editUserInfo').innerHTML;
+  document.getElementById('resetPasswordInput').value = '';
+  document.getElementById('resetPasswordResult').style.display = 'none';
+  document.getElementById('resetPasswordValue').textContent = '';
+
+  closeModal('adminUserModal');
+  document.getElementById('resetPasswordModal').classList.add('show');
+}
+
+async function hamCapLaiMatKhau() {
+  const ma_user     = document.getElementById('resetUserId').value;
+  const mat_khau_moi = document.getElementById('resetPasswordInput').value.trim();
+
+  if (!ma_user) { showToast('⚠️ Thiếu thông tin!'); return; }
+
+  try {
+    const res = await fetch('http://localhost:5000/api/cap-lai-mat-khau', {
+      method : 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body   : JSON.stringify({ ma_user: Number(ma_user), mat_khau_moi: mat_khau_moi })
+    });
+    const result = await res.json();
+
+    if (!result.status) {
+      showToast('❌ ' + result.message);
+      return;
+    }
+
+    // Hiển thị mật khẩu ĐÚNG MỘT LẦN (không lưu biến toàn cục / localStorage)
+    document.getElementById('resetPasswordValue').textContent = result.data.mat_khau_moi;
+    document.getElementById('resetPasswordResult').style.display = 'block';
+    showToast('✅ Đã cấp lại mật khẩu!');
+  } catch (e) {
+    showToast('❌ Lỗi kết nối!');
+  }
+}
+
+function closeResetPasswordModal() {
+  document.getElementById('resetPasswordInput').value = '';
+  document.getElementById('resetPasswordValue').textContent = '';
+  document.getElementById('resetPasswordResult').style.display = 'none';
+  closeModal('resetPasswordModal');
+}
+
 async function openProductDetail(productId) {
   const content = document.getElementById('productDetailContent');
   content.innerHTML = `<div style="text-align:center; padding:60px 0; color:var(--text-muted);">⏳ Đang tải...</div>`;

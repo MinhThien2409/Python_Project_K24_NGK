@@ -34,6 +34,49 @@ class DanhMucDao:
         finally:
             cursor.close(); conn.close()
 
+    def kiem_tra_ten_ton_tai(self, ten, tru_id=None):
+        """Kiểm tra tên danh mục đã tồn tại chưa (không phân biệt hoa/thường)."""
+        conn = DBconnection.get_connection()
+        if conn is None: return False
+        cursor = conn.cursor()
+        try:
+            if tru_id is None:
+                cursor.execute(
+                    "SELECT CategoryId FROM Categories "
+                    "WHERE LOWER(LTRIM(RTRIM(CategoryName))) = LOWER(LTRIM(RTRIM(?)))",
+                    (ten,)
+                )
+            else:
+                cursor.execute(
+                    "SELECT CategoryId FROM Categories "
+                    "WHERE LOWER(LTRIM(RTRIM(CategoryName))) = LOWER(LTRIM(RTRIM(?))) "
+                    "AND CategoryId <> ?",
+                    (ten, tru_id)
+                )
+            return cursor.fetchone() is not None
+        except Exception as e:
+            print("Lỗi kiem_tra_ten_ton_tai:", e)
+            return False
+        finally:
+            cursor.close(); conn.close()
+
+    def dem_san_pham(self, category_id):
+        """Đếm số sản phẩm thuộc danh mục (FR-003)."""
+        conn = DBconnection.get_connection()
+        if conn is None: return None
+        cursor = conn.cursor()
+        try:
+            cursor.execute(
+                "SELECT COUNT(*) FROM Products WHERE CategoryId=?",
+                (category_id,)
+            )
+            return cursor.fetchone()[0]
+        except Exception as e:
+            print("Lỗi dem_san_pham:", e)
+            return None
+        finally:
+            cursor.close(); conn.close()
+
     def sua(self, category: DanhMuc):
         conn = DBconnection.get_connection()
         if conn is None: return False

@@ -1,5 +1,7 @@
 venv/
 .venv/
+.env
+back_end/DBconfig.py
 .idea/
 __pycache__/
 .specify/

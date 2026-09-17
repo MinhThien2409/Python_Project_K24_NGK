@@ -186,6 +186,25 @@ class UserDao:
             cursor.close();
             conn.close()
 
+    def cap_nhat_mat_khau(self, ma_user, mat_khau_moi):
+        """Cấp lại mật khẩu cho user (ghi cột Password theo UserId — FR-010)."""
+        conn = DBconnection.get_connection()
+        if conn is None: return False
+        cursor = conn.cursor()
+        try:
+            cursor.execute(
+                "UPDATE Users SET Password=? WHERE UserId=?",
+                (mat_khau_moi, ma_user)
+            )
+            conn.commit()
+            return cursor.rowcount > 0
+        except Exception as e:
+            print(f"Lỗi cap_nhat_mat_khau: {e}")
+            return False
+        finally:
+            cursor.close()
+            conn.close()
+
     def cap_nhat_trang_thai(self, ma_user, trang_thai):
         conn = DBconnection.get_connection()
         if conn is None: return False

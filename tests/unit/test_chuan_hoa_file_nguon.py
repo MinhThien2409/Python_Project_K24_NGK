@@ -200,3 +200,52 @@ def test_back_up_sql_giu_nguyen_cot_trang_thai():
     noi_dung = load_dump("back_up.sql")
     assert re.search(r"\[trang_thai\] \[varchar\]\(10\) NULL", noi_dung)
     assert "DEFAULT ('active') FOR [trang_thai]" in noi_dung
+
+
+# ── T020 (US2): DEFAULT Status của SellerRequests chuẩn hóa chữ thường ──────
+RE_DEFAULT_STATUS = re.compile(
+    r"DEFAULT\s+\(\s*'([Pp]ending)'\s*\)\s*FOR\s*\[Status\]"
+)
+
+
+@pytest.mark.parametrize("ten_file", DUMP_FILES)
+def test_seller_requests_status_default_chu_thuong(ten_file):
+    noi_dung = load_dump(ten_file)
+    dong_alter = [dong for dong in noi_dung.splitlines()
+                  if "SellerRequests" in dong and "DEFAULT" in dong and "FOR [Status]" in dong]
+    assert dong_alter, f"File {ten_file}: thiếu ALTER TABLE SellerRequests ADD DEFAULT ... FOR [Status]"
+    for dong in dong_alter:
+        hop_le = RE_DEFAULT_STATUS.findall(dong)
+        assert hop_le, f"File {ten_file}: dòng không khớp regex {dong.strip()}"
+        assert all(gia_tri == "pending" for gia_tri in hop_le), (
+            f"File {ten_file}: DEFAULT Status phải là ('pending') chữ thường, thực tế {dong.strip()}"
+        )
+
+
+# ── T031 (US3): ràng buộc mới không khóa Quản lý + không còn Role_id=13 ──────
+CK_QUAN_LY_NOT_BANNED = "CK_Users_QuanLy_KhongDuocKhoa"
+
+RE_CHECK_QUAN_LY = re.compile(r"CHECK\s*\(NOT\s*\(trang_thai\s*=\s*N?'banned'\s*AND\s*Role_Id\s*=\s*2\)\)")
+
+
+@pytest.mark.parametrize("ten_file", DUMP_FILES)
+def test_rang_buoc_khong_duoc_khoa_quan_ly(ten_file):
+    noi_dung = load_dump(ten_file)
+    assert CK_QUAN_LY_NOT_BANNED in noi_dung, (
+        f"File {ten_file}: thiếu ràng buộc {CK_QUAN_LY_NOT_BANNED}"
+    )
+    assert RE_CHECK_QUAN_LY.search(noi_dung), (
+        f"File {ten_file}: CHECK {CK_QUAN_LY_NOT_BANNED} phải chặn Role_Id=2 bị banned"
+    )
+    assert noi_dung.count(CK_QUAN_LY_NOT_BANNED) == 1, (
+        f"File {ten_file}: {CK_QUAN_LY_NOT_BANNED} phải xuất hiện đúng 1 lần"
+    )
+
+
+def test_khong_con_role_id_13_trong_backend():
+    """Grep toàn `back_end/`: không còn lệnh gán Role_id=13 (bug duyệt seller đã sửa)."""
+    bat_phep = re.compile(r"Role_?[iI]d\s*=\s*13")
+    for duong_dan in REPO_ROOT.joinpath("back_end").rglob("*.py"):
+        noi_dung = duong_dan.read_text(encoding="utf-8")
+        loi = [dong for dong in noi_dung.splitlines() if bat_phep.search(dong)]
+        assert not loi, f"{duong_dan.name}: vẫn còn gán Role_Id=13: {loi}"

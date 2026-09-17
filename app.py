@@ -1,6 +1,9 @@
 # app.py
 
-from flask import Flask, request, jsonify, render_template
+import os
+import secrets
+
+from flask import Flask, request, jsonify, render_template, session
 from flask_cors import CORS
 from back_end.BUS.UserBus import UserBus
 from back_end.Model.GianHang import GianHang
@@ -14,6 +17,7 @@ from back_end.Model.DonHang import DonHang
 from back_end.Model.OrderItem import OrderItem
 
 app = Flask(__name__)
+app.config['SECRET_KEY'] = os.environ.get('POBBY_SECRET_KEY') or secrets.token_hex(16)
 CORS(app, resources={r"/*": {"origins": "*"}})
 
 # ── Khởi tạo BUS ──────────────────────────────────────────────
@@ -51,16 +55,56 @@ def register_api():
 @app.route('/api/dang-nhap', methods=['POST'])
 def login_api():
     data = request.json
-    return jsonify(user_bus.dang_nhap(
+    ket_qua = user_bus.dang_nhap(
         tendangnhap= data.get('tendangnhap'),
         mat_khau   = data.get('mat_khau')
-    ))
+    )
+    if ket_qua.get('status'):
+        session['user_id'] = ket_qua['data']['ma_user']
+    return jsonify(ket_qua)
+
+
+@app.route('/api/phien', methods=['GET'])
+def api_phien():
+    """Trả thông tin phiên đăng nhập hiện tại (FR-009 / phien.contract)."""
+    ma_user = session.get('user_id')
+    if not ma_user:
+        return jsonify({"status": False, "message": "Bạn chưa đăng nhập!", "data": None})
+    gate = user_bus.kiem_tra_nguoi_dung_hoat_dong(ma_user)
+    if not gate.get('status'):
+        return jsonify(gate)
+    thong_tin = user_bus.lay_thong_tin_user(ma_user)
+    ten_vai_tro = user_bus.lay_ten_vai_tro_theo_id(thong_tin.get('Role_Id'))
+    return jsonify({
+        "status": True,
+        "message": "",
+        "data": {
+            "ma_user": ma_user,
+            "ten_user": thong_tin.get('FullName'),
+            "ma_nhom_quyen": thong_tin.get('Role_Id'),
+            "ten_vai_tro": ten_vai_tro,
+            "ten_vai_tro_hien_thi": ten_vai_tro,
+            "trang_thai": thong_tin.get('trang_thai') or 'active',
+            "sdt": thong_tin.get('Phone'),
+            "dia_chi": thong_tin.get('Address'),
+        }
+    })
+
+
+@app.route('/api/dang-xuat', methods=['POST'])
+def api_dang_xuat():
+    """Xóa toàn bộ phiên đăng nhập."""
+    session.clear()
+    return jsonify({"status": True, "message": "Đã đăng xuất."})
 
 # ==========================================
 # 3. DANH SÁCH USER
 # ==========================================
 @app.route('/api/users', methods=['GET'])
 def get_users_api():
+    gate = user_bus.kiem_tra_quyen_quan_ly(session.get('user_id'))
+    if not gate.get('status'):
+        return jsonify(gate), 403
     ket_qua = user_bus.lay_danh_sach_user()
     if isinstance(ket_qua, dict) and "data" in ket_qua:
         return jsonify(ket_qua)
@@ -73,9 +117,12 @@ def get_users_api():
 def cap_nhat_profile():
     if request.method == 'OPTIONS':
         return jsonify({"status": True}), 200
+    gate = user_bus.kiem_tra_nguoi_dung_hoat_dong(session.get('user_id'))
+    if not gate.get('status'):
+        return jsonify(gate), 403
     data = request.json
     return jsonify(user_bus.cap_nhat_user(
-        data.get('ma_user'),
+        session.get('user_id'),
         data.get('ten_user'),
         data.get('dia_chi'),
         data.get('sdt'),
@@ -105,9 +152,12 @@ def get_store_by_user(user_id):
 # ==========================================
 @app.route('/api/dang-ky-gian-hang', methods=['POST'])
 def api_dang_ky_gian_hang():
+    gate = user_bus.kiem_tra_nguoi_dung_hoat_dong(session.get('user_id'))
+    if not gate.get('status'):
+        return jsonify(gate), 403
     data = request.json
     req  = YeuCau(
-        UserId        = data.get('UserId'),
+        UserId        = session.get('user_id'),
         ShopName      = data.get('StoreName'),
         BusinessPhone = data.get('Phone'),
         Category      = data.get('Category'),
@@ -119,22 +169,30 @@ def api_dang_ky_gian_hang():
 
 @app.route('/api/seller-requests', methods=['GET'])
 def api_lay_yeu_cau():
+    gate = user_bus.kiem_tra_quyen_quan_ly(session.get('user_id'))
+    if not gate.get('status'):
+        return jsonify(gate), 403
     return jsonify(gian_hang_bus.lay_danh_sach_yeu_cau())
 
 
 @app.route('/api/duyet-seller/<int:request_id>', methods=['POST'])
 def api_duyet_seller(request_id):
-    data = request.json
-    return jsonify(gian_hang_bus.duyet_yeu_cau(request_id, data.get('reviewed_by')))
+    gate = user_bus.kiem_tra_quyen_quan_ly(session.get('user_id'))
+    if not gate.get('status'):
+        return jsonify(gate), 403
+    return jsonify(gian_hang_bus.duyet_yeu_cau(session.get('user_id'), request_id))
 
 
 @app.route('/api/tu-choi-seller/<int:request_id>', methods=['POST'])
 def api_tu_choi_seller(request_id):
+    gate = user_bus.kiem_tra_quyen_quan_ly(session.get('user_id'))
+    if not gate.get('status'):
+        return jsonify(gate), 403
     data = request.json
     return jsonify(gian_hang_bus.tu_choi_yeu_cau(
+        session.get('user_id'),
         request_id,
-        data.get('reviewed_by'),
-        data.get('ly_do', '')
+        data.get('ly_do', '') if data else ''
     ))
 
 # ==========================================
@@ -147,18 +205,27 @@ def get_categories():
 
 @app.route('/api/categories', methods=['POST'])
 def add_category():
+    gate = user_bus.kiem_tra_quyen_quan_ly(session.get('user_id'))
+    if not gate.get('status'):
+        return jsonify(gate), 403
     data = request.json
     return jsonify(category_bus.them_category(data.get('name')))
 
 
 @app.route('/api/categories/<int:category_id>', methods=['PUT'])
 def update_category(category_id):
+    gate = user_bus.kiem_tra_quyen_quan_ly(session.get('user_id'))
+    if not gate.get('status'):
+        return jsonify(gate), 403
     data = request.json
     return jsonify(category_bus.sua_category(category_id, data.get('name')))
 
 
 @app.route('/api/categories/<int:category_id>', methods=['DELETE'])
 def delete_category(category_id):
+    gate = user_bus.kiem_tra_quyen_quan_ly(session.get('user_id'))
+    if not gate.get('status'):
+        return jsonify(gate), 403
     return jsonify(category_bus.xoa_category(category_id))
 
 # ==========================================
@@ -230,9 +297,12 @@ def delete_product(product_id):
 # ==========================================
 @app.route('/api/gio-hang/them', methods=['POST'])
 def api_them_vao_gio():
+    gate = user_bus.kiem_tra_nguoi_dung_hoat_dong(session.get('user_id'))
+    if not gate.get('status'):
+        return jsonify(gate), 403
     data = request.json
     result = cart_bus.xu_ly_them_vao_gio(
-        data.get('UserId'),
+        session.get('user_id'),
         data.get('ProductId'),
         data.get('Quantity'),
         data.get('UnitPrice'),
@@ -242,12 +312,21 @@ def api_them_vao_gio():
 
 @app.route('/api/gio-hang/xoa-tat-ca', methods=['POST'])
 def api_xoa_tat_ca_gio():
-    data = request.json
-    return jsonify(cart_bus.xoa_toan_bo_gio(data.get('UserId')))
+    gate = user_bus.kiem_tra_nguoi_dung_hoat_dong(session.get('user_id'))
+    if not gate.get('status'):
+        return jsonify(gate), 403
+    return jsonify(cart_bus.xoa_toan_bo_gio(session.get('user_id')))
 
 
 @app.route('/api/gio-hang/<int:user_id>', methods=['GET'])
 def api_lay_gio_hang(user_id):
+    gate = user_bus.kiem_tra_nguoi_dung_hoat_dong(session.get('user_id'))
+    if not gate.get('status'):
+        return jsonify(gate), 403
+    if user_id != session.get('user_id'):
+        return jsonify({"status": False,
+                        "message": "Không thể thao tác trên tài khoản khác!",
+                        "data": None}), 403
     result = cart_bus.lay_thong_tin_gio_hang(user_id)
     return jsonify(result)
 
@@ -257,10 +336,13 @@ def api_lay_gio_hang(user_id):
 # ==========================================
 @app.route('/api/don-hang/dat-hang', methods=['POST'])
 def api_dat_hang():
+    gate = user_bus.kiem_tra_nguoi_dung_hoat_dong(session.get('user_id'))
+    if not gate.get('status'):
+        return jsonify(gate), 403
     data = request.json
 
     don_hang_moi = DonHang(
-        UserId        = int(data.get('UserId', 0)),
+        UserId        = session.get('user_id'),
         ReceiverName  = str(data.get('ReceiverName', '')),
         ReceiverPhone = str(data.get('ReceiverPhone', '')),
         ShippingAddress = str(data.get('ShippingAddress', '')),
@@ -300,20 +382,33 @@ def api_cap_nhat_trang_thai(order_id):
     return jsonify(don_hang_bus.thay_doi_trang_thai(order_id, new_status))
 @app.route('/api/don-hang/cua-toi/<int:user_id>', methods=['GET'])
 def api_lay_don_hang_cua_toi(user_id):
+    gate = user_bus.kiem_tra_nguoi_dung_hoat_dong(session.get('user_id'))
+    if not gate.get('status'):
+        return jsonify(gate), 403
+    if user_id != session.get('user_id'):
+        return jsonify({"status": False,
+                        "message": "Không thể thao tác trên tài khoản khác!",
+                        "data": None}), 403
     return jsonify(don_hang_bus.lay_don_hang_cua_toi(user_id))
 @app.route('/api/gio-hang/xoa', methods=['POST'])
 def api_xoa_khoi_gio():
+    gate = user_bus.kiem_tra_nguoi_dung_hoat_dong(session.get('user_id'))
+    if not gate.get('status'):
+        return jsonify(gate), 403
     data = request.json
     return jsonify(cart_bus.xoa_khoi_gio(
-        data.get('UserId'),
+        session.get('user_id'),
         data.get('ProductId')
     ))
 
 @app.route('/api/gio-hang/cap-nhat', methods=['POST'])
 def api_cap_nhat_so_luong():
+    gate = user_bus.kiem_tra_nguoi_dung_hoat_dong(session.get('user_id'))
+    if not gate.get('status'):
+        return jsonify(gate), 403
     data = request.json
     return jsonify(cart_bus.cap_nhat_so_luong(
-        data.get('UserId'),
+        session.get('user_id'),
         data.get('ProductId'),
         data.get('Quantity')
     ))
@@ -330,10 +425,29 @@ def api_lay_don_hang_cua_seller(store_id):
     return jsonify(don_hang_bus.lay_don_hang_cua_seller(store_id))
 @app.route('/api/users/<int:ma_user>/status', methods=['PUT'])
 def update_user_status(ma_user):
-    data   = request.json
+    gate = user_bus.kiem_tra_quyen_quan_ly(session.get('user_id'))
+    if not gate.get('status'):
+        return jsonify(gate), 403
+    data   = request.json or {}
     status = data.get('status')  # 'active' hoặc 'banned'
-    if not status:
-        return jsonify({"status": False, "message": "Thiếu status!"})
-    return jsonify(user_bus.cap_nhat_trang_thai(ma_user, status))
+    return jsonify(user_bus.cap_nhat_trang_thai(session.get('user_id'), ma_user, status))
+
+
+# ==========================================
+# 4.2. CẤP LẠI MẬT KHẨU (FR-010 / FR-011)
+# ==========================================
+@app.route('/api/cap-lai-mat-khau', methods=['POST'])
+def api_cap_lai_mat_khau():
+    gate = user_bus.kiem_tra_quyen_quan_ly(session.get('user_id'))
+    if not gate.get('status'):
+        return jsonify(gate), 403
+    data = request.json or {}
+    return jsonify(user_bus.cap_lai_mat_khau(
+        session.get('user_id'),
+        data.get('ma_user'),
+        data.get('mat_khau_moi') or None
+    ))
+
+
 if __name__ == '__main__':
     app.run(debug=True, port=5000)

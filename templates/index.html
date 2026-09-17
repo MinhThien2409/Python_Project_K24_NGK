@@ -265,14 +265,13 @@
       <div id="pane-categories" class="admin-pane" style="display:none;">
         <div class="admin-card">
           <h3>Quản lý danh mục sản phẩm</h3>
-          <div style="display:flex; gap:10px; margin-top:12px;">
-            <input type="text" id="newCatEmoji" placeholder="Emoji" style="padding:10px; border:1px solid var(--border); border-radius:8px; width:80px; text-align:center;" />
-            <input type="text" id="newCatName" placeholder="Tên danh mục mới" style="padding:10px; border:1px solid var(--border); border-radius:8px; flex:1;" />
-            <input type="text" id="newCatSlug" placeholder="Mã định danh (Slug)" style="padding:10px; border:1px solid var(--border); border-radius:8px; width:200px;" />
-            <button class="checkout-btn" style="background:var(--primary); padding:0 20px;" onclick="addCategory()">Thêm danh mục</button>
+          <div id="catMessage" style="margin-top:12px; font-size:13px; display:none;"></div>
+          <div class="form-group" style="flex-direction:row; margin-top:12px;">
+            <input type="text" id="newCatName" placeholder="Tên danh mục mới" style="flex:1;" />
+            <button class="btn-submit" style="padding:0 20px; white-space:nowrap;" onclick="addCategory()">Thêm danh mục</button>
           </div>
           <table style="margin-top:20px;">
-            <thead><tr><th>Icon</th><th>Tên danh mục</th><th>Mã định danh</th><th>Số lượng SP</th><th>Hành động</th></tr></thead>
+            <thead><tr><th>Tên danh mục</th><th>Mã danh mục</th><th>Hành động</th></tr></thead>
             <tbody id="tblCategoriesBody"></tbody>
           </table>
         </div>
@@ -302,7 +301,7 @@
         <div class="admin-card">
           <h3>Danh sách yêu cầu đăng ký làm người bán hàng</h3>
           <table>
-            <thead><tr><th>Tên cửa hàng</th><th>Chủ sở hữu</th><th>Số điện thoại</th><th>Mặt hàng</th><th>Mô tả</th><th>Trạng thái</th><th>Thao tác</th></tr></thead>
+            <thead><tr><th>Tên cửa hàng</th><th>Chủ sở hữu</th><th>Số điện thoại</th><th>Mặt hàng</th><th>Mô tả</th><th>Trạng thái</th><th>Lý do từ chối</th><th>Thao tác</th></tr></thead>
             <tbody id="tblAdminSellersBody"></tbody>
           </table>
         </div>
@@ -316,6 +315,7 @@
               <option value="all">Tất cả vai trò</option>
               <option value="Customer">Khách hàng</option>
               <option value="Seller">Người bán</option>
+              <option value="Quản lý">Quản lý</option>
               <option value="Admin">Quản trị viên</option>
             </select>
             <input type="text" id="userSearchFilter" placeholder="Tìm tên/email..." oninput="renderAdminUsers()" style="padding:6px; border-radius:6px; border:1px solid var(--border);">
@@ -727,13 +727,36 @@
     <input type="hidden" id="editUserId">
     <div id="editUserInfo" style="background:var(--bg); padding:10px; border-radius:6px; margin-bottom:14px; font-size:13px;"></div>
     <div class="form-group">
+      <label>Vai trò (không thể thay đổi)</label>
+      <input type="text" id="editUserRoleReadonly" readonly style="background:var(--bg);">
+    </div>
+    <div class="form-group">
       <label>Trạng thái</label>
       <select id="editUserStatus" style="padding:8px; border-radius:6px; border:1px solid var(--border);">
         <option value="active">Hoạt động</option>
         <option value="banned">Khóa</option>
       </select>
     </div>
+    <button onclick="moModalCapLaiMatKhau()" class="btn-submit" style="width:100%; margin-bottom:8px;">🔑 Cấp lại mật khẩu</button>
     <button onclick="handleSaveUserRole()" class="btn-submit" style="width:100%;">Lưu thay đổi</button>
+  </div>
+</div>
+
+<div class="modal-overlay" id="resetPasswordModal">
+  <div class="modal-box" style="width:400px;">
+    <button class="modal-close" onclick="closeResetPasswordModal()">✕</button>
+    <h3 style="margin-bottom:14px;">🔑 Cấp lại mật khẩu</h3>
+    <input type="hidden" id="resetUserId">
+    <div id="resetUserInfo" style="background:var(--bg); padding:10px; border-radius:6px; margin-bottom:14px; font-size:13px;"></div>
+    <div class="form-group">
+      <label>Mật khẩu mới (bỏ trống để hệ thống sinh ngẫu nhiên)</label>
+      <input type="text" id="resetPasswordInput" placeholder="Tối thiểu 6 ký tự">
+    </div>
+    <button onclick="hamCapLaiMatKhau()" class="btn-submit" style="width:100%;">Cấp lại mật khẩu</button>
+    <div id="resetPasswordResult" style="display:none; margin-top:14px; background:var(--bg); padding:12px; border-radius:6px; text-align:center;">
+      <div style="font-size:12px; color:var(--text-muted); margin-bottom:6px;">Mật khẩu mới (chỉ hiển thị một lần):</div>
+      <div id="resetPasswordValue" style="font-size:20px; font-weight:800; color:var(--primary); letter-spacing:1px;"></div>
+    </div>
   </div>
 </div>
 

@@ -93,7 +93,7 @@ class GianHangDao:
             cursor.close(); conn.close()
 
     def lay_danh_sach_yeu_cau(self):
-        """Admin xem danh sách đơn chờ duyệt"""
+        """Quản lý/Admin xem danh sách đơn đăng ký bán hàng (kèm thông tin xét duyệt)"""
         conn = DBconnection.get_connection()
         if conn is None: return []
         cursor = conn.cursor()
@@ -117,7 +117,10 @@ class GianHangDao:
                     "description":   row.Description,
                     "national_id":   row.NationalId,
                     "status":        row.Status,
-                    "created_at":    str(row.CreatedAt) if row.CreatedAt else ""
+                    "created_at":    str(row.CreatedAt) if row.CreatedAt else "",
+                    "reviewed_by":   row.ReviewedBy,
+                    "reviewed_at":   str(row.ReviewedAt) if row.ReviewedAt else None,
+                    "reject_reason": row.RejectReason
                 }
                 for row in rows
             ]
@@ -128,23 +131,37 @@ class GianHangDao:
             cursor.close(); conn.close()
 
     def duyet_yeu_cau(self, request_id, reviewed_by):
-        """Admin duyệt → cập nhật Status + tạo Store + đổi Role user"""
+        """Duyệt đơn bán hàng: cập nhật Status + tạo Store + nâng quyền Seller trong 1 transaction.
+
+        Chỉ duyệt đơn còn Status='pending' (chống xử lý lặp — FR-007); user đã là Seller
+        (Role_Id=3) thì không duyệt lại. Trả mã 'ok'|'da_xu_ly'|'khong_tim_thay'|'da_la_seller'.
+        """
         conn = DBconnection.get_connection()
-        if conn is None: return False
+        if conn is None: return 'khong_tim_thay'
         cursor = conn.cursor()
         try:
-            # 1. Lấy thông tin đơn
+            # 0. Xác nhận đơn tồn tại trước (phân biệt 'khong_tim_thay' với 'da_xu_ly')
             cursor.execute(
                 "SELECT * FROM SellerRequests WHERE RequestId=?", (request_id,))
             req = cursor.fetchone()
-            if not req: return False
+            if not req: return 'khong_tim_thay'
 
-            # 2. Cập nhật trạng thái đơn
+            # 1. Cập nhật trạng thái — guard WHERE Status='pending' (atomic, chống cạnh tranh)
             cursor.execute("""
                 UPDATE SellerRequests
                 SET Status='approved', ReviewedBy=?, ReviewedAt=GETDATE()
-                WHERE RequestId=?
+                WHERE RequestId=? AND Status='pending'
             """, (reviewed_by, request_id))
+            if cursor.rowcount == 0:
+                return 'da_xu_ly'
+
+            # 2. User đã là Seller → không duyệt lại
+            cursor.execute(
+                "SELECT Role_id FROM Users WHERE UserId=?", (req.UserId,))
+            user = cursor.fetchone()
+            if not user: return 'khong_tim_thay'
+            if user.Role_id == 3:
+                return 'da_la_seller'
 
             # 3. Tạo Stores mới từ dữ liệu đơn
             cursor.execute("""
@@ -154,36 +171,49 @@ class GianHangDao:
             """, (req.ShopName, req.UserId, req.BusinessPhone,
                   req.Category, req.Description))
 
-            # 4. Đổi Role user thành Seller (13)
+            # 4. Đổi Role user thành Seller (3) — sửa lỗi cũ gán 13 (không tồn tại)
             cursor.execute(
-                "UPDATE Users SET Role_id=13 WHERE UserId=?", (req.UserId,))
+                "UPDATE Users SET Role_id=3 WHERE UserId=?", (req.UserId,))
 
             conn.commit()
-            return True
+            return 'ok'
         except Exception as e:
             print("Lỗi duyệt yêu cầu:", e)
             conn.rollback()
-            return False
+            return 'khong_tim_thay'
         finally:
             cursor.close(); conn.close()
 
     def tu_choi_yeu_cau(self, request_id, reviewed_by, ly_do):
-        """Admin từ chối đơn"""
+        """Từ chối đơn bán hàng: chỉ áp dụng cho đơn còn Status='pending' (FR-007).
+
+        User giữ nguyên vai trò, không tạo Store. Trả 'ok'|'da_xu_ly'|'khong_tim_thay'.
+        """
         conn = DBconnection.get_connection()
-        if conn is None: return False
+        if conn is None: return 'khong_tim_thay'
         cursor = conn.cursor()
         try:
+            # 0. Xác nhận đơn tồn tại trước (phân biệt 'khong_tim_thay' với 'da_xu_ly')
+            cursor.execute(
+                "SELECT RequestId FROM SellerRequests WHERE RequestId=?", (request_id,))
+            if not cursor.fetchone(): return 'khong_tim_thay'
+
+            # 1. Cập nhật trạng thái — guard WHERE Status='pending' (atomic, chống cạnh tranh)
             cursor.execute("""
                 UPDATE SellerRequests
                 SET Status='rejected', ReviewedBy=?,
                     ReviewedAt=GETDATE(), RejectReason=?
-                WHERE RequestId=?
+                WHERE RequestId=? AND Status='pending'
             """, (reviewed_by, ly_do, request_id))
+            if cursor.rowcount == 0:
+                return 'da_xu_ly'
+
             conn.commit()
-            return cursor.rowcount > 0
+            return 'ok'
         except Exception as e:
             print("Lỗi từ chối yêu cầu:", e)
-            return False
+            conn.rollback()
+            return 'khong_tim_thay'
         finally:
             cursor.close(); conn.close()
 

@@ -51,7 +51,7 @@ def test_dang_nhap_van_tra_du_ten_user(user_bus, user_mau, mock_user_dao):
 
 # ── T025: chặn khóa Admin / đăng ký Customer / Role NULL-lạ từ chối ─────────
 def test_cap_nhat_trang_thai_tu_choi_khoa_admin(mock_user_dao):
-    """Khóa Admin bị từ chối rõ ràng, không crash (FR-009)."""
+    """Khóa Admin bị từ chối rõ ràng, không crash (FR-008)."""
     bus = UserBus()
     dao = mock_user_dao()
 
@@ -59,7 +59,7 @@ def test_cap_nhat_trang_thai_tu_choi_khoa_admin(mock_user_dao):
     dao.lay_thong_tin_user = lambda ma_user: {"UserId": 1, "Role_Id": 1, "trang_thai": "active"}
     bus.dao = dao
 
-    ket_qua = bus.cap_nhat_trang_thai(1, "banned")
+    ket_qua = bus.cap_nhat_trang_thai(2, 1, "banned")
 
     assert ket_qua["status"] is False
     assert ket_qua["message"] == "Không ai có quyền khóa tài khoản Admin!"
@@ -72,7 +72,7 @@ def test_cap_nhat_trang_thai_cho_phep_khoa_non_admin(mock_user_dao):
     dao.cap_nhat_trang_thai = lambda ma_user, trang_thai: True
     bus.dao = dao
 
-    ket_qua = bus.cap_nhat_trang_thai(5, "banned")
+    ket_qua = bus.cap_nhat_trang_thai(2, 5, "banned")
 
     assert ket_qua["status"] is True
 

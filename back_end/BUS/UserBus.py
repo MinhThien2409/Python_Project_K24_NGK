@@ -23,7 +23,7 @@ class UserBus:
             dia_chi=dia_chi,
             sdt=sdt,
             cmnd=None,
-            ma_nhom_quyen=14,
+            ma_nhom_quyen=4,
             tendangnhap=tendangnhap,
             mat_khau=mat_khau
         )
@@ -51,21 +51,39 @@ class UserBus:
                 "data": None
             }
 
-        if user:
+        # Role_Id NULL hoặc trỏ tới vai trò không tồn tại → từ chối rõ ràng, không crash (FR-009)
+        if isinstance(user, dict) and user.get('role_none'):
             return {
-                "status": True,
-                "message": f"Chào mừng {user.ten_user} trở lại!",
-                "data": {
-                    "ma_user": user.ma_user,
-                    "ten_user": user.ten_user,
-                    "ma_nhom_quyen": user.ma_nhom_quyen,
-                    "dia_chi": user.dia_chi,
-                    "sdt": user.sdt,
-                    "cmnd": user.cmnd
-                }
+                "status": False,
+                "message": "Dữ liệu vai trò không hợp lệ! Vui lòng liên hệ quản trị viên.",
+                "data": None
             }
-        else:
+
+        if not user:
             return {"status": False, "message": "Tên đăng nhập hoặc mật khẩu không chính xác!", "data": None}
+
+        ten_vai_tro = self.dao.lay_ten_vai_tro_theo_id(user.ma_nhom_quyen)
+        if not ten_vai_tro:
+            return {
+                "status": False,
+                "message": "Dữ liệu vai trò không hợp lệ! Vui lòng liên hệ quản trị viên.",
+                "data": None
+            }
+
+        return {
+            "status": True,
+            "message": f"Chào mừng {user.ten_user} trở lại!",
+            "data": {
+                "ma_user": user.ma_user,
+                "ten_user": user.ten_user,
+                "ma_nhom_quyen": user.ma_nhom_quyen,
+                "ten_vai_tro": ten_vai_tro,
+                "ten_vai_tro_hien_thi": ten_vai_tro,
+                "dia_chi": user.dia_chi,
+                "sdt": user.sdt,
+                "cmnd": user.cmnd
+            }
+        }
 
     def lay_danh_sach_user(self):
         danh_sach = self.dao.lay_danh_sach_user()
@@ -91,14 +109,6 @@ class UserBus:
         else:
             return {"status": False, "message": "Lỗi khi xóa người dùng."}
 
-    def cap_nhat_vai_tro(self, ma_user, role_id):
-        if not ma_user or not role_id:
-            return {"status": False, "message": "Thiếu thông tin!"}
-        ok = self.dao.cap_nhat_vai_tro(ma_user, role_id)
-        if ok:
-            return {"status": True, "message": "Đã cập nhật vai trò thành công!"}
-        return {"status": False, "message": "Lỗi cập nhật vai trò."}
-
     def lay_thong_tin_user(self, ma_user):
         return self.dao.lay_thong_tin_user(ma_user)
 
@@ -107,6 +117,15 @@ class UserBus:
             return {"status": False, "message": "Thiếu mã user!"}
         if trang_thai not in ('active', 'banned'):
             return {"status": False, "message": "Trạng thái không hợp lệ!"}
+
+        # Không ai có quyền khóa tài khoản Admin (FR-009) — kiểm tra trước khi ghi
+        thong_tin = self.dao.lay_thong_tin_user(ma_user)
+        if not thong_tin:
+            return {"status": False, "message": "Không tìm thấy người dùng!"}
+        role_id = thong_tin.get("Role_Id") or thong_tin.get("Role_id") or thong_tin.get("role_id")
+        ten_vai_tro = self.dao.lay_ten_vai_tro_theo_id(role_id)
+        if trang_thai == 'banned' and ten_vai_tro == "Admin":
+            return {"status": False, "message": "Không ai có quyền khóa tài khoản Admin!"}
 
         ok = self.dao.cap_nhat_trang_thai(ma_user, trang_thai)
         if ok:

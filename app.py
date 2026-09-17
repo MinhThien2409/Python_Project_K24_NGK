@@ -3,7 +3,6 @@
 from flask import Flask, request, jsonify, render_template
 from flask_cors import CORS
 from back_end.BUS.UserBus import UserBus
-from back_end.BUS.PhanQuyenBus import PhanQuyenBus
 from back_end.Model.GianHang import GianHang
 from back_end.Model.YeuCau import YeuCau
 from back_end.BUS.GianHangBus import GianHangBus
@@ -19,7 +18,6 @@ CORS(app, resources={r"/*": {"origins": "*"}})
 
 # ── Khởi tạo BUS ──────────────────────────────────────────────
 user_bus       = UserBus()
-phan_quyen_bus = PhanQuyenBus()
 gian_hang_bus  = GianHangBus()
 category_bus   = DanhMucBus()
 san_pham_bus   = SanPhamBus()
@@ -102,58 +100,6 @@ def doi_mat_khau():
 @app.route('/api/stores/by-user/<int:user_id>', methods=['GET'])
 def get_store_by_user(user_id):
     return jsonify(gian_hang_bus.lay_store_theo_user(user_id))
-# ==========================================
-# 6. PHÂN QUYỀN
-# ==========================================
-@app.route('/api/cap-quyen-ngoai-le', methods=['POST'])
-def save_permissions_api():
-    data            = request.json
-    ma_user         = data.get('ma_user')
-    danh_sach_quyen = data.get('permissions', [])
-
-    if not ma_user:
-        return jsonify({"status": False, "message": "Vui lòng chọn tài khoản cần phân quyền!"})
-
-    return jsonify(phan_quyen_bus.cap_quyen_ngoai_le_batch(ma_user, danh_sach_quyen))
-
-
-@app.route('/api/cap-quyen-nhom', methods=['POST'])
-def cap_quyen_nhom():
-    try:
-        data        = request.get_json()
-        role_id     = data.get('role_id')
-        permissions = data.get('permissions', [])
-
-        if not role_id:
-            return jsonify({"status": False, "message": "Thiếu role_id!"}), 400
-
-        return jsonify(phan_quyen_bus.cap_nhat_quyen_batch(role_id, permissions))
-
-    except Exception as e:
-        return jsonify({"status": False, "message": f"Lỗi server: {str(e)}"}), 500
-@app.route('/api/quyen-cua-user/<int:ma_user>', methods=['GET'])
-def get_user_permissions_api(ma_user):
-    return jsonify(phan_quyen_bus.lay_quyen_cua_user(ma_user))
-
-
-@app.route('/api/quyen-cua-nhom/<int:ma_nhom>', methods=['GET'])
-def quyen_cua_nhom(ma_nhom):
-    try:
-        return jsonify(phan_quyen_bus.lay_quyen_cua_nhom(ma_nhom))
-    except Exception as e:
-        return jsonify({"status": False, "message": f"Lỗi server: {str(e)}"}), 500
-
-
-
-
-@app.route('/api/ap-dung-quyen-nhom-cho-user', methods=['POST'])
-def ap_dung_quyen_nhom_cho_user():
-    data    = request.get_json()
-    ma_user = data.get('ma_user')
-    if not ma_user:
-        return jsonify({"status": False, "message": "Thiếu ma_user!"}), 400
-    return jsonify(phan_quyen_bus.ap_dung_quyen_nhom_cho_user(ma_user))
-
 # ==========================================
 # 7. GIAN HÀNG / SELLER
 # ==========================================
@@ -279,16 +225,6 @@ def delete_product(product_id):
     return jsonify(san_pham_bus.xoa_san_pham(product_id))
 
 
-#Quan ly nguoi dung
-@app.route('/api/users/<int:ma_user>/role', methods=['PUT'])
-def update_user_role(ma_user):
-    data    = request.json
-    role_id = data.get('role_id')
-    if not role_id:
-        return jsonify({"status": False, "message": "Thiếu role_id!"})
-    return jsonify(user_bus.cap_nhat_vai_tro(ma_user, role_id))
-
-
 # ==========================================
 # API GIỎ HÀNG
 # ==========================================
@@ -365,26 +301,6 @@ def api_cap_nhat_trang_thai(order_id):
 @app.route('/api/don-hang/cua-toi/<int:user_id>', methods=['GET'])
 def api_lay_don_hang_cua_toi(user_id):
     return jsonify(don_hang_bus.lay_don_hang_cua_toi(user_id))
-# ==========================================
-# API QUẢN LÝ ROLES (NHÓM QUYỀN)
-# ==========================================
-@app.route('/api/roles', methods=['GET'])
-def get_all_roles():
-    return jsonify(phan_quyen_bus.lay_tat_ca_roles())
-
-@app.route('/api/roles', methods=['POST'])
-def add_role():
-    data = request.json
-    return jsonify(phan_quyen_bus.them_role(data.get('role_name')))
-
-@app.route('/api/roles/<int:role_id>', methods=['PUT'])
-def update_role(role_id):
-    data = request.json
-    return jsonify(phan_quyen_bus.sua_role(role_id, data.get('role_name')))
-
-@app.route('/api/roles/<int:role_id>', methods=['DELETE'])
-def delete_role(role_id):
-    return jsonify(phan_quyen_bus.xoa_role(role_id))
 @app.route('/api/gio-hang/xoa', methods=['POST'])
 def api_xoa_khoi_gio():
     data = request.json

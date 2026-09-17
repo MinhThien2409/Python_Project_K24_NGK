@@ -2,7 +2,7 @@
 
 ## Endpoint GIỮ LẠI
 
-Không có. Toàn bộ API quản lý vai trò bị xóa; 4 vai trò chuẩn chỉ tồn tại trong SQL dữ liệu mẫu, không thể thay đổi lúc runtime.
+Không có. Toàn bộ API quản lý vai trò bị xóa; 4 vai trò chuẩn chỉ tồn tại trong file nguồn `database.sql`/`back_up.sql`, không thể thay đổi lúc runtime.
 
 ## Endpoint BỊ XÓA → 404
 

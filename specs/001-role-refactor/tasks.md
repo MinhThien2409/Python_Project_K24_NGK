@@ -1,156 +1,157 @@
 # Tasks: Tái cấu trúc vai trò — 4 vai trò duy nhất (001-role-refactor)
 
-**Input**: Design documents from `/specs/001-role-refactor/` (spec.md, plan.md, research.md, data-model.md, contracts/, quickstart.md)
+**Input**: Tài liệu thiết kế từ `/specs/001-role-refactor/` (spec.md, plan.md, research.md, data-model.md, contracts/, quickstart.md)
 
 **Prerequisites**: plan.md, spec.md, research.md, data-model.md, contracts/, quickstart.md
 
-**Tests**: REQUIRED — Hiến chương Pobby Nguyên tắc IV. Test viết TRƯỚC implementation (test-first), chạy bằng `pytest`, đặt trong `tests/unit/` và `tests/integration/`. KHÔNG chạm PobbyDB thật (mock DAO + Flask test_client).
+**Tests**: BẮT BUỘC — Hiến chương Pobby Nguyên tắc IV. Test viết TRƯỚC implementation (test-first), chạy bằng `pytest`, đặt trong `tests/unit/` và `tests/integration/`. KHÔNG chạm PobbyDB thật (mock DAO + Flask test_client + phân tích tĩnh nội dung `database.sql`/`back_up.sql`).
 
-## Format: `[ID] [P?] [Story] Description`
+**Hướng triển khai (chỉ đạo 2026-09-17)**: Chuẩn hóa vai trò bằng cách **SỬA TRỰC TIẾP file nguồn** — không tạo hàm riêng để chuẩn hóa, không tạo SQL script riêng để chuẩn hóa. Kết quả chuẩn hóa nằm ngay trong `Database/database.sql` và `Database/back_up.sql` (4 vai trò ID 1–4, user được remap, bỏ `Permissions`/`Modules`). Script cũ `Database/sql/001_chuan_hoa_vai_tro.sql` và 2 test cũ phải ĐƯỢC XÓA/thay thế.
 
-- **[P]**: Can run in parallel (different files, no dependencies)
-- **[Story]**: Which user story this task belongs to (US1, US2, US3, US4)
-- Include exact file paths in descriptions
+## Format: `[ID] [P?] [Story] Mô tả`
+
+- **[P]**: Có thể chạy song song (khác file, không phụ thuộc)
+- **[Story]**: User story task thuộc về (US1, US2, US3, US4)
+- Luôn kèm đường dẫn file chính xác trong mô tả
 
 ## Path Conventions (Pobby)
 
 - Backend: `back_end/Model/`, `back_end/DAO/`, `back_end/BUS/`, controller `app.py`
 - Frontend: `templates/index.html`, `static/js/main.js`
-- Tests: `tests/unit/`, `tests/integration/`
-- DB: `Database/database.sql`, `Database/back_up.sql`, script mới `Database/sql/001_chuan_hoa_vai_tro.sql`
+- Tests: `tests/unit/`, `tests/integration/`, fixture dùng chung `tests/conftest.py`
+- DB (sửa TRỰC TIẾP, không có script chuẩn hóa): `Database/database.sql`, `Database/back_up.sql` (đều UTF-16LE có BOM)
 
 ---
 
-## Phase 1: Setup (Shared Infrastructure)
+## Phase 1: Setup (Hạ tầng dùng chung)
 
-**Purpose**: Project initialization and basic structure
+**Mục đích**: Khởi tạo cấu trúc dự án và hạ tầng cơ bản
 
-- [ ] T001 Create tests directory structure tests/unit and tests/integration with __init__.py files
-- [ ] T002 Add pytest to requirements.txt
-- [ ] T003 [P] Resolve Database/sql file-vs-directory conflict (Database/sql is currently a 5MB binary backup file — move to Database/sql.bak) to allow Database/sql/001_chuan_hoa_vai_tro.sql directory
+- [X] T001 Tạo cấu trúc thư mục tests (tests/unit và tests/integration) kèm file __init__.py
+- [X] T002 Thêm pytest vào requirements.txt
+- [X] T003 [P] Di dời file Database/sql (5MB binary backup) → Database/sql.bak để giải phóng tên thư mục Database/sql
 
 ---
 
-## Phase 2: Foundational (Blocking Prerequisites)
+## Phase 2: Foundational (Điều kiện tiên quyết chặn)
 
-**Purpose**: Core infrastructure that MUST be complete before ANY user story can be implemented
+**Mục đích**: Hạ tầng kiểm thử cốt lõi — BẮT BUỘC hoàn thành trước mọi user story
 
-**⚠️ CRITICAL**: No user story work can begin until this phase is complete
+**⚠️ CRITICAL**: Không user story nào được bắt đầu khi phase này chưa xong
 
-- [ ] T004 Create pytest mock helpers for UserDao and Flask test_client without touching PobbyDB in tests/conftest.py
-- [ ] T005 [P] Define 4 canonical role names seed fixture (Admin, Quản lý, Seller, Customer) in tests/conftest.py
-- [ ] T006 Verify pytest collects empty suite green via pytest -v with tests/conftest.py in repository root
+- [X] T004 Tạo mock helper cho UserDao + Flask test_client trong tests/conftest.py (KHÔNG chạm PobbyDB thật)
+- [X] T005 [P] Định nghĩa fixture 4 vai trò chuẩn (Admin, Quản lý, Seller, Customer) + MockUserDao (map id 1–4) trong tests/conftest.py
+- [X] T006 Chạy pytest -v kiểm tra suite thu thập xanh với tests/conftest.py ở root repo
 
-**Checkpoint**: Foundation ready - user story implementation can now begin in parallel
+**Checkpoint**: Foundation sẵn sàng — các user story có thể triển khai song song
 
 ---
 
 ## Phase 3: User Story 1 - Chuẩn hóa 4 vai trò duy nhất (Priority: P1) 🎯 MVP
 
-**Goal**: Bảng Roles chỉ còn đúng 4 dòng chuẩn; 100% Users.Role_Id trỏ tới 4 vai trò này (FR-001, FR-002, FR-003, FR-009)
+**Goal**: `database.sql` + `back_up.sql` sau khi SỬA TRỰC TIẾP chỉ còn đúng 4 vai trò chuẩn (ID 1=Admin, 2=Quản lý, 3=Seller, 4=Customer); 100% `Users.Role_Id` trỏ tới 1 trong 4 vai trò; không còn bảng `Permissions`/`Modules` (FR-001, FR-002, FR-003, FR-009)
 
-**Independent Test**: Truy vấn Roles sau script rebuild seed — đúng 4 dòng; truy vấn Users mồ côi (`LEFT JOIN Roles`) — 0 dòng (SC-001)
+**Independent Test**: Phân tích tĩnh `database.sql` + `back_up.sql` — đúng 4 dòng Roles ID 1–4; mọi `INSERT [dbo].[Users]` có `Role_Id` ∈ {1,2,3,4}; không còn chuỗi `Permissions`/`Modules` (SC-001)
 
-### Tests for User Story 1 (REQUIRED - Nguyên tắc IV) ⚠️
+### Tests cho User Story 1 (BẮT BUỘC - Nguyên tắc IV) ⚠️
 
-> **NOTE: Write these tests FIRST, ensure they FAIL before implementation**
+> **LƯU Ý: Viết các test này TRƯỚC, đảm bảo chúng FAIL trước khi implementation**
 
-- [ ] T007 [P] [US1] Static seed-script validation test (assert IF EXISTS, presence of 4 canonical role names, orphan-check SELECT) in tests/unit/test_seed_script_tinh.py
-- [ ] T008 [P] [US1] Seed verification test for Roles count=4 and orphan Users=0 by static content parse of Database/sql/001_chuan_hoa_vai_tro.sql (no real DB) in tests/integration/test_seed_chuan_hoa.py
+- [X] T007 [P] [US1] Viết static test: `Database/database.sql` và `Database/back_up.sql` chứa đúng 4 vai trò chuẩn (`INSERT [dbo].[Roles] ([RoleId], [RoleName]) VALUES (1,N'Admin')`, (2,N'Quản lý'), (3,N'Seller'), (4,N'Customer')) và KHÔNG còn vai trò thừa (Kế toán, Marketing, VIP, Shipper, Manager, ...) trong tests/unit/test_chuan_hoa_file_nguon.py
+- [X] T008 [P] [US1] Viết static test: mọi `INSERT [dbo].[Users]` trong `database.sql` và `back_up.sql` đều có `Role_Id` ∈ {1,2,3,4} (không có NULL/lạ), user1 (UserId=1) → Role_Id=1, và KHÔNG còn khối `CREATE TABLE [dbo].[Permissions]`/`[dbo].[Modules]`/`INSERT [dbo].[Permissions]`/`INSERT [dbo].[Modules]` trong tests/unit/test_chuan_hoa_file_nguon.py
 
-### Implementation for User Story 1
+### Implementation cho User Story 1
 
-- [ ] T009 [US1] Write idempotent rebuild-seed script Database/sql/001_chuan_hoa_vai_tro.sql (single transaction: DROP FK + DROP Permissions/Modules IF EXISTS, DELETE non-canonical Roles, INSERT missing 4 canonical roles, purge Users with Role_Id NULL/invalid, final verification SELECT)
-- [ ] T010 [US1] Sync Database/database.sql to 4 canonical Roles and DROP Permissions/Modules tables
-- [ ] T011 [US1] Sync Database/back_up.sql to 4 canonical Roles and DROP Permissions/Modules tables
+- [X] T009 [US1] Sửa trực tiếp `Database/database.sql`: thu bảng `Roles` còn 4 dòng chuẩn ID 1–4; remap `Users.Role_Id` (user1→1, chủ `Stores.UserId` {2,4,6,8,10,12,14,16,18,20} → 3, còn lại → 4); xóa toàn bộ khối `Permissions`/`Modules` (CREATE TABLE + INSERT + FK/index/CHECK)
+- [X] T010 [US1] Sửa trực tiếp `Database/back_up.sql` đồng bộ với T009 (FR-010): Roles 4 dòng ID 1–4; remap Users (chủ Stores {2,4,6,8,10,12,13,14,16,18,20} → 3 — Store 23 do user 13 sở hữu); xóa khối `Permissions`/`Modules`
+- [X] T011 [US1] Xóa script chuẩn hóa cũ `Database/sql/001_chuan_hoa_vai_tro.sql` và XÓA 2 test cũ trỏ vào script đó: `tests/unit/test_seed_script_tinh.py`, `tests/integration/test_seed_chuan_hoa.py` (đã được thay bằng T007/T008)
 
-**Checkpoint**: At this point, User Story 1 should be fully functional and testable independently
+**Checkpoint**: User Story 1 hoạt động độc lập, testable
 
 ---
 
 ## Phase 4: User Story 2 - Gán đúng vai trò cho dữ liệu mẫu (Priority: P1)
 
-**Goal**: Seed Users/Stores mẫu nhất quán — user1 Admin, mọi chủ Stores là Seller, còn lại Customer (FR-004)
+**Goal**: Trong `database.sql` + `back_up.sql` (sửa trực tiếp), seed `Users`/`Stores` nhất quán — user1 → Admin(1), mọi chủ `Stores` → Seller(3) (kể cả khi `IsActive=0`), còn lại → Customer(4) (FR-004)
 
-**Independent Test**: Đối chiếu Users với Stores — user1 → Admin, mọi Stores.UserId → Seller (giữ vai trò dù IsActive=0), còn lại → Customer
+**Independent Test**: Đối chiếu `Users.Role_Id` với `Stores.UserId` trong cả 2 file — user1 → 1, mọi `Stores.UserId` → 3, phần còn lại → 4; có ít nhất 1 Store `IsActive=0` mà chủ vẫn là Seller (SC-001, Edge case)
 
-### Tests for User Story 2 (REQUIRED - Nguyên tắc IV) ⚠️
+### Tests cho User Story 2 (BẮT BUỘC - Nguyên tắc IV) ⚠️
 
-> **NOTE: Write these tests FIRST, ensure they FAIL before implementation**
+> **LƯU Ý: Viết các test này TRƯỚC, đảm bảo chúng FAIL trước khi implementation**
 
-- [ ] T012 [P] [US2] Seed content test (user1 Admin, store owners Seller, rest Customer, Seller kept when IsActive=0, keyed by UserId) parsing Database/sql/001_chuan_hoa_vai_tro.sql in tests/integration/test_seed_du_lieu_mau.py
+- [X] T012 [P] [US2] Viết static test seed content theo UserId trong `database.sql` + `back_up.sql`: user1→Admin(1), mọi `INSERT [dbo].[Stores]` có `UserId` → Seller(3) (kể cả dòng `IsActive=0`), các user còn lại → Customer(4); có ≥1 Store `IsActive=0` để kiểm chứng Seller giữ vai trò trong tests/unit/test_chuan_hoa_file_nguon.py
 
-### Implementation for User Story 2
+### Implementation cho User Story 2
 
-- [ ] T013 [US2] Extend Database/sql/001_chuan_hoa_vai_tro.sql with seed Users/Stores INSERT statements (user1 Admin, store owners Seller, rest Customer) keyed by UserId — include a Store with IsActive=0 to verify Seller retention
-- [ ] T014 [US2] Sync seed Users/Stores INSERT statements into Database/database.sql
-- [ ] T015 [US2] Sync seed Users/Stores INSERT statements into Database/back_up.sql
+- [X] T013 [US2] Sửa trực tiếp `Database/database.sql`: đảm bảo từng `Users.Role_Id` khớp quy tắc seed theo `Stores.UserId` (user1→1, chủ Stores→3 kể cả IsActive=0, còn lại→4); nếu chưa có, thêm 1 Store `IsActive=0` do user Seller sở hữu
+- [X] T014 [US2] Sửa trực tiếp `Database/back_up.sql`: đồng bộ quy tắc seed với T013 (đặc biệt Store 23/user 13 của file này)
 
-**Checkpoint**: At this point, User Stories 1 AND 2 should both work independently
+**Checkpoint**: User Stories 1 VÀ 2 hoạt động độc lập
 
 ---
 
 ## Phase 5: User Story 3 - Loại bỏ phân quyền ngoại lệ + toàn bộ API roles (Priority: P2)
 
-**Goal**: Xóa Permissions/Modules, PhanQuyenBus/PhanQuyenDao/Model/PhanQuyen.py + UserBus.cap_nhat_vai_tro, 5 endpoint ngoại lệ + toàn bộ /api/roles* + /api/users/<id>/role (404), dọn UI ma trận quyền (FR-005, FR-006, FR-007)
+**Goal**: Xóa `Permissions`/`Modules` khỏi backend, xóa `PhanQuyenBus`/`PhanQuyenDao`/`Model/PhanQuyen.py` + `UserBus.cap_nhat_vai_tro`, xóa 5 endpoint ngoại lệ + toàn bộ `/api/roles*` + `/api/users/<id>/role` (404), dọn UI ma trận quyền (FR-005, FR-006, FR-007)
 
 **Independent Test**: Gọi 10 endpoint cũ → 404; grep backend 0 tham chiếu cap-quyen-ngoai-le|cap-quyen-nhom|quyen-cua-user|quyen-cua-nhom|ap-dung-quyen|Permissions|Modules|PhanQuyen|/api/roles|cap_nhat_vai_tro (SC-002)
 
-### Tests for User Story 3 (REQUIRED - Nguyên tắc IV) ⚠️
+### Tests cho User Story 3 (BẮT BUỘC - Nguyên tắc IV) ⚠️
 
-> **NOTE: Write these tests FIRST, ensure they FAIL before implementation**
+> **LƯU Ý: Viết các test này TRƯỚC, đảm bảo chúng FAIL trước khi implementation**
 
-- [ ] T016 [P] [US3] Integration test deleted endpoints return 404 (5 cap-quyen/quyen-cua endpoints + GET/POST/PUT/DELETE /api/roles + PUT /api/users/<id>/role) in tests/integration/test_xoa_quyen_ngoai_le.py
-- [ ] T017 [P] [US3] Backend grep test: zero references to cap-quyen-ngoai-le|cap-quyen-nhom|quyen-cua-user|quyen-cua-nhom|ap-dung-quyen|Permissions|Modules|PhanQuyen|/api/roles|cap_nhat_vai_tro in backend code (app.py, back_end/) in tests/integration/test_xoa_quyen_ngoai_le.py
+- [X] T015 [P] [US3] Viết integration test: 10 endpoint cũ trả 404 (5 endpoint cap-quyen/quyen-cua + GET/POST/PUT/DELETE /api/roles + PUT /api/users/<id>/role) qua Flask test_client trong tests/integration/test_xoa_quyen_ngoai_le.py
+- [X] T016 [P] [US3] Viết grep test: 0 tham chiếu cap-quyen-ngoai-le|cap-quyen-nhom|quyen-cua-user|quyen-cua-nhom|ap-dung-quyen|Permissions|Modules|PhanQuyen|/api/roles|cap_nhat_vai_tro trong app.py và thư mục back_end/ trong tests/integration/test_xoa_quyen_ngoai_le.py
 
-### Implementation for User Story 3
+### Implementation cho User Story 3
 
-- [ ] T018 [US3] Remove 5 exception-permission routes, all /api/roles* routes, PUT /api/users/<id>/role, and phan_quyen_bus import/init from app.py
-- [ ] T019 [P] [US3] Delete file back_end/BUS/PhanQuyenBus.py
-- [ ] T020 [P] [US3] Delete file back_end/DAO/PhanQuyenDao.py
-- [ ] T021 [P] [US3] Delete file back_end/Model/PhanQuyen.py
-- [ ] T022 [US3] Remove cap_nhat_vai_tro from back_end/BUS/UserBus.py and back_end/DAO/UserDao.py (role assignment only via seed; cap_nhat_trang_thai stays with new Admin guard)
-- [ ] T023 [US3] Remove permission matrix UI (menu-permissions, pane-permissions, tblPermissionsBody, tblGroupPermissionsBody, roles CUD panel) from templates/index.html
-- [ ] T024 [US3] Remove permission/roles fetch logic (loadAndApplyAdminPermissions, renderPermissionsTable, load/savePermissionsData, load/saveGroupPermissions, themNhomQuyen, cap-quyen/quyen-cua/roles fetches) from static/js/main.js
+- [X] T017 [US3] Xóa khỏi app.py: 5 route ngoại lệ (`/api/cap-quyen-ngoai-le`, `/api/cap-quyen-nhom`, `/api/quyen-cua-user/<int:ma_user>`, `/api/quyen-cua-nhom/<int:ma_nhom>`, `/api/ap-dung-quyen-nhom-cho-user`), toàn bộ route `/api/roles` (GET/POST/PUT/DELETE), `PUT /api/users/<int:ma_user>/role`, cùng import/khởi tạo `phan_quyen_bus`
+- [X] T018 [P] [US3] Xóa file back_end/BUS/PhanQuyenBus.py
+- [X] T019 [P] [US3] Xóa file back_end/DAO/PhanQuyenDao.py
+- [X] T020 [P] [US3] Xóa file back_end/Model/PhanQuyen.py
+- [X] T021 [US3] Xóa phương thức `cap_nhat_vai_tro` khỏi back_end/BUS/UserBus.py và back_end/DAO/UserDao.py (gán vai trò chỉ qua seed — không để code chết; `cap_nhat_trang_thai` GIỮ LẠI để thêm guard Admin ở T030)
+- [X] T022 [US3] Xóa UI ma trận quyền khỏi templates/index.html: menu-permissions, pane-permissions, tblPermissionsBody, tblGroupPermissionsBody, panel CUD roles
+- [X] T023 [US3] Xóa logic quyền/roles khỏi static/js/main.js: loadAndApplyAdminPermissions, renderPermissionsTable, load/savePermissionsData, load/saveGroupPermissions, themNhomQuyen... và mọi fetch cap-quyen-*/quyen-cua-*/roles
 
-**Checkpoint**: All user stories should now be independently functional
+**Checkpoint**: Các user story đều hoạt động độc lập
 
 ---
 
 ## Phase 6: User Story 4 - Kiểm tra đăng nhập theo vai trò mới (Priority: P2)
 
-**Goal**: /api/dang-nhap trả ten_vai_tro duy nhất của tài khoản; Role NULL/lạ bị từ chối rõ ràng; chặn khóa Admin ở BUS + DB guard; đăng ký mới gán Customer (FR-008, FR-009, Edge Cases)
+**Goal**: `/api/dang-nhap` trả `ten_vai_tro` duy nhất; `Role_Id` NULL/lạ bị từ chối rõ ràng (không crash); chặn khóa Admin ở BUS + DB guard `CK_Users_Admin_KhongDuocKhoa`; đăng ký mới gán Customer(Role_Id=4) (FR-008, FR-009, Edge Cases)
 
-**Independent Test**: Đăng nhập tài khoản mẫu 4 vai trò trả đúng ten_vai_tro; banned non-admin bị từ chối; khóa Admin bị từ chối; Role NULL/lạ bị từ chối (SC-003)
+**Independent Test**: Đăng nhập tài khoản mẫu 4 vai trò trả đúng `ten_vai_tro`; banned (non-admin) bị từ chối; khóa Admin bị từ chối ("Không ai có quyền khóa tài khoản Admin!"); Role_Id NULL/lạ bị từ chối (SC-003)
 
-### Tests for User Story 4 (REQUIRED - Nguyên tắc IV) ⚠️
+### Tests cho User Story 4 (BẮT BUỘC - Nguyên tắc IV) ⚠️
 
-> **NOTE: Write these tests FIRST, ensure they FAIL before implementation**
+> **LƯU Ý: Viết các test này TRƯỚC, đảm bảo chúng FAIL trước khi implementation**
 
-- [ ] T025 [P] [US4] Unit test UserBus.dang_nhap returns ten_vai_tro + ten_vai_tro_hien_thi for 4 canonical roles with mocked DAO in tests/unit/test_user_bus_vai_tro.py
-- [ ] T026 [P] [US4] Unit tests: UserBus.cap_nhat_trang_thai refuses to ban Admin ("Không ai có quyền khóa tài khoản Admin!"), dang_ky_khach_hang assigns Customer, Role_Id NULL/invalid rejected clearly in tests/unit/test_user_bus_vai_tro.py
-- [ ] T027 [P] [US4] Integration test POST /api/dang-nhap for 4 roles + banned (non-admin) + NULL-role rejection via Flask test_client in tests/integration/test_dang_nhap_vai_tro.py
+- [X] T024 [P] [US4] Viết unit test: UserBus.dang_nhap trả `ten_vai_tro` + `ten_vai_tro_hien_thi` cho cả 4 vai trò chuẩn với mock DAO trong tests/unit/test_user_bus_vai_tro.py
+- [X] T025 [P] [US4] Viết unit test: UserBus.cap_nhat_trang_thai TỪ CHỐI khóa Admin ("Không ai có quyền khóa tài khoản Admin!"), dang_ky_khach_hang gán Customer, Role_Id NULL/lạ bị từ chối rõ ràng (không crash) trong tests/unit/test_user_bus_vai_tro.py
+- [X] T026 [P] [US4] Viết integration test: POST /api/dang-nhap cho 4 vai trò + banned (non-admin) + Role_Id NULL/lạ bị từ chối qua Flask test_client trong tests/integration/test_dang_nhap_vai_tro.py
 
-### Implementation for User Story 4
+### Implementation cho User Story 4
 
-- [ ] T028 [US4] Update UserDao.dang_nhap in back_end/DAO/UserDao.py to LEFT JOIN Roles for RoleName with placeholder ? and commit/rollback/finally
-- [ ] T029 [US4] Add lay_ten_vai_tro_theo_id helper with Vietnamese docstring in back_end/DAO/UserDao.py
-- [ ] T030 [US4] Update UserBus.dang_nhap in back_end/BUS/UserBus.py to return ten_vai_tro + ten_vai_tro_hien_thi and reject Role_Id NULL/invalid clearly (no crash)
-- [ ] T031 [US4] Guard UserBus.cap_nhat_trang_thai in back_end/BUS/UserBus.py to refuse banning Admin
-- [ ] T032 [US4] Update UserBus.dang_ky_khach_hang in back_end/BUS/UserBus.py to assign Customer role id read from new seed (no hardcoded old ID)
-- [ ] T033 [US4] Add DB guard against banning Admin (CHECK/constraint, e.g. Admin never 'banned') in Database/sql/001_chuan_hoa_vai_tro.sql and sync to Database/database.sql plus Database/back_up.sql
+- [X] T027 [US4] Sửa `dang_nhap` trong back_end/DAO/UserDao.py: `LEFT JOIN Roles r ON u.Role_id = r.RoleId` lấy `RoleName` trong cùng 1 query, dùng placeholder `?`, có commit/rollback/finally (giữ hành vi banned)
+- [X] T028 [US4] Thêm helper `lay_ten_vai_tro_theo_id(role_id)` trong back_end/DAO/UserDao.py với docstring tiếng Việt (map 1=Admin, 2=Quản lý, 3=Seller, 4=Customer)
+- [X] T029 [US4] Sửa `dang_nhap` trong back_end/BUS/UserBus.py: trả `ten_vai_tro` + `ten_vai_tro_hien_thi` vào `data`; Role_Id NULL/lạ → `{"status": False, "message": "Dữ liệu vai trò không hợp lệ! Vui lòng liên hệ quản trị viên.", "data": None}` (không crash)
+- [X] T030 [US4] Sửa `cap_nhat_trang_thai` trong back_end/BUS/UserBus.py: nếu user có vai trò Admin → từ chối `{"status": False, "message": "Không ai có quyền khóa tài khoản Admin!"}` (gọi `lay_ten_vai_tro_theo_id`/thông tin user qua DAO, mock friendly)
+- [X] T031 [US4] Sửa `dang_ky_khach_hang` trong back_end/BUS/UserBus.py: gán Customer theo Role_Id=4 (bỏ hardcode 14 cũ)
+- [X] T032 [US4] Thêm DB guard chống khóa Admin (sửa trực tiếp `Database/database.sql` VÀ `Database/back_up.sql`): CHECK constraint `CK_Users_Admin_KhongDuocKhoa` = `NOT (trang_thai = N'banned' AND Role_Id = 1)`; `database.sql` còn cần thêm cột `trang_thai` (DEFAULT 'active') nếu chưa có
 
-**Checkpoint**: All 4 user stories independently testable; SC-003 verifiable
+**Checkpoint**: Cả 4 user story testable độc lập; SC-003 kiểm chứng được
 
 ---
 
 ## Phase 7: Polish & Cross-Cutting Concerns
 
-**Purpose**: Improvements that affect multiple user stories
+**Mục đích**: Cải tiến ảnh hưởng nhiều user story
 
-- [ ] T034 [P] Run quickstart.md validation (seed idempotent rerun via sqlcmd, pytest -v, UI 3-role visual check, backend grep zero) per specs/001-role-refactor/quickstart.md
-- [ ] T035 [P] Final consistency check of Database/database.sql and Database/back_up.sql (4 Roles, seed Users/Stores synced, no Permissions/Modules tables)
-- [ ] T036 Full pytest -v green and constitution gate re-check (G1-G7) per specs/001-role-refactor/plan.md
+- [X] T033 [P] Chạy kiểm chứng theo specs/001-role-refactor/quickstart.md (phân tích tĩnh database.sql/back_up.sql theo §1, pytest -v, UI 3 vai trò, grep backend 0)
+- [X] T034 [P] Soát nhất quán cuối: `Database/database.sql` vs `Database/back_up.sql` (4 Roles ID 1–4, seed Users/Stores đồng bộ, không Permissions/Modules, có CK_Users_Admin_KhongDuocKhoa)
+- [X] T035 Chạy toàn bộ pytest -v xanh và tự soát 7 cổng G1–G7 theo specs/001-role-refactor/plan.md
 
 ---
 
@@ -158,91 +159,90 @@
 
 ### Phase Dependencies
 
-- **Setup (Phase 1)**: No dependencies - can start immediately
-- **Foundational (Phase 2)**: Depends on Setup completion - BLOCKS all user stories
-- **User Stories (Phase 3+)**: All depend on Foundational phase completion
-  - User stories can then proceed in parallel (if staffed)
-  - Or sequentially in priority order (P1 → P2 → P3)
-- **Polish (Final Phase)**: Depends on all desired user stories being complete
+- **Setup (Phase 1)**: Không phụ thuộc — bắt đầu ngay
+- **Foundational (Phase 2)**: Phụ thuộc Setup — CHẶN mọi user story
+- **User Stories (Phase 3+)**: Đều phụ thuộc Foundational
+  - Có thể song song (nếu đủ nhân sự) hoặc tuần tự theo ưu tiên (P1 → P2)
+- **Polish (Final Phase)**: Phụ thuộc các user story muốn giao
 
 ### User Story Dependencies
 
-- **User Story 1 (P1)**: Can start after Foundational (Phase 2) — No dependencies on other stories; script skeleton Database/sql/001_chuan_hoa_vai_tro.sql needed by US2/US4
-- **User Story 2 (P1)**: Can start after Foundational (Phase 2) — Extends US1 seed script file; independently testable via seed content
-- **User Story 3 (P2)**: Can start after Foundational (Phase 2) — Code deletion independent of seed; DROP Permissions/Modules must run after code deletion (research R3)
-- **User Story 4 (P2)**: Can start after Foundational (Phase 2) — Needs canonical role names from US1/US2 seed; independently testable with mocks
+- **User Story 1 (P1)**: Sau Foundational — không phụ thuộc story khác; kết quả database.sql/back_up.sql chuẩn là nền cho US2/US4
+- **User Story 2 (P1)**: Sau Foundational — mở rộng seed trong cùng 2 file dump của US1 (phải chạy SAU T009/T010); testable độc lập qua static parse
+- **User Story 3 (P2)**: Sau Foundational — xóa code độc lập với sửa dump; thứ tự an toàn: xóa code (T017–T023) trước khi rà khối `Permissions`/`Modules` trong dump (đã xử lý ở US1) — research R3
+- **User Story 4 (P2)**: Sau Foundational — cần tên vai trò chuẩn ID 1–4 từ US1; testable độc lập với mock
 
-### Within Each User Story
+### Trong Từng User Story
 
-- Tests MUST be written and FAIL before implementation (Nguyên tắc IV - bắt buộc)
-- Model → DAO → BUS → Controller (endpoint) → UI (Nguyên tắc I)
-- Core implementation before integration
-- Story complete before moving to next priority
+- Tests PHẢI viết trước và FAIL trước implementation (Nguyên tắc IV - bắt buộc)
+- Thứ tự Model → DAO → BUS → Controller (endpoint) → UI (Nguyên tắc I)
+- Core trước integration; hoàn thành story trước khi chuyển sang story ưu tiên kế tiếp
 
-### Parallel Opportunities
+### Cơ Hội Song Song
 
-- All Setup tasks marked [P] can run in parallel
-- All Foundational tasks marked [P] can run in parallel (within Phase 2)
-- Once Foundational phase completes, all user stories can start in parallel (if team capacity allows)
-- All tests for a user story marked [P] can run in parallel
-- File deletions T019/T020/T021 can run in parallel (different files)
-- Unit tests T025/T026/T027 can run in parallel (mock-based)
+- Setup tasks [P]: chạy song song
+- Foundational tasks [P]: chạy song song (trong Phase 2)
+- Tests [P] trong cùng một user story: chạy song song
+- Xóa file T018/T019/T020: song song (khác file)
+- Unit tests T024/T025/T026: song song (mock-based)
 
 ---
 
 ## Parallel Example: User Story 3
 
 ```bash
-# Launch all tests for User Story 3 together (bắt buộc theo Nguyên tắc IV):
-Task: "Integration test deleted endpoints return 404 in tests/integration/test_xoa_quyen_ngoai_le.py"
-Task: "Backend grep test zero references in tests/integration/test_xoa_quyen_ngoai_le.py"
+# Chạy tất cả test User Story 3 cùng lúc (bắt buộc Nguyên tắc IV):
+Task: "Integration test 10 endpoint cũ trả 404 trong tests/integration/test_xoa_quyen_ngoai_le.py"
+Task: "Grep test 0 tham chiếu backend trong tests/integration/test_xoa_quyen_ngoai_le.py"
 
-# Launch all deletions for User Story 3 together:
-Task: "Delete file back_end/BUS/PhanQuyenBus.py"
-Task: "Delete file back_end/DAO/PhanQuyenDao.py"
-Task: "Delete file back_end/Model/PhanQuyen.py"
+# Chạy tất cả xóa file User Story 3 cùng lúc:
+Task: "Xóa file back_end/BUS/PhanQuyenBus.py"
+Task: "Xóa file back_end/DAO/PhanQuyenDao.py"
+Task: "Xóa file back_end/Model/PhanQuyen.py"
 ```
 
 ---
 
 ## Implementation Strategy
 
-### MVP First (User Story 1 Only)
+### MVP First (Chỉ User Story 1)
 
-1. Complete Phase 1: Setup
-2. Complete Phase 2: Foundational (CRITICAL - blocks all stories)
-3. Complete Phase 3: User Story 1
-4. **STOP and VALIDATE**: Test User Story 1 independently (Roles=4, orphan Users=0)
-5. Deploy/demo if ready
+1. Hoàn thành Phase 1: Setup
+2. Hoàn thành Phase 2: Foundational (CRITICAL - chặn mọi story)
+3. Hoàn thành Phase 3: User Story 1
+4. **STOP và KIỂM CHỨNG**: Test User Story 1 độc lập (Roles=4, orphan Users=0 qua static parse database.sql/back_up.sql)
+5. Deploy/demo nếu sẵn sàng
 
 ### Incremental Delivery
 
-1. Complete Setup + Foundational → Foundation ready
-2. Add User Story 1 → Test independently → Deploy/Demo (MVP!)
-3. Add User Story 2 → Test independently → Deploy/Demo
-4. Add User Story 3 → Test independently → Deploy/Demo
-5. Add User Story 4 → Test independently → Deploy/Demo
-6. Each story adds value without breaking previous stories
+1. Xong Setup + Foundational → Foundation ready
+2. Thêm User Story 1 → Test độc lập → Deploy/Demo (MVP!)
+3. Thêm User Story 2 → Test độc lập → Deploy/Demo
+4. Thêm User Story 3 → Test độc lập → Deploy/Demo
+5. Thêm User Story 4 → Test độc lập → Deploy/Demo
+6. Mỗi story thêm giá trị mà không phá story trước
 
 ### Parallel Team Strategy
 
-- Developer A: US1 + US2 (seed script + database.sql back_up.sql sync)
-- Developer B: US3 (app.py routes deletion + 3 file deletions + cap_nhat_vai_tro removal + index.html + main.js)
+- Developer A: US1 + US2 (sửa trực tiếp database.sql/back_up.sql + static test)
+- Developer B: US3 (xóa routes app.py + xóa 3 file PhanQuyen + cap_nhat_vai_tro + index.html/main.js)
 - Developer C: US4 (UserDao.py + UserBus.py + DB Admin guard)
-- All: Phase 7 polish together after stories complete
+- Tất cả: Phase 7 polish khi các story xong
 
 ---
 
 ## MVP Scope
 
-- **MVP**: User Story 1 only (T001–T011) — Roles=4 + orphan Users=0 verifiable via quickstart section 1
-- **MVP+Seed**: + User Story 2 (T012–T015) — demo login per role possible
-- **Full 001**: + US3 (deletion) + US4 (login + Admin guard) + Polish (T034–T036)
+- **MVP**: User Story 1 (T001–T011) — database.sql/back_up.sql chỉ còn 4 vai trò, không user mồ côi; kiểm chứng qua quickstart §1 (phân tích tĩnh file)
+- **MVP+Seed**: + User Story 2 (T012–T014) — demo đăng nhập theo vai trò khả thi
+- **Full 001**: + US3 (xóa phân quyền ngoại lệ) + US4 (đăng nhập + Admin guard) + Polish (T033–T035)
 
 ## Notes
 
-- `Database/sql` is currently a 5MB binary backup FILE, not a directory — T003 must resolve before T009.
-- Role IDs are NOT fixed (13/14/19/20) — canonical names from new seed; T032/T028 must read IDs from seed, not hardcode old IDs.
-- No API roles remain — do NOT recreate GET /api/roles or PUT /api/users/<id>/role.
-- cap_nhat_vai_tro (BUS + DAO) is removed together with the role-assignment route (roles.contract.md) — do not keep dead code.
-- Tests must NOT touch real PobbyDB — mock DAO + Flask test_client only.
+- `Database/database.sql` và `Database/back_up.sql` đang ở trạng thái gốc (git restore) — CHƯA được sửa; chỉ sửa bằng thao tác block (header `/****** Object: Table [dbo].[X]` → `GO`), giữ UTF-16 BOM.
+- `Database/sql/001_chuan_hoa_vai_tro.sql` (do hướng cũ tạo) PHẢI bị xóa ở T011; `Database/sql.bak` giữ làm lịch sử.
+- Role IDs CỐ ĐỊNH 1=Admin, 2=Quản lý, 3=Seller, 4=Customer — T031/T032 dùng ID 4/constraint theo đó, không hardcode ID cũ (13/14/19/20).
+- Chủ `Stores`: `database.sql` → {2,4,6,8,10,12,14,16,18,20}; `back_up.sql` → {2,4,6,8,10,12,13,14,16,18,20} (Store 23 do user 13 sở hữu).
+- Không còn API roles — KHÔNG tạo lại GET /api/roles hay PUT /api/users/<id>/role.
+- `cap_nhat_vai_tro` (BUS + DAO) bị xóa cùng route gán vai trò (roles.contract.md) — không để code chết.
+- Tests KHÔNG được chạm PobbyDB thật — mock DAO + Flask test_client + phân tích tĩnh file dump.

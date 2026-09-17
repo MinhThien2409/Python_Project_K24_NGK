@@ -17,7 +17,7 @@
   "data": {
     "ma_user": 1,
     "ten_user": "Nguyễn Văn An",
-    "ma_nhom_quyen": 20,
+    "ma_nhom_quyen": 1,
     "ten_vai_tro": "Admin",
     "ten_vai_tro_hien_thi": "Admin",
     "dia_chi": "...",
@@ -27,14 +27,14 @@
 }
 ```
 
-## Ánh xạ vai trò (tên chuẩn chốt trong seed mới)
+## Ánh xạ vai trò (ID cố định ghi trực tiếp trong file nguồn)
 
-| `ma_nhom_quyen` | `ten_vai_tro` (DB) | `ten_vai_tro_hien_thi` (UI) |
+| `ma_nhom_quyen` (RoleId) | `ten_vai_tro` (DB) | `ten_vai_tro_hien_thi` (UI) |
 |---|---|---|
-| Admin ID (seed) | Admin | Admin |
-| Quản lý ID (seed) | Quản lý | Quản lý |
-| Seller ID (seed) | Seller | Seller |
-| Customer ID (seed) | Customer | Customer |
+| 1 | Admin | Admin |
+| 2 | Quản lý | Quản lý |
+| 3 | Seller | Seller |
+| 4 | Customer | Customer |
 
 ## Response các trường hợp
 

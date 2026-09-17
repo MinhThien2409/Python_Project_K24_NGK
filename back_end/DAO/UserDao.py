@@ -37,11 +37,14 @@ class UserDao:
         cursor = conn.cursor()
 
         try:
+            # JOIN Roles lấy tên vai trò trong cùng 1 query (FR-008) — dùng placeholder `?`
             sql = """
-                SELECT UserId, FullName, Role_id, Address, Phone, NationalId,
-                       COALESCE(trang_thai, 'active') AS trang_thai
-                FROM Users 
-                WHERE Username = ? AND Password = ?
+                SELECT u.UserId, u.FullName, u.Role_id, u.Address, u.Phone, u.NationalId,
+                       COALESCE(u.trang_thai, 'active') AS trang_thai,
+                       r.RoleName
+                FROM Users u
+                LEFT JOIN Roles r ON u.Role_id = r.RoleId
+                WHERE u.Username = ? AND u.Password = ?
             """
             cursor.execute(sql, (username, password))
             row = cursor.fetchone()
@@ -52,6 +55,10 @@ class UserDao:
             # ✅ Tài khoản đã bị khóa → không cho đăng nhập
             if row.trang_thai == 'banned':
                 return {"banned": True}
+
+            # Role_Id NULL hoặc trỏ tới vai trò không tồn tại → trả cờ role_none để BUS từ chối rõ ràng
+            if row.Role_id is None or row.RoleName is None:
+                return {"role_none": True}
 
             return User(
                 ma_user=row.UserId,
@@ -67,6 +74,17 @@ class UserDao:
         finally:
             cursor.close()
             conn.close()
+
+    def lay_ten_vai_tro_theo_id(self, role_id):
+        """Trả tên vai trò chuẩn theo Role_Id (1=Admin, 2=Quản lý, 3=Seller,
+        4=Customer); không phải vai trò chuẩn thì trả None."""
+        ten_vai_tro_theo_id = {
+            1: "Admin",
+            2: "Quản lý",
+            3: "Seller",
+            4: "Customer",
+        }
+        return ten_vai_tro_theo_id.get(role_id)
 
 
     def kiem_tra_tendangnhap_ton_tai(self, tendangnhap):
@@ -147,24 +165,6 @@ class UserDao:
             return False
         finally:
             cursor.close()
-            conn.close()
-
-    def cap_nhat_vai_tro(self, ma_user, role_id):
-        conn = DBconnection.get_connection()
-        if conn is None: return False
-        cursor = conn.cursor()
-        try:
-            cursor.execute(
-                "UPDATE Users SET Role_id=? WHERE UserId=?",
-                (role_id, ma_user)
-            )
-            conn.commit()
-            return cursor.rowcount > 0
-        except Exception as e:
-            print("Lỗi cập nhật vai trò:", e)
-            return False
-        finally:
-            cursor.close();
             conn.close()
 
     def lay_thong_tin_user(self, ma_user):

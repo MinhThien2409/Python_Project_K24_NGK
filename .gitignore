@@ -1,4 +1,5 @@
 venv/
+.venv/
 .idea/
 __pycache__/
 .specify/
@@ -7,3 +8,9 @@ __pycache__/
 specs/
 .opencode/
 Todos.md
+*.pyc
+.pytest_cache/
+dist/
+*.egg-info/
+.DS_Store
+Thumbs.db

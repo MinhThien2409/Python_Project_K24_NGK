@@ -33,6 +33,11 @@ Nếu một yêu cầu không thể tuân thủ hiến chương, ghi rõ trong m
 - Q: API quản lý vai trò sau chuẩn hóa giữ lại những gì? → A: C - Xóa toàn bộ API roles.
 - Q: Tài khoản Admin duy nhất bị khóa nhầm thì khôi phục thế nào? → A: Không ai có quyền khóa Admin; xóa dữ liệu cũ, tạo SQL dữ liệu mẫu mới; thay đổi cấu trúc database nếu cần.
 
+### Session 2026-09-17 (điều chỉnh hướng triển khai)
+
+- Q: Chuẩn hóa vai trò được thực hiện bằng cách nào? → A: **Sửa đổi trực tiếp trên mã nguồn hiện có** — không tạo hàm riêng để chuẩn hóa, không tạo SQL script riêng để chuẩn hóa. Các file nguồn `Database/database.sql`, `Database/back_up.sql` và code được chỉnh sửa thẳng để kết quả chuẩn hóa nằm ngay trong file (4 vai trò chuẩn, user được gán đúng vai trò, bảng `Permissions`/`Modules` biến mất), thay vì cung cấp một script chạy lúc runtime.
+- Hệ quả: FR-003/FR-004/FR-009 được thỏa mãn bằng file gốc đã được chỉnh trực tiếp (idempotent theo nghĩa nạp lại `database.sql` luôn cho 4 vai trò chuẩn), không còn sản phẩm bàn giao "script chuẩn hóa". Kiểm thử chuyển sang kiểm tra trực tiếp nội dung `database.sql`/`back_up.sql` + hành vi code.
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Chuẩn hóa 4 vai trò duy nhất (Priority: P1)

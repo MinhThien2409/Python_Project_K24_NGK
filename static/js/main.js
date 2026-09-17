@@ -62,9 +62,9 @@ async function khoiPhucDangNhap() {
 
     const maQuyen = currentUser.ma_nhom_quyen || currentUser.Role_id;
 
-    if (maQuyen === 20) {
+    if (maQuyen === 1 || maQuyen === 2) {
       switchViewMode('admin');
-    } else if (maQuyen === 13) {
+    } else if (maQuyen === 3) {
       await loadSellerStore();
       switchViewMode('user');
     } else {
@@ -95,7 +95,6 @@ function switchViewMode(mode) {
   else if (mode === 'admin') {
     const btn = document.getElementById('btnViewAdmin');
     if (btn) btn.classList.add('active');
-       if (currentUser) loadAndApplyAdminPermissions(currentUser.ma_user);
   }
   else if (mode === 'seller') {
     const btn = document.getElementById('btnViewSeller');
@@ -558,11 +557,11 @@ async function handleLogin(e) {
        await loadCartFromServer();
 
       const maQuyen = currentUser.ma_nhom_quyen || currentUser.Role_id;
-      if (maQuyen === 20) {
+      if (maQuyen === 1 || maQuyen === 2) {
         switchViewMode('admin');
 
       }
-      else if (maQuyen==13){
+      else if (maQuyen === 3){
         await loadSellerStore();
         switchViewMode('user');
       }
@@ -688,108 +687,18 @@ async function openProfileModal() {
   document.getElementById('profileModal').classList.add('show');
 }
 
-// Kiểm tra quyền truy cập khu vực Admin dựa trên dữ liệu phân quyền thật từ DB
-async function checkAdminAccessButton(ma_nhom_quyen) {
+// Kiểm tra quyền truy cập khu vực Admin dựa trên vai trò chuẩn (Admin=1, Quản lý=2)
+function checkAdminAccessButton(ma_nhom_quyen) {
   const btn = document.getElementById('btnGoAdminFromProfile');
   if (!btn) return;
 
-  const ma_user = currentUser.ma_user || currentUser.UserId;
-
-  try {
-    const res    = await fetch(`http://localhost:5000/api/quyen-cua-user/${ma_user}`);
-    const result = await res.json();
-
-    const hasAnyPermission = result.status === true
-      && Array.isArray(result.data)
-      && result.data.some(q => q.xem === true);
-
-    btn.style.display = hasAnyPermission ? 'block' : 'none';
-
-  } catch (e) {
-    console.error('Lỗi kiểm tra quyền admin:', e);
-    btn.style.display = 'none'; // Lỗi → ẩn cho an toàn
-  }
-}
-// Cache quyền của admin đang đăng nhập
-let currentAdminPermissions = [];
-
-// Gọi hàm này sau khi login thành công (thay loadAndApplyAdminPermissions)
-async function loadAndApplyAdminPermissions(ma_user) {
-  try {
-    const res    = await fetch(`http://localhost:5000/api/quyen-cua-user/${ma_user}`);
-    const result = await res.json();
-
-    if (result.status === true) {
-      // Lưu vào cache
-      currentAdminPermissions = result.data;
-
-      const tatCaMenu = [
-        'menu-dashboard', 'menu-products', 'menu-categories',
-        'menu-orders',    'menu-sellers',  'menu-users',
-        'menu-vouchers',  'menu-permissions'
-      ];
-
-      // Map module_id → menu element
-      const menuMap = {
-        1: 'menu-products',
-        2: 'menu-orders',
-        3: 'menu-permissions',
-        4: 'menu-categories',
-        5: 'menu-dashboard',
-        6: 'menu-sellers',
-        7: 'menu-users',
-        8: 'menu-vouchers'
-      };
-
-      // Ẩn tất cả trước
-      tatCaMenu.forEach(id => {
-        const el = document.getElementById(id);
-        if (el) el.style.display = 'none';
-      });
-
-      // Chỉ hiện menu có quyền xem
-      result.data.forEach(quyen => {
-        if (quyen.xem === true && menuMap[quyen.ma_chuc_nang]) {
-          const el = document.getElementById(menuMap[quyen.ma_chuc_nang]);
-          if (el) el.style.display = 'block';
-        }
-      });
-
-      // Bấm vào tab đầu tiên có quyền
-      const firstVisible = tatCaMenu.find(id => {
-        const el = document.getElementById(id);
-        return el && el.style.display !== 'none';
-      });
-      if (firstVisible) {
-        const tabName = firstVisible.replace('menu-', '');
-        switchAdminTab(tabName);
-      }
-    }
-  } catch (e) {
-    console.error("Lỗi tải menu phân quyền:", e);
-  }
+  const laQuanTri = ma_nhom_quyen === 1 || ma_nhom_quyen === 2;
+  btn.style.display = laQuanTri ? 'block' : 'none';
 }
 
-// Kiểm tra quyền theo module
-// moduleMap: tab name → module id (khớp với sysModules)
-const TAB_MODULE_MAP = {
-  'dashboard'  : 5,
-  'products'   : 1,
-  'categories' : 4,
-  'orders'     : 2,
-  'sellers'    : 6,
-  'users'      : 7,
-  'vouchers'   : 8,
-  'permissions': 3,
-};
-
+// Admin/Quản lý có toàn quyền truy cập các phân hệ quản trị
 function hasPermission(tabName, action = 'xem') {
-  const moduleId = TAB_MODULE_MAP[tabName];
-  if (!moduleId) return true; // Không map → cho qua
-
-  const quyen = currentAdminPermissions.find(q => q.ma_chuc_nang === moduleId);
-  if (!quyen) return false;
-  return quyen[action] === true;
+  return true;
 }
 
 function switchAdminTab(tabName) {
@@ -829,11 +738,6 @@ function switchAdminTab(tabName) {
   renderAdminUsers();
 }
   if (tabName === 'vouchers')    renderAdminVouchers?.();
-  if (tabName === 'permissions') {
-    renderPermissionsTable();
-    renderGroupPermTable();
-    switchPermTab('user');
-  }
 }
 
 // GỬI DỮ LIỆU CẬP NHẬT LÊN SERVER
@@ -887,8 +791,7 @@ function goToUser() {
 // CẬP NHẬT HÀM ĐĂNG XUẤT
 function handleLogout() {
   currentUser = null;
-  currentAdminPermissions = [];
-   xoaDangNhap();
+  xoaDangNhap();
 
   // Reset topbar & nút header
   document.getElementById('topbarUserText').textContent  = '👤 Chưa đăng nhập';
@@ -912,106 +815,6 @@ document.getElementById('hdrUserBtn').style.display = 'none';
   showToast('Đã đăng xuất thành công.');
 }
 
-// ==========================================
-// 3. API: DỮ LIỆU USER & QUẢN LÝ PHÂN QUYỀN
-// ==========================================
-
-
-
-
-
-
-// Cập nhật sysModules để id khớp với menuMap trên
-const sysModules = [
-  { id: 1, name: 'Quản lý Sản phẩm'   },
-  { id: 2, name: 'Quản lý Đơn hàng'   },
-  { id: 3, name: 'Quản lý Phân quyền' },
-  { id: 4, name: 'Quản lý Danh mục'   },
-  { id: 5, name: 'Thống kê Doanh thu'  },  // ← Thêm
-  { id: 6, name: 'Quản lý Người bán'  },
-  { id: 7, name: 'Quản lý Tài khoản'  },  // ← Thêm
-];
-// Load users vào dropdown trong panel nhóm
-async function loadUsersForGroupApply() {
-  const select = document.getElementById('applyGroupToUserSelect');
-  if (!select) return;
-  try {
-    const res    = await fetch('http://localhost:5000/api/users');
-    const result = await res.json();
-    if (result.status && Array.isArray(result.data)) {
-      select.innerHTML = '<option value="">-- Chọn tài khoản --</option>';
-      result.data.forEach(u => {
-        const opt = document.createElement('option');
-        opt.value       = u.ma_user;
-        opt.textContent = `#${u.ma_user} ${u.ten_user} [${u.ten_nhom_quyen || '?'}]`;
-        select.appendChild(opt);
-      });
-    }
-  } catch (e) { console.error('Lỗi load users:', e); }
-}
-
-// Áp dụng quyền của nhóm đang chọn xuống 1 user cụ thể
-async function apDungQuyenNhomChoUserTuPanel() {
-  const groupId = document.getElementById('permGroupSelect').value;
-  const userId  = document.getElementById('applyGroupToUserSelect').value;
-
-  if (!groupId) { showToast('⚠️ Vui lòng chọn nhóm quyền!'); return; }
-  if (!userId)  { showToast('⚠️ Vui lòng chọn tài khoản!');  return; }
-
-  if (!confirm('Áp dụng quyền của nhóm này cho tài khoản đã chọn?\nQuyền ngoại lệ hiện tại sẽ bị ghi đè.')) return;
-
-  // Lấy quyền hiện tại của nhóm từ checkbox bảng
-  const permissions = sysModules.map(m => ({
-    ma_chuc_nang: m.id,
-    xem  : document.querySelector(`.grp-view[data-mod="${m.id}"]`)?.checked   || false,
-    them : document.querySelector(`.grp-add[data-mod="${m.id}"]`)?.checked    || false,
-    sua  : document.querySelector(`.grp-edit[data-mod="${m.id}"]`)?.checked   || false,
-    xoa  : document.querySelector(`.grp-delete[data-mod="${m.id}"]`)?.checked || false,
-  }));
-
-  try {
-    const res    = await fetch('http://localhost:5000/api/cap-quyen-ngoai-le', {
-      method : 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body   : JSON.stringify({ ma_user: userId, permissions })
-    });
-    const result = await res.json();
-    showToast((result.status ? '✅ ' : '❌ ') + result.message);
-  } catch (e) { showToast('❌ Lỗi kết nối!'); }
-}
-
-async function loadUserPermissions() {
-  const ma_user = document.getElementById('permUserSelect').value;
-  if(!ma_user) {
-      showToast("⚠️ Vui lòng chọn một tài khoản từ danh sách để xem quyền!");
-      return;
-  }
-
-  try {
-    const res = await fetch(`http://localhost:5000/api/quyen-cua-user/${ma_user}`);
-    const result = await res.json();
-
-    if(result.status === true) {
-      toggleAllPermissions(false);
-      result.data.forEach(q => {
-         let cbView = document.querySelector(`.cb-view[data-mod="${q.ma_chuc_nang}"]`);
-         let cbAdd = document.querySelector(`.cb-add[data-mod="${q.ma_chuc_nang}"]`);
-         let cbEdit = document.querySelector(`.cb-edit[data-mod="${q.ma_chuc_nang}"]`);
-         let cbDelete = document.querySelector(`.cb-delete[data-mod="${q.ma_chuc_nang}"]`);
-
-         if(cbView) cbView.checked = q.xem;
-         if(cbAdd) cbAdd.checked = q.them;
-         if(cbEdit) cbEdit.checked = q.sua;
-         if(cbDelete) cbDelete.checked = q.xoa;
-      });
-      showToast('✅ Đã tải cấu hình quyền hiện tại của tài khoản từ Database!');
-    } else {
-      showToast('❌ ' + result.message);
-    }
-  } catch(e) {
-      showToast("❌ Không thể kết nối tới Server để lấy quyền!");
-  }
-}
 // Thay thế toàn bộ hàm handleSaveProfile cũ bằng hàm này
 async function handleSaveProfile(e) {
   e.preventDefault();
@@ -1074,16 +877,16 @@ function updateHeaderForUser() {
   document.getElementById('hdrHistoryBtn').style.display = 'flex';
 
 
-  // --- LOGIC PHÂN QUYỀN HIỂN THỊ NÚT SELLER ---
+  // --- PHÂN BIỆT HIỂN THỊ THEO VAI TRÒ CHUẨN (1=Admin, 2=Quản lý, 3=Seller, 4=Customer) ---
   const maQuyen = currentUser.ma_nhom_quyen || currentUser.Role_id;
 
-  if (maQuyen === 20 || currentUser.role === 'Admin') {
-      // 1. Nếu là Admin -> Hiện thanh Admin màu đen trên cùng
+  if (maQuyen === 1 || maQuyen === 2 || currentUser.role === 'Admin') {
+      // 1. Nếu là Admin/Quản lý -> Hiện thanh Admin màu đen trên cùng
       document.getElementById('viewSwitcher').style.display = 'flex';
       document.getElementById('hdrRegisterSellerBtn').style.display = 'none';
       document.getElementById('hdrGoSellerBtn').style.display = 'none';
   }
-  else if (maQuyen === 13 || currentUser.role === 'Seller') {
+  else if (maQuyen === 3 || currentUser.role === 'Seller') {
       // 2. Nếu là Seller -> BẬT NÚT KÊNH NGƯỜI BÁN
       document.getElementById('viewSwitcher').style.display = 'none';
       document.getElementById('hdrRegisterSellerBtn').style.display = 'none';
@@ -1095,40 +898,6 @@ function updateHeaderForUser() {
       document.getElementById('hdrGoSellerBtn').style.display = 'none';
       document.getElementById('hdrRegisterSellerBtn').style.display = 'flex';
   }
-}
-async function savePermissions() {
-  const ma_user = document.getElementById('permUserSelect').value;
-  if(!ma_user) { showToast("⚠️ Vui lòng chọn một tài khoản trước khi lưu!"); return; }
-
-  let permissionsData = [];
-  sysModules.forEach(m => {
-    permissionsData.push({
-      ma_chuc_nang: m.id,
-      xem: document.querySelector(`.cb-view[data-mod="${m.id}"]`)?.checked || false,
-      them: document.querySelector(`.cb-add[data-mod="${m.id}"]`)?.checked || false,
-      sua: document.querySelector(`.cb-edit[data-mod="${m.id}"]`)?.checked || false,
-      xoa: document.querySelector(`.cb-delete[data-mod="${m.id}"]`)?.checked || false
-    });
-  });
-
-  try {
-    const response = await fetch('http://localhost:5000/api/cap-quyen-ngoai-le', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ma_user: ma_user, permissions: permissionsData })
-    });
-    const result = await response.json();
-    showToast((result.status ? '💾 ' : '❌ ') + result.message);
-  } catch(e) { showToast("❌ Lỗi kết nối lưu phân quyền!"); }
-}
-
-
-
-function toggleAllPermissions(status) {
-  document.querySelectorAll('#tblPermissionsBody input[type="checkbox"]').forEach(cb => cb.checked = status);
-  showToast(status ? '✅ Đã chọn Cấp tất cả quyền!' : '❌ Đã Thu hồi tất cả quyền!');
-}
-if(document.getElementById('searchModule')) {
-    document.getElementById('searchModule').addEventListener('input', renderPermissionsTable);
 }
 
 // ==========================================
@@ -2081,8 +1850,6 @@ async function renderAdminUsers() {
   tbody.innerHTML = `<tr><td colspan="7" style="text-align:center; padding:20px;
                      color:var(--text-muted);">Đang tải...</td></tr>`;
 
-  if (!allRoles.length) await loadAllRoles();
-
   try {
     const res    = await fetch('http://localhost:5000/api/users');
     const result = await res.json();
@@ -2106,7 +1873,7 @@ async function renderAdminUsers() {
     }
 
     if (roleFilter !== 'all') {
-      const targetRole = allRoles.find(r =>
+      const targetRole = VAI_TRO_CHUAN.find(r =>
         r.RoleName.toLowerCase() === roleFilter.toLowerCase()
       );
       if (targetRole) data = data.filter(u => u.ma_nhom_quyen === targetRole.RoleId);
@@ -2166,414 +1933,6 @@ async function renderAdminUsers() {
 }
 
 // ─── MỞ MODAL CHỈNH SỬA USER ─────────────────────────────────────────────────
-async function openEditUserModal(ma_user, ten_user, ma_nhom_quyen, currentStatus = 'active') {
-  document.getElementById('editUserId').value = ma_user;
-
-  document.getElementById('editUserInfo').innerHTML = `
-    <div style="display:flex; align-items:center; gap:10px;">
-      <div style="width:40px; height:40px; border-radius:50%; background:var(--primary-light);
-                  display:flex; align-items:center; justify-content:center;
-                  font-size:18px; font-weight:700; color:var(--primary);">
-        ${ten_user.charAt(0).toUpperCase()}
-      </div>
-      <div>
-        <div style="font-weight:700;">${ten_user}</div>
-        <div style="font-size:12px; color:var(--text-muted);">ID: #${ma_user}</div>
-      </div>
-    </div>
-  `;
-
-  if (!allRoles.length) await loadAllRoles();
-
-  // Dropdown vai trò — động
-  document.getElementById('editUserRole').innerHTML = allRoles.map(r => `
-    <option value="${r.RoleId}" ${r.RoleId === ma_nhom_quyen ? 'selected' : ''}>
-      ${r.RoleName}
-    </option>
-  `).join('');
-
-  // ✅ Set đúng trạng thái hiện tại
-  document.getElementById('editUserStatus').value = currentStatus;
-
-  document.getElementById('adminUserModal').classList.add('show');
-}
-
-// ─── LƯU THAY ĐỔI VAI TRÒ ────────────────────────────────────────────────────
-async function handleSaveUserRole() {
-  const ma_user   = document.getElementById('editUserId').value;
-  const role_id   = document.getElementById('editUserRole').value;
-  const newStatus = document.getElementById('editUserStatus').value;
-
-  if (!ma_user) { showToast('⚠️ Thiếu thông tin!'); return; }
-
-  try {
-    // Gọi song song 2 API: cập nhật role + cập nhật status
-    const [resRole, resStatus] = await Promise.all([
-      fetch(`http://localhost:5000/api/users/${ma_user}/role`, {
-        method : 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body   : JSON.stringify({ role_id: parseInt(role_id) })
-      }),
-      fetch(`http://localhost:5000/api/users/${ma_user}/status`, {
-        method : 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body   : JSON.stringify({ status: newStatus })
-      })
-    ]);
-
-    const [rRole, rStatus] = await Promise.all([resRole.json(), resStatus.json()]);
-
-    if (rRole.status && rStatus.status) {
-      showToast('✅ Đã cập nhật vai trò và trạng thái!');
-      closeModal('adminUserModal');
-      renderAdminUsers();
-    } else {
-      const errMsg = (!rRole.status ? rRole.message : '') ||
-                     (!rStatus.status ? rStatus.message : '');
-      showToast('❌ ' + errMsg);
-    }
-
-  } catch (e) {
-    showToast('❌ Lỗi kết nối!');
-  }
-}
-// ==========================================
-// PHÂN QUYỀN — REFACTOR HOÀN TOÀN
-// ==========================================
-
-let currentPermTab = 'user';
-
-function switchPermTab(tab) {
-  currentPermTab = tab;
-  const isUser = tab === 'user';
-
-  const btnUser  = document.getElementById('btnPermTabUser');
-  const btnGroup = document.getElementById('btnPermTabGroup');
-  if (btnUser) {
-    btnUser.style.background = isUser ? 'var(--primary)' : 'white';
-    btnUser.style.color      = isUser ? 'white' : 'var(--text)';
-    btnUser.style.border     = isUser ? 'none' : '1px solid var(--border)';
-  }
-  if (btnGroup) {
-    btnGroup.style.background = isUser ? 'white' : 'var(--primary)';
-    btnGroup.style.color      = isUser ? 'var(--text)' : 'white';
-    btnGroup.style.border     = isUser ? '1px solid var(--border)' : 'none';
-  }
-
-  const panelUser  = document.getElementById('permPanelUser');
-  const panelGroup = document.getElementById('permPanelGroup');
-  if (panelUser)  panelUser.style.display  = isUser ? 'block' : 'none';
-  if (panelGroup) panelGroup.style.display = isUser ? 'none'  : 'block';
-
-  if (isUser) {
-    loadUsersToDropdown();
-    renderPermissionsTable();
-  } else {
-    loadRolesForPermPanel();
-    renderGroupPermTable();
-    loadUsersForGroupApply();
-  }
-}
-
-// ── PANEL CÁ NHÂN ─────────────────────────────────────────────
-async function loadUsersToDropdown() {
-  const selectBox = document.getElementById('permUserSelect');
-  if (!selectBox) return;
-  try {
-    const res    = await fetch('http://localhost:5000/api/users');
-    const result = await res.json();
-    if (result.status && Array.isArray(result.data)) {
-      selectBox.innerHTML = '<option value="">-- Chọn tài khoản --</option>';
-      result.data.forEach(u => {
-        const id   = u.ma_user || u.UserId;
-        const name = u.ten_user || u.FullName || '?';
-        const role = u.ten_nhom_quyen || u.RoleName || '';
-        const opt  = document.createElement('option');
-        opt.value       = id;
-        opt.textContent = `#${id} ${name} [${role}]`;
-        selectBox.appendChild(opt);
-      });
-    }
-  } catch (e) {
-    showToast('❌ Không thể tải danh sách tài khoản!');
-  }
-}
-
-function renderPermissionsTable() {
-  const tbody = document.getElementById('tblPermissionsBody');
-  if (!tbody) return;
-  tbody.innerHTML = sysModules.map(m => `
-    <tr style="border-bottom:1px solid var(--border);">
-      <td style="padding:10px; border-right:1px solid var(--border); font-weight:500;">${m.name}</td>
-      <td style="text-align:center;"><input type="checkbox" class="cb-view"   data-mod="${m.id}" style="transform:scale(1.3); cursor:pointer;"></td>
-      <td style="text-align:center;"><input type="checkbox" class="cb-add"    data-mod="${m.id}" style="transform:scale(1.3); cursor:pointer;"></td>
-      <td style="text-align:center;"><input type="checkbox" class="cb-edit"   data-mod="${m.id}" style="transform:scale(1.3); cursor:pointer;"></td>
-      <td style="text-align:center;"><input type="checkbox" class="cb-delete" data-mod="${m.id}" style="transform:scale(1.3); cursor:pointer;"></td>
-    </tr>
-  `).join('');
-}
-
-async function loadPermissionsData() {
-  const userId = document.getElementById('permUserSelect').value;
-  if (!userId) { showToast('⚠️ Vui lòng chọn tài khoản!'); return; }
-  try {
-    const res    = await fetch(`http://localhost:5000/api/quyen-cua-user/${userId}`);
-    const result = await res.json();
-    if (result.status) {
-      document.querySelectorAll('#tblPermissionsBody input[type="checkbox"]')
-        .forEach(cb => cb.checked = false);
-      result.data.forEach(q => {
-        if (q.xem)  { const el = document.querySelector(`.cb-view[data-mod="${q.ma_chuc_nang}"]`);   if (el) el.checked = true; }
-        if (q.them) { const el = document.querySelector(`.cb-add[data-mod="${q.ma_chuc_nang}"]`);    if (el) el.checked = true; }
-        if (q.sua)  { const el = document.querySelector(`.cb-edit[data-mod="${q.ma_chuc_nang}"]`);   if (el) el.checked = true; }
-        if (q.xoa)  { const el = document.querySelector(`.cb-delete[data-mod="${q.ma_chuc_nang}"]`); if (el) el.checked = true; }
-      });
-      showToast('✅ Đã tải quyền của tài khoản!');
-    }
-  } catch (e) { showToast('❌ Lỗi kết nối!'); }
-}
-
-function capTatCaQuyenUser() {
-  document.querySelectorAll('#tblPermissionsBody input[type="checkbox"]')
-    .forEach(cb => cb.checked = true);
-  showToast('✅ Đã chọn tất cả quyền!');
-}
-
-function thuHoiTatCaQuyenUser() {
-  document.querySelectorAll('#tblPermissionsBody input[type="checkbox"]')
-    .forEach(cb => cb.checked = false);
-  showToast('❌ Đã bỏ tất cả quyền!');
-}
-
-async function savePermissionsData() {
-  const userId = document.getElementById('permUserSelect').value;
-  if (!userId) { showToast('⚠️ Vui lòng chọn tài khoản!'); return; }
-  const permissions = sysModules.map(m => ({
-    ma_chuc_nang: m.id,
-    xem  : document.querySelector(`.cb-view[data-mod="${m.id}"]`)?.checked   || false,
-    them : document.querySelector(`.cb-add[data-mod="${m.id}"]`)?.checked    || false,
-    sua  : document.querySelector(`.cb-edit[data-mod="${m.id}"]`)?.checked   || false,
-    xoa  : document.querySelector(`.cb-delete[data-mod="${m.id}"]`)?.checked || false,
-  }));
-  try {
-    const res    = await fetch('http://localhost:5000/api/cap-quyen-ngoai-le', {
-      method : 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body   : JSON.stringify({ ma_user: userId, permissions })
-    });
-    const result = await res.json();
-    showToast((result.status ? '💾 ' : '❌ ') + result.message);
-  } catch (e) { showToast('❌ Lỗi kết nối!'); }
-}
-
-async function apDungQuyenNhomChoUser() {
-  const userId = document.getElementById('permUserSelect').value;
-  if (!userId) { showToast('⚠️ Vui lòng chọn tài khoản!'); return; }
-  if (!confirm('Thao tác này sẽ XÓA mọi quyền ngoại lệ và đặt lại về quyền mặc định của nhóm. Tiếp tục?')) return;
-  try {
-    const res    = await fetch('http://localhost:5000/api/ap-dung-quyen-nhom-cho-user', {
-      method : 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body   : JSON.stringify({ ma_user: userId })
-    });
-    const result = await res.json();
-    showToast((result.status ? '✅ ' : '❌ ') + result.message);
-    if (result.status) loadPermissionsData();
-  } catch (e) { showToast('❌ Lỗi kết nối!'); }
-}
-
-// ── PANEL NHÓM QUYỀN ──────────────────────────────────────────
-async function loadRolesForPermPanel() {
-  try {
-    const res    = await fetch('http://localhost:5000/api/roles');
-    const result = await res.json();
-    if (!result.status) return;
-    const roles = result.data;
-
-    const select = document.getElementById('permGroupSelect');
-    if (select) {
-      select.innerHTML = '<option value="">-- Chọn nhóm --</option>' +
-        roles.map(r => `<option value="${r.RoleId}">${r.RoleId}. ${r.RoleName}</option>`).join('');
-    }
-     const content = document.getElementById('rolesManagerContent');
-    if (content && content.style.display !== 'none') {
-      renderRolesList(roles);
-    }
-  } catch (e) { showToast('❌ Lỗi tải danh sách nhóm!'); }
-}
-
-function renderRolesList(roles) {
-  const tbody = document.getElementById('tblRolesList');
-  if (!tbody) return;
-  if (!roles.length) {
-    tbody.innerHTML = `<tr><td colspan="3" style="text-align:center; padding:10px;
-                       color:var(--text-muted);">Chưa có nhóm nào</td></tr>`;
-    return;
-  }
-  tbody.innerHTML = roles.map(r => `
-    <tr style="border-bottom:1px solid var(--border);">
-      <td style="padding:7px 10px; color:var(--text-muted); font-size:12px;">#${r.RoleId}</td>
-      <td style="padding:7px 10px;">
-        <span id="roleName_${r.RoleId}">${r.RoleName}</span>
-        <input type="text" id="roleNameInput_${r.RoleId}" value="${r.RoleName}"
-          style="display:none; padding:4px 8px; border:1px solid var(--border);
-                 border-radius:4px; font-family:inherit; font-size:13px; width:80%;">
-      </td>
-      <td style="padding:7px 10px; text-align:center;">
-        <button class="admin-action-btn btn-edit"   id="btnEdit_${r.RoleId}"
-          onclick="batDauSuaRole(${r.RoleId})">✏️ Sửa</button>
-        <button class="admin-action-btn btn-confirm" id="btnSave_${r.RoleId}"
-          onclick="luuSuaRole(${r.RoleId})" style="display:none;">💾 Lưu</button>
-        <button class="admin-action-btn btn-cancel"  id="btnCancel_${r.RoleId}"
-          onclick="huyySuaRole(${r.RoleId})" style="display:none;">✕</button>
-        <button class="admin-action-btn btn-delete"
-          onclick="xoaNhomQuyen(${r.RoleId}, '${r.RoleName.replace(/'/g,"\\'")}')">🗑️ Xóa</button>
-      </td>
-    </tr>
-  `).join('');
-}
-
-function renderGroupPermTable() {
-  const tbody = document.getElementById('tblGroupPermissionsBody');
-  if (!tbody) return;
-  tbody.innerHTML = sysModules.map(m => `
-    <tr style="border-bottom:1px solid var(--border);">
-      <td style="padding:10px; border-right:1px solid var(--border); font-weight:500;">${m.name}</td>
-      <td style="text-align:center;"><input type="checkbox" class="grp-view"   data-mod="${m.id}" style="transform:scale(1.3); cursor:pointer;"></td>
-      <td style="text-align:center;"><input type="checkbox" class="grp-add"    data-mod="${m.id}" style="transform:scale(1.3); cursor:pointer;"></td>
-      <td style="text-align:center;"><input type="checkbox" class="grp-edit"   data-mod="${m.id}" style="transform:scale(1.3); cursor:pointer;"></td>
-      <td style="text-align:center;"><input type="checkbox" class="grp-delete" data-mod="${m.id}" style="transform:scale(1.3); cursor:pointer;"></td>
-    </tr>
-  `).join('');
-}
-
-function onGroupSelectChange() {
-  document.querySelectorAll('#tblGroupPermissionsBody input[type="checkbox"]')
-    .forEach(cb => cb.checked = false);
-}
-
-async function loadGroupPermissions() {
-  const groupId = document.getElementById('permGroupSelect').value;
-  if (!groupId) { showToast('⚠️ Vui lòng chọn nhóm quyền!'); return; }
-  try {
-    const res    = await fetch(`http://localhost:5000/api/quyen-cua-nhom/${groupId}`);
-    const result = await res.json();
-    if (result.status) {
-      document.querySelectorAll('#tblGroupPermissionsBody input[type="checkbox"]')
-        .forEach(cb => cb.checked = false);
-      result.data.forEach(q => {
-        if (q.xem)  { const el = document.querySelector(`.grp-view[data-mod="${q.ma_chuc_nang}"]`);   if (el) el.checked = true; }
-        if (q.them) { const el = document.querySelector(`.grp-add[data-mod="${q.ma_chuc_nang}"]`);    if (el) el.checked = true; }
-        if (q.sua)  { const el = document.querySelector(`.grp-edit[data-mod="${q.ma_chuc_nang}"]`);   if (el) el.checked = true; }
-        if (q.xoa)  { const el = document.querySelector(`.grp-delete[data-mod="${q.ma_chuc_nang}"]`); if (el) el.checked = true; }
-      });
-      showToast('✅ Đã tải quyền của nhóm!');
-    }
-  } catch (e) { showToast('❌ Lỗi kết nối!'); }
-}
-
-function capTatCaQuyenGroup() {
-  document.querySelectorAll('#tblGroupPermissionsBody input[type="checkbox"]')
-    .forEach(cb => cb.checked = true);
-  showToast('✅ Đã chọn tất cả quyền nhóm!');
-}
-
-function thuHoiTatCaQuyenGroup() {
-  document.querySelectorAll('#tblGroupPermissionsBody input[type="checkbox"]')
-    .forEach(cb => cb.checked = false);
-  showToast('❌ Đã bỏ tất cả quyền nhóm!');
-}
-
-async function saveGroupPermissions() {
-  const groupId = document.getElementById('permGroupSelect').value;
-  if (!groupId) { showToast('⚠️ Vui lòng chọn nhóm!'); return; }
-  const permissions = sysModules.map(m => ({
-    ma_chuc_nang: m.id,
-    xem  : document.querySelector(`.grp-view[data-mod="${m.id}"]`)?.checked   || false,
-    them : document.querySelector(`.grp-add[data-mod="${m.id}"]`)?.checked    || false,
-    sua  : document.querySelector(`.grp-edit[data-mod="${m.id}"]`)?.checked   || false,
-    xoa  : document.querySelector(`.grp-delete[data-mod="${m.id}"]`)?.checked || false,
-  }));
-  try {
-    const res    = await fetch('http://localhost:5000/api/cap-quyen-nhom', {
-      method : 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body   : JSON.stringify({ role_id: groupId, permissions })
-    });
-    const result = await res.json();
-    showToast((result.status ? '💾 ' : '❌ ') + result.message);
-  } catch (e) { showToast('❌ Lỗi kết nối!'); }
-}
-
-// ── CRUD NHÓM QUYỀN ───────────────────────────────────────────
-async function themNhomQuyen() {
-  const name = document.getElementById('newRoleName').value.trim();
-  if (!name) { showToast('⚠️ Nhập tên nhóm quyền!'); return; }
-  try {
-    const res    = await fetch('http://localhost:5000/api/roles', {
-      method : 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body   : JSON.stringify({ role_name: name })
-    });
-    const result = await res.json();
-    if (result.status) {
-      showToast('✅ ' + result.message);
-      document.getElementById('newRoleName').value = '';
-      loadRolesForPermPanel(); // reload cả dropdown lẫn bảng
-    } else {
-      showToast('❌ ' + result.message);
-    }
-  } catch (e) { showToast('❌ Lỗi kết nối!'); }
-}
-
-function batDauSuaRole(roleId) {
-  document.getElementById(`roleName_${roleId}`).style.display      = 'none';
-  document.getElementById(`roleNameInput_${roleId}`).style.display = 'inline-block';
-  document.getElementById(`btnEdit_${roleId}`).style.display       = 'none';
-  document.getElementById(`btnSave_${roleId}`).style.display       = 'inline-block';
-  document.getElementById(`btnCancel_${roleId}`).style.display     = 'inline-block';
-}
-
-function huyySuaRole(roleId) {
-  document.getElementById(`roleName_${roleId}`).style.display      = 'inline';
-  document.getElementById(`roleNameInput_${roleId}`).style.display = 'none';
-  document.getElementById(`btnEdit_${roleId}`).style.display       = 'inline-block';
-  document.getElementById(`btnSave_${roleId}`).style.display       = 'none';
-  document.getElementById(`btnCancel_${roleId}`).style.display     = 'none';
-}
-
-async function luuSuaRole(roleId) {
-  const newName = document.getElementById(`roleNameInput_${roleId}`).value.trim();
-  if (!newName) { showToast('⚠️ Tên nhóm không được trống!'); return; }
-  try {
-    const res    = await fetch(`http://localhost:5000/api/roles/${roleId}`, {
-      method : 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body   : JSON.stringify({ role_name: newName })
-    });
-    const result = await res.json();
-    if (result.status) {
-      showToast('✅ ' + result.message);
-      loadRolesForPermPanel();
-    } else {
-      showToast('❌ ' + result.message);
-    }
-  } catch (e) { showToast('❌ Lỗi kết nối!'); }
-}
-
-async function xoaNhomQuyen(roleId, roleName) {
-  if (!confirm(`Xóa nhóm quyền "${roleName}"?\nTất cả quyền của nhóm này sẽ bị xóa theo!`)) return;
-  try {
-    const res    = await fetch(`http://localhost:5000/api/roles/${roleId}`, { method: 'DELETE' });
-    const result = await res.json();
-    if (result.status) {
-      showToast('✅ ' + result.message);
-      loadRolesForPermPanel();
-    } else {
-      showToast('❌ ' + result.message);
-    }
-  } catch (e) { showToast('❌ Lỗi kết nối!'); }
-}
 async function loadCartFromServer() {
   if (!currentUser) return;
   try {
@@ -3334,50 +2693,31 @@ async function renderRecentOrdersPreview() {
     section.style.display = 'none';
   }
 }
-function toggleRolesManager() {
-  const content = document.getElementById('rolesManagerContent');
-  const btn     = document.getElementById('btnToggleRolesManager');
-  const isHidden = content.style.display === 'none';
-
-  content.style.display = isHidden ? 'block' : 'none';
-  btn.textContent       = isHidden ? '➖ Thu gọn' : '➕ Mở rộng';
-
-  // Lần đầu mở → load danh sách roles
-  if (isHidden) loadRolesForPermPanel();
-}
-// Cache roles động từ API
-let allRoles = [];
-
-async function loadAllRoles() {
-  try {
-    const res    = await fetch('http://localhost:5000/api/roles');
-    const result = await res.json();
-    if (result.status && Array.isArray(result.data)) {
-      allRoles = result.data; // [{ RoleId, RoleName }, ...]
-    }
-  } catch (e) {
-    console.error('Lỗi load roles:', e);
-  }
-}
+// 4 vai trò chuẩn theo seed mới (FR-001): 1=Admin, 2=Quản lý, 3=Seller, 4=Customer
+const VAI_TRO_CHUAN = [
+  { RoleId: 1, RoleName: 'Admin' },
+  { RoleId: 2, RoleName: 'Quản lý' },
+  { RoleId: 3, RoleName: 'Seller' },
+  { RoleId: 4, RoleName: 'Customer' },
+];
 
 // Lấy tên role theo ID — dùng trong renderAdminUsers
 function getRoleName(roleId) {
-  const r = allRoles.find(r => r.RoleId === roleId);
-  return r ? r.RoleName : `Role #${roleId}`;
+  const r = VAI_TRO_CHUAN.find(r => r.RoleId === roleId);
+  return r ? r.RoleName : `Vai trò #${roleId}`;
 }
 
 // Lấy class badge theo ID — có thể mở rộng sau
 function getRoleCls(roleId) {
-  if (roleId === 20) return 'role-admin';
-  if (roleId === 13) return 'role-seller';
-  if (roleId === 14) return 'role-customer';
+  if (roleId === 1 || roleId === 2) return 'role-admin';
+  if (roleId === 3) return 'role-seller';
   return 'role-customer'; // mặc định
 }
 
 // ─── RENDER BẢNG QUẢN LÝ TÀI KHOẢN (ĐỘNG) ───────────────────
 
-// ─── MỞ MODAL CHỈNH SỬA USER — DROPDOWN ĐỘNG ─────────────────
-async function openEditUserModal(ma_user, ten_user, ma_nhom_quyen) {
+// ─── MỞ MODAL CHỈNH SỬA USER — DROPDOWN VAI TRÒ TĨNH ─────────
+async function openEditUserModal(ma_user, ten_user, ma_nhom_quyen, currentStatus = 'active') {
   document.getElementById('editUserId').value = ma_user;
 
   document.getElementById('editUserInfo').innerHTML = `
@@ -3394,25 +2734,53 @@ async function openEditUserModal(ma_user, ten_user, ma_nhom_quyen) {
     </div>
   `;
 
-  // Đảm bảo roles đã load
-  if (!allRoles.length) await loadAllRoles();
-
-  // Đổ tất cả roles vào dropdown động
+  // Dropdown vai trò — 4 vai trò chuẩn tĩnh (không còn API /api/roles)
   const roleSelect = document.getElementById('editUserRole');
-  roleSelect.innerHTML = allRoles.map(r => `
-    <option value="${r.RoleId}" ${r.RoleId === ma_nhom_quyen ? 'selected' : ''}>
-      ${r.RoleName}
-    </option>
-  `).join('');
+  if (roleSelect) {
+    roleSelect.innerHTML = VAI_TRO_CHUAN.map(r => `
+      <option value="${r.RoleId}" ${r.RoleId === ma_nhom_quyen ? 'selected' : ''}>
+        ${r.RoleName}
+      </option>
+    `).join('');
+  }
+
+  // ✅ Set đúng trạng thái hiện tại
+  document.getElementById('editUserStatus').value = currentStatus;
 
   document.getElementById('adminUserModal').classList.add('show');
 }
 async function renderUserRoleFilter() {
-  if (!allRoles.length) await loadAllRoles();
   const select = document.getElementById('userRoleFilter');
   if (!select) return;
   select.innerHTML = `<option value="all">Tất cả vai trò</option>` +
-    allRoles.map(r => `<option value="${r.RoleName}">${r.RoleName}</option>`).join('');
+    VAI_TRO_CHUAN.map(r => `<option value="${r.RoleName}">${r.RoleName}</option>`).join('');
+}
+
+// ─── LƯU THAY ĐỔI TRẠNG THÁI TÀI KHOẢN ──────────────────────────────────────
+async function handleSaveUserRole() {
+  const ma_user   = document.getElementById('editUserId').value;
+  const newStatus = document.getElementById('editUserStatus').value;
+
+  if (!ma_user) { showToast('⚠️ Thiếu thông tin!'); return; }
+
+  try {
+    const resStatus = await fetch(`http://localhost:5000/api/users/${ma_user}/status`, {
+      method : 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body   : JSON.stringify({ status: newStatus })
+    });
+    const rStatus = await resStatus.json();
+
+    if (rStatus.status) {
+      showToast('✅ Đã cập nhật trạng thái!');
+      closeModal('adminUserModal');
+      renderAdminUsers();
+    } else {
+      showToast('❌ ' + rStatus.message);
+    }
+  } catch (e) {
+    showToast('❌ Lỗi kết nối!');
+  }
 }
 async function openProductDetail(productId) {
   const content = document.getElementById('productDetailContent');

@@ -32,5 +32,6 @@
 ## Notes
 
 - Lần kiểm tra đầu (2026-09-17): tất cả 16 mục PASS.
-- Lưu ý: một số tên endpoint/cột được nhắc trong spec (ví dụ `/api/cap-quyen-ngoai-le`, `Role_Id`) là **tên định danh hiện có của hệ thống** dùng để chỉ rõ đối tượng bị loại bỏ/kiểm tra, không phải chi tiết triển khai mới. Tương tự, script chuẩn hóa được nhắc vì đây là sản phẩm bàn giao bắt buộc theo hiến chương (thay đổi schema phải kèm script trong `Database/`).
+- Lưu ý: một số tên endpoint/cột được nhắc trong spec (ví dụ `/api/cap-quyen-ngoai-le`, `Role_Id`) là **tên định danh hiện có của hệ thống** dùng để chỉ rõ đối tượng bị loại bỏ/kiểm tra, không phải chi tiết triển khai mới.
+- Cập nhật 2026-09-17 (chỉ đạo): chuẩn hóa vai trò được thực hiện bằng **sửa trực tiếp file nguồn** (`database.sql`/`back_up.sql` + code), không tạo hàm riêng và không tạo SQL script riêng để chuẩn hóa. Các nhắc tới "script chuẩn hóa" trong spec được hiểu là kết quả đã được chỉnh sẵn trong file nguồn (FR-003/FR-004/FR-009 kiểm chứng bằng phân tích tĩnh file nguồn).
 - Spec sẵn sàng cho `/speckit.clarify` hoặc `/speckit.plan`.

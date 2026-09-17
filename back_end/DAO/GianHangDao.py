@@ -149,7 +149,7 @@ class GianHangDao:
             # 1. Cập nhật trạng thái — guard WHERE Status='pending' (atomic, chống cạnh tranh)
             cursor.execute("""
                 UPDATE SellerRequests
-                SET Status='approved', ReviewedBy=?, ReviewedAt=GETDATE()
+                SET Status='approved', ReviewedBy=?, ReviewedAt=NOW()
                 WHERE RequestId=? AND Status='pending'
             """, (reviewed_by, request_id))
             if cursor.rowcount == 0:
@@ -202,7 +202,7 @@ class GianHangDao:
             cursor.execute("""
                 UPDATE SellerRequests
                 SET Status='rejected', ReviewedBy=?,
-                    ReviewedAt=GETDATE(), RejectReason=?
+                    ReviewedAt=NOW(), RejectReason=?
                 WHERE RequestId=? AND Status='pending'
             """, (reviewed_by, ly_do, request_id))
             if cursor.rowcount == 0:

@@ -99,7 +99,7 @@ class SanPhamDao:
         cursor = conn.cursor()
         try:
             sql = f"""
-                SELECT TOP {top}
+                SELECT
                     p.ProductId, p.ProductName, p.Description,
                     p.Price, p.OldPrice, p.Quantity,
                     p.Rating, p.SoldCount, p.Emoji, p.ImageUrl,
@@ -111,6 +111,7 @@ class SanPhamDao:
                 LEFT JOIN Stores     s ON p.StoreId    = s.StoreId
                 WHERE p.IsActive = 1
                 ORDER BY p.SoldCount DESC
+                LIMIT {top}
             """
             cursor.execute(sql)
             rows = cursor.fetchall()
@@ -134,17 +135,15 @@ class SanPhamDao:
                     (ProductName, Description, Price, OldPrice,
                      Quantity, Rating, SoldCount, Emoji, ImageUrl,
                      CategoryId, StoreId, IsActive)
-                OUTPUT INSERTED.ProductId
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             """
             cursor.execute(sql, (
                 sp.ProductName, sp.Description, sp.Price, sp.OldPrice,
                 sp.Quantity,    sp.Rating,      sp.SoldCount, sp.Emoji, sp.ImageUrl,
                 sp.CategoryId,  sp.StoreId,     sp.IsActive
             ))
-            row = cursor.fetchone()
             conn.commit()
-            return row[0] if row else None
+            return cursor.lastrowid or None
         except Exception as e:
             print("Lỗi them SanPham:", e)
             conn.rollback()

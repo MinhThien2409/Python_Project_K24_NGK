@@ -116,6 +116,28 @@ class UserBus:
     def lay_ten_vai_tro_theo_id(self, role_id):
         return self.dao.lay_ten_vai_tro_theo_id(role_id)
 
+    def doi_mat_khau(self, ma_user, mat_khau_cu, mat_khau_moi):
+        """Đổi mật khẩu: kiểm tra mật khẩu cũ, yêu cầu mật khẩu mới khác cũ và ≥ 6 ký tự."""
+        if not ma_user:
+            return {"status": False, "message": "Thiếu mã user!"}
+        if not mat_khau_cu:
+            return {"status": False, "message": "Vui lòng nhập mật khẩu cũ!"}
+        if not mat_khau_moi or len(mat_khau_moi) < 6:
+            return {"status": False, "message": "Mật khẩu mới phải có ít nhất 6 ký tự!"}
+
+        thong_tin = self.dao.lay_thong_tin_user(ma_user)
+        if not thong_tin:
+            return {"status": False, "message": "Tài khoản không tồn tại!", "data": None}
+        if thong_tin.get("Password") != mat_khau_cu:
+            return {"status": False, "message": "Mật khẩu cũ không chính xác!", "data": None}
+        if mat_khau_cu == mat_khau_moi:
+            return {"status": False, "message": "Mật khẩu mới phải khác mật khẩu cũ!"}
+
+        ok = self.dao.cap_nhat_mat_khau(ma_user, mat_khau_moi)
+        if not ok:
+            return {"status": False, "message": "Lỗi cập nhật mật khẩu!", "data": None}
+        return {"status": True, "message": "Đổi mật khẩu thành công!"}
+
     def kiem_tra_quyen_quan_ly(self, nguoi_thao_tac_id):
         """Kiểm tra người thao tác là Admin/Quản lý đang hoạt động (FR-012)."""
         if not nguoi_thao_tac_id:

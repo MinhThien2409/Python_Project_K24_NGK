@@ -19,9 +19,9 @@ class GioHangDao:
             else:
                 # Nếu chưa có, tạo giỏ hàng mới
                 cursor.execute(
-                    "INSERT INTO Carts (UserId, TotalAmount, CreatedAt) OUTPUT INSERTED.CartId VALUES (?, 0, GETDATE())",
+                    "INSERT INTO Carts (UserId, TotalAmount, CreatedAt) VALUES (%s, 0, NOW())",
                     (user_id,))
-                cart_id = cursor.fetchone()[0]
+                cart_id = cursor.lastrowid
                 conn.commit()
 
             return cart_id
@@ -69,10 +69,10 @@ class GioHangDao:
         try:
             # Tính tổng (Quantity * UnitPrice) từ CartItems và cập nhật ngược lại Carts
             sql = """
-            UPDATE Carts 
-            SET TotalAmount = ISNULL((SELECT SUM(Quantity * UnitPrice) FROM CartItems WHERE CartId = ?), 0)
-            WHERE CartId = ?
-            """
+                UPDATE Carts 
+                SET TotalAmount = COALESCE((SELECT SUM(Quantity * UnitPrice) FROM CartItems WHERE CartId = %s), 0)
+                WHERE CartId = %s
+                """
             cursor.execute(sql, (cart_id, cart_id))
             conn.commit()
             return True

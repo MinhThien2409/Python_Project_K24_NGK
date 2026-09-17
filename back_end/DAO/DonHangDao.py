@@ -18,8 +18,7 @@ class DonHangDao:
             INSERT INTO Orders (Status, ShippingFee, UserId, ReceiverName,
                                 ReceiverPhone, ShippingAddress, PaymentMethod,
                                 SubTotal, DiscountAmount, TotalAmount, Note)
-            OUTPUT INSERTED.OrderId
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             """
             cursor.execute(sql_order, (
                 str(order.Status),
@@ -35,7 +34,7 @@ class DonHangDao:
                 str(order.Note) if order.Note else None
             ))
 
-            new_order_id = cursor.fetchone()[0]
+            new_order_id = cursor.lastrowid
 
             sql_item = """
             INSERT INTO OrderItems (OrderId, ProductId, ProductName, Emoji,
@@ -167,7 +166,7 @@ class DonHangDao:
                 )
                 for item in cursor.fetchall():
                     cursor.execute(
-                        "UPDATE Products SET SoldCount = ISNULL(SoldCount, 0) + ? WHERE ProductId = ?",
+                        "UPDATE Products SET SoldCount = COALESCE(SoldCount, 0) + ? WHERE ProductId = ?",
                         (item[1], item[0])
                     )
 
@@ -257,7 +256,7 @@ class DonHangDao:
 
             cursor.execute("""
                 SELECT 
-                    ISNULL(SUM(CASE WHEN Status <> 'Cancelled' THEN TotalAmount ELSE 0 END), 0) AS doanh_thu,
+                    COALESCE(SUM(CASE WHEN Status <> 'Cancelled' THEN TotalAmount ELSE 0 END), 0) AS doanh_thu,
                     COUNT(*) AS tong_don,
                     SUM(CASE WHEN Status='Pending'   THEN 1 ELSE 0 END) AS cho_duyet,
                     SUM(CASE WHEN Status='Shipping'  THEN 1 ELSE 0 END) AS dang_giao,
@@ -276,7 +275,7 @@ class DonHangDao:
             u = cursor.fetchone()
 
             cursor.execute("""
-                SELECT TOP 5
+                SELECT
                     p.ProductId,
                     p.ProductName,
                     p.Emoji,
@@ -287,11 +286,12 @@ class DonHangDao:
                 FROM Products p
                 LEFT JOIN Categories c ON p.CategoryId = c.CategoryId
                 ORDER BY p.SoldCount DESC
+                LIMIT 5
             """)
             top_sp = cursor.fetchall()
 
             cursor.execute("""
-                SELECT TOP 5
+                SELECT
                     o.OrderId,
                     o.ReceiverName,
                     o.TotalAmount,
@@ -301,6 +301,7 @@ class DonHangDao:
                 FROM Orders o
                 LEFT JOIN Users u ON o.UserId = u.UserId
                 ORDER BY o.CreatedAt DESC
+                LIMIT 5
             """)
             recent = cursor.fetchall()
 
@@ -355,7 +356,7 @@ class DonHangDao:
             cursor.execute("""
                 SELECT 
                     MONTH(CreatedAt) AS thang,
-                    ISNULL(SUM(TotalAmount), 0) AS doanh_thu,
+                    COALESCE(SUM(TotalAmount), 0) AS doanh_thu,
                     COUNT(*) AS so_don
                 FROM Orders
                 WHERE YEAR(CreatedAt) = ?

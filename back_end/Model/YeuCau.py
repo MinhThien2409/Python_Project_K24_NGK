@@ -3,7 +3,8 @@ class YeuCau:
                  BusinessPhone=None, Category=None, Description=None,
                  NationalId=None, Status='pending',
                  CreatedAt=None, ReviewedBy=None,
-                 ReviewedAt=None, RejectReason=None):
+                  ReviewedAt=None, RejectReason=None):
+        """Khởi tạo yêu cầu mở gian hàng của người dùng chờ duyệt."""
         self.RequestId     = RequestId
         self.UserId        = UserId
         self.ShopName      = ShopName

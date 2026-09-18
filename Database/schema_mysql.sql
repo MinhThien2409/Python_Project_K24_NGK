@@ -58,7 +58,6 @@ CREATE TABLE Products (
     Description VARCHAR(1000) NULL,
     OldPrice    DECIMAL(18, 2) NULL,
     ImageUrl    VARCHAR(500) NULL,
-    Rating      DECIMAL(3, 1)  NULL,
     SoldCount   INT          NULL DEFAULT 0,
     Emoji       VARCHAR(10)   NULL,
     IsActive    TINYINT(1)   NULL DEFAULT 1,

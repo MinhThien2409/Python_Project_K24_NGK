@@ -271,15 +271,6 @@ footer {
 .btn-confirm { background: var(--green-light); color: var(--green); }
 .btn-cancel { background: var(--red-light); color: var(--red); }
 
-/* 10. Đánh giá (Stars input) & Review list */
-.rating-row { display: flex; align-items: center; gap: 6px; padding: 3px 0; cursor: pointer; border-radius: 6px; }
-.rating-row.active { background: var(--primary-light); padding-left: 4px; }
-.star { font-size: 14px; color: #ddd; }
-.star.on { color: var(--accent); }
-.star-input span { font-size: 24px; cursor: pointer; color: #ddd; }
-.star-input span.on { color: var(--accent); }
-.review-item { padding: 12px 0; border-bottom: 1px solid var(--border); }
-
 .profile-modal-header {
   display: flex;
   align-items: center;

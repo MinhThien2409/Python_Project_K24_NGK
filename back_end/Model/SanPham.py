@@ -7,7 +7,6 @@ class SanPham:
         Price        = None,
         OldPrice     = None,
         Quantity     = None,
-        Rating       = 4.5,
         SoldCount    = 0,
         Emoji        = None,
         ImageUrl = None,
@@ -15,13 +14,13 @@ class SanPham:
         StoreId      = None,
         IsActive     = 1
     ):
+        """Khởi tạo sản phẩm với thông tin giá, tồn kho và phân loại."""
         self.ProductId   = ProductId
         self.ProductName = ProductName
         self.Description = Description
         self.Price       = Price
         self.OldPrice    = OldPrice
         self.Quantity    = Quantity
-        self.Rating      = Rating
         self.SoldCount   = SoldCount
         self.Emoji       = Emoji
         self.ImageUrl = ImageUrl

@@ -112,20 +112,6 @@
             <input type="range" id="priceSlider" min="0" max="100000000" step="100000" value="100000000" oninput="updatePriceSlider(this.value)" style="display:none;">
             <span id="priceSliderMax" style="display:none;"></span>
 
-            <div class="filter-label" style="margin-top: 12px;">Đánh giá</div>
-            <div class="rating-row" onclick="setRatingFilter(5)" style="cursor:pointer; padding:2px 0;">
-              <div class="rating-stars"><span class="star on">★</span><span class="star on">★</span><span class="star on">★</span><span class="star on">★</span><span class="star on">★</span></div>
-              <span style="font-size:12px; margin-left:6px;">5 sao</span>
-            </div>
-            <div class="rating-row" onclick="setRatingFilter(4)" style="cursor:pointer; padding:2px 0;">
-              <div class="rating-stars"><span class="star on">★</span><span class="star on">★</span><span class="star on">★</span><span class="star on">★</span><span class="star">★</span></div>
-              <span style="font-size:12px; margin-left:6px;">từ 4 sao</span>
-            </div>
-            <div class="rating-row" onclick="setRatingFilter(3)" style="cursor:pointer; padding:2px 0;">
-              <div class="rating-stars"><span class="star on">★</span><span class="star on">★</span><span class="star on">★</span><span class="star">★</span><span class="star">★</span></div>
-              <span style="font-size:12px; margin-left:6px;">từ 3 sao</span>
-            </div>
-
             <div class="filter-label" style="margin-top: 12px;">Tình trạng</div>
             <label class="filter-option"><input type="checkbox" id="chkInStock" onchange="applyUserFilters()"> Còn hàng</label>
             <label class="filter-option"><input type="checkbox" id="chkOnSale" onchange="applyUserFilters()"> Đang giảm giá</label>
@@ -142,7 +128,6 @@
                 <option value="default">Nổi bật nhất</option>
                 <option value="price-asc">Giá tăng dần</option>
                 <option value="price-desc">Giá giảm dần</option>
-                <option value="rating">Đánh giá cao</option>
                 <option value="bestseller">Bán chạy</option>
                 <option value="newest">Mới nhất</option>
             </select>
@@ -222,6 +207,7 @@
       <div class="admin-menu-item" id="menu-orders" onclick="switchAdminTab('orders')">📋 Quản lý đơn hàng</div>
       <div class="admin-menu-item" id="menu-sellers" onclick="switchAdminTab('sellers')">🏪 Duyệt người bán hàng <span id="sellerPendingBadge" style="color:red; font-weight:bold;"></span></div>
       <div class="admin-menu-item" id="menu-users" onclick="switchAdminTab('users')">👥 Quản lý tài khoản</div>
+      <div class="admin-menu-item" id="menu-quanly" onclick="switchAdminTab('quanly')" style="display:none;">🛡️ Quản lý</div>
       <div class="admin-menu-item" id="menu-vouchers" onclick="switchAdminTab('vouchers')">🎟️ Quản lý voucher</div>
     </aside>
 
@@ -325,6 +311,19 @@
           <table>
             <thead><tr><th>ID</th><th>Họ tên</th><th>Email</th><th>Điện thoại</th><th>Vai trò</th><th>Trạng thái</th><th>Thao tác</th></tr></thead>
             <tbody id="tblAdminUsersBody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div id="pane-quanly" class="admin-pane" style="display:none;">
+        <div class="admin-card filter-card" style="display:flex; justify-content:space-between; align-items:center;">
+          <h3>Quản lý tài khoản Quản lý</h3>
+          <button class="btn-submit" style="padding:8px 16px;" onclick="openModalTaoQuanLy()">+ Tạo Quản lý mới</button>
+        </div>
+        <div class="admin-card">
+          <table>
+            <thead><tr><th>ID</th><th>Họ tên</th><th>Tên đăng nhập</th><th>Điện thoại</th><th>Địa chỉ</th><th>Trạng thái</th><th>Thao tác</th></tr></thead>
+            <tbody id="tblQuanLyBody"></tbody>
           </table>
         </div>
       </div>
@@ -451,7 +450,8 @@
     <!-- Tabs: Thông tin | Chỉnh sửa | Bảo mật -->
     <div class="profile-tabs">
       <div class="profile-tab active" id="ptab-info"    onclick="switchProfileTab('info')">Thông tin</div>
-
+      <div class="profile-tab" id="ptab-edit"    onclick="switchProfileTab('edit')">Chỉnh sửa</div>
+      <div class="profile-tab" id="ptab-security" onclick="switchProfileTab('security')">Bảo mật</div>
     </div>
 
     <!-- Tab 1: Thông tin (chỉ đọc) -->
@@ -477,8 +477,24 @@
       </div>
     </div>
 
+    <!-- Tab 2: Chinh sua thong tin (005 US5) -->
+    <div class="profile-tab-content" id="pcontent-edit">
+      <form onsubmit="handleProfileUpdate(event)">
+        <div class="form-group"><label>Họ tên</label><input type="text" id="profTen" required></div>
+        <div class="form-group"><label>Địa chỉ</label><input type="text" id="profDiaChi"></div>
+        <div class="form-group"><label>Số điện thoại</label><input type="tel" id="profSdt" placeholder="0901234567"></div>
+        <button type="submit" class="btn-submit" style="width:100%;">Lưu thay đổi</button>
+      </form>
+    </div>
 
-
+    <!-- Tab 3: Doi mat khau (005 US5) -->
+    <div class="profile-tab-content" id="pcontent-security">
+      <form onsubmit="handleChangePassword(event)">
+        <div class="form-group"><label>Mật khẩu cũ</label><input type="password" id="pwCu" required></div>
+        <div class="form-group"><label>Mật khẩu mới (từ 6 ký tự)</label><input type="password" id="pwMoi" required></div>
+        <button type="submit" class="btn-submit" style="width:100%;">Đổi mật khẩu</button>
+      </form>
+    </div>
 
   </div>
 </div>
@@ -521,9 +537,9 @@
         <label>Phương thức thanh toán</label>
         <select id="chkPayment" onchange="togglePaymentDetails(this.value)">
           <option value="COD">Thanh toán khi nhận hàng (COD)</option>
-          <option value="BANK">Chuyển khoản ngân hàng (QR)</option>
-          <option value="MOMO">Ví MoMo</option>
-          <option value="ZALOPAY">ZaloPay</option>
+          <option value="Bank">Chuyển khoản ngân hàng (QR)</option>
+          <option value="Momo">Ví MoMo</option>
+          <option value="VNPay">VNPay</option>
         </select>
       </div>
       <div id="bankDetailsBlock" style="display:none; background:#FFF8EC; border:1px solid #FFD4A8; padding:12px; border-radius:8px; font-size:12px; margin-bottom:14px; line-height:1.6;">
@@ -566,8 +582,16 @@
   </div>
 </div>
 
-<div class="modal-overlay" id="orderHistoryModal">
-  <div class="modal-box" style="width:740px; max-height:85vh; overflow-y:auto;">
+<div class="modal-overlay" id="invoiceModal">
+  <div class="modal-box" style="width:520px; max-height:85vh; overflow-y:auto;">
+    <button class="modal-close" onclick="closeModal('invoiceModal')">✕</button>
+    <h3 style="margin-bottom:14px;">🧾 Hóa đơn đặt hàng</h3>
+    <div id="invoiceContent"></div>
+    <button class="btn-submit" style="width:100%; margin-top:12px;" onclick="closeModal('invoiceModal')">Đóng</button>
+  </div>
+</div>
+
+<div class="modal-overlay" id="orderHistoryModal">  <div class="modal-box" style="width:740px; max-height:85vh; overflow-y:auto;">
     <button class="modal-close" onclick="closeModal('orderHistoryModal')">✕</button>
     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
       <h3 style="margin:0;">📋 Lịch sử đơn hàng</h3>
@@ -632,14 +656,6 @@
   </div>
 </div>
 
-<div class="modal-overlay" id="reviewModal">
-  <div class="modal-box" style="width:450px;">
-    <button class="modal-close" onclick="closeModal('reviewModal')">✕</button>
-    <h3 style="margin-bottom:14px;">⭐ Đánh giá sản phẩm</h3>
-    <div id="reviewModalContent"></div>
-  </div>
-</div>
-
 <div class="modal-overlay" id="sellerModal">
   <div class="modal-box" style="width:450px;">
     <button class="modal-close" onclick="closeModal('sellerModal')">✕</button>
@@ -672,7 +688,6 @@
       </div>
       <div style="display:flex; gap:10px;">
         <div class="form-group" style="flex:1;"><label>Tồn kho</label><input type="number" id="prodStock" required></div>
-        <div class="form-group" style="flex:1;"><label>Đánh giá (0-5)</label><input type="number" id="prodRating" step="0.1" max="5" value="4.5"></div>
       </div>
       <!-- Thay thế form-group prodEmoji hiện tại -->
 <div class="form-group">
@@ -739,6 +754,23 @@
     </div>
     <button onclick="moModalCapLaiMatKhau()" class="btn-submit" style="width:100%; margin-bottom:8px;">🔑 Cấp lại mật khẩu</button>
     <button onclick="handleSaveUserRole()" class="btn-submit" style="width:100%;">Lưu thay đổi</button>
+  </div>
+</div>
+
+<div class="modal-overlay" id="quanLyModal">
+  <div class="modal-box" style="width:440px;">
+    <button class="modal-close" onclick="closeModal('quanLyModal')">✕</button>
+    <h3 id="quanLyModalTitle" style="margin-bottom:14px;">Tạo tài khoản Quản lý</h3>
+    <form onsubmit="handleLuuQuanLy(event)">
+      <input type="hidden" id="quanLyEditId">
+      <div class="form-group"><label>Họ tên</label><input type="text" id="quanLyTen" required maxlength="100"></div>
+      <div class="form-group" id="quanLyTaiKhoanGroup"><label>Tên đăng nhập</label><input type="text" id="quanLyTaiKhoan" required maxlength="50"></div>
+      <div class="form-group" id="quanLyMatKhauGroup"><label>Mật khẩu (tối thiểu 6 ký tự)</label><input type="password" id="quanLyMatKhau" required></div>
+      <div class="form-group"><label>Số điện thoại</label><input type="text" id="quanLySdt" maxlength="20"></div>
+      <div class="form-group"><label>Địa chỉ</label><input type="text" id="quanLyDiaChi" maxlength="255"></div>
+      <div id="quanLyMessage" style="margin-top:10px; font-size:13px; display:none;"></div>
+      <button type="submit" class="btn-submit" style="width:100%; margin-top:10px;">Lưu thông tin</button>
+    </form>
   </div>
 </div>
 

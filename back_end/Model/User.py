@@ -1,5 +1,6 @@
 class User:
     def __init__(self, ma_user=None, ma_nhom_quyen=2, ten_user=None, dia_chi=None, sdt=None, cmnd=None, tendangnhap=None, mat_khau=None):
+        """Khởi tạo người dùng với mã, tên và vai trò."""
         self.ma_user = ma_user
         self.ma_nhom_quyen = ma_nhom_quyen
         self.ten_user = ten_user

@@ -1,9 +1,17 @@
+import logging
+
 from back_end.DBconnection import DBconnection
 from back_end.Model.DanhMuc import DanhMuc
 
+logger = logging.getLogger(__name__)
+
+
 class DanhMucDao:
 
+    # ─── ĐỌC ───
+
     def lay_tat_ca(self):
+        """Lấy toàn bộ danh mục sắp xếp theo CategoryId."""
         conn = DBconnection.get_connection()
         if conn is None: return []
         cursor = conn.cursor()
@@ -12,25 +20,8 @@ class DanhMucDao:
             rows = cursor.fetchall()
             return [{"id": r.CategoryId, "name": r.CategoryName} for r in rows]
         except Exception as e:
-            print("Lỗi lay_tat_ca categories:", e)
+            logger.exception("Lỗi lay_tat_ca categories: %s", e)
             return []
-        finally:
-            cursor.close(); conn.close()
-
-    def them(self, category: DanhMuc):
-        conn = DBconnection.get_connection()
-        if conn is None: return False
-        cursor = conn.cursor()
-        try:
-            cursor.execute(
-                "INSERT INTO Categories (CategoryName) VALUES (?)",
-                (category.CategoryName,)
-            )
-            conn.commit()
-            return True
-        except Exception as e:
-            print("Lỗi them category:", e)
-            return False
         finally:
             cursor.close(); conn.close()
 
@@ -55,7 +46,7 @@ class DanhMucDao:
                 )
             return cursor.fetchone() is not None
         except Exception as e:
-            print("Lỗi kiem_tra_ten_ton_tai:", e)
+            logger.exception("Lỗi kiem_tra_ten_ton_tai: %s", e)
             return False
         finally:
             cursor.close(); conn.close()
@@ -72,12 +63,34 @@ class DanhMucDao:
             )
             return cursor.fetchone()[0]
         except Exception as e:
-            print("Lỗi dem_san_pham:", e)
+            logger.exception("Lỗi dem_san_pham: %s", e)
             return None
         finally:
             cursor.close(); conn.close()
 
+    # ─── GHI ───
+
+    def them(self, category: DanhMuc):
+        """Thêm danh mục mới vào bảng Categories."""
+        conn = DBconnection.get_connection()
+        if conn is None: return False
+        cursor = conn.cursor()
+        try:
+            cursor.execute(
+                "INSERT INTO Categories (CategoryName) VALUES (?)",
+                (category.CategoryName,)
+            )
+            conn.commit()
+            return True
+        except Exception as e:
+            logger.exception("Lỗi them category: %s", e)
+            conn.rollback()
+            return False
+        finally:
+            cursor.close(); conn.close()
+
     def sua(self, category: DanhMuc):
+        """Cập nhật tên danh mục theo CategoryId."""
         conn = DBconnection.get_connection()
         if conn is None: return False
         cursor = conn.cursor()
@@ -89,12 +102,14 @@ class DanhMucDao:
             conn.commit()
             return cursor.rowcount > 0
         except Exception as e:
-            print("Lỗi sua category:", e)
+            logger.exception("Lỗi sua category: %s", e)
+            conn.rollback()
             return False
         finally:
             cursor.close(); conn.close()
 
     def xoa(self, category_id):
+        """Xóa danh mục theo CategoryId."""
         conn = DBconnection.get_connection()
         if conn is None: return False
         cursor = conn.cursor()
@@ -106,7 +121,8 @@ class DanhMucDao:
             conn.commit()
             return cursor.rowcount > 0
         except Exception as e:
-            print("Lỗi xoa category:", e)
+            logger.exception("Lỗi xoa category: %s", e)
+            conn.rollback()
             return False
         finally:
             cursor.close(); conn.close()

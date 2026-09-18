@@ -249,3 +249,40 @@ def test_khong_con_role_id_13_trong_backend():
         noi_dung = duong_dan.read_text(encoding="utf-8")
         loi = [dong for dong in noi_dung.splitlines() if bat_phep.search(dong)]
         assert not loi, f"{duong_dan.name}: vẫn còn gán Role_Id=13: {loi}"
+
+
+# ── T008 (003-US1): seed đúng 1 Admin + trigger + CHECK ───────────────────────
+TRIGGER_MOT_ADMIN = "TRG_Users_ChiMotAdmin"
+
+
+@pytest.mark.parametrize("ten_file", DUMP_FILES)
+def test_seed_chi_mot_admin_user1(ten_file):
+    users = _lay_users(load_dump(ten_file))
+    ds_admin = [uid for uid, role in users.items() if role == ROLE_ID_ADMIN]
+    assert ds_admin == [1], (
+        f"File {ten_file}: chỉ user1 là Admin, thực tế {ds_admin}"
+    )
+
+
+@pytest.mark.parametrize("ten_file", DUMP_FILES)
+def test_co_trigger_chi_mot_admin(ten_file):
+    noi_dung = load_dump(ten_file)
+    assert TRIGGER_MOT_ADMIN in noi_dung, (
+        f"File {ten_file}: thiếu trigger {TRIGGER_MOT_ADMIN}"
+    )
+    assert noi_dung.count(TRIGGER_MOT_ADMIN) >= 1
+
+
+@pytest.mark.parametrize("ten_file", DUMP_FILES)
+def test_giu_hai_check_chong_khoa_admin_quan_ly(ten_file):
+    noi_dung = load_dump(ten_file)
+    assert CK_ADMIN_NOT_BANNED in noi_dung
+    assert CK_QUAN_LY_NOT_BANNED in noi_dung
+
+
+def test_khong_ton_tai_route_tao_admin():
+    """Không tồn tại endpoint tạo Admin (chỉ POST /api/quan-ly gán cứng Role 2)."""
+    noi_dung = REPO_ROOT.joinpath("app.py").read_text(encoding="utf-8")
+    assert "tao_admin" not in noi_dung.lower()
+    assert "them_admin" not in noi_dung.lower()
+    assert "/api/admin" not in noi_dung.lower()

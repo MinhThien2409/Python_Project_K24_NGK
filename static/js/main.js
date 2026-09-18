@@ -501,7 +501,6 @@ async function openEditSellerProduct(productId) {
     document.getElementById('prodPrice').value                   = p.price;
     document.getElementById('prodOldPrice').value                = p.old_price || '';
     document.getElementById('prodStock').value                   = p.quantity;
-    document.getElementById('prodRating').value                  = p.rating || 4.5;
     document.getElementById('prodEmoji').value                   = p.emoji || '';
     document.getElementById('prodDesc').value                    = p.description || '';
 
@@ -734,6 +733,7 @@ function switchAdminTab(tabName) {
   renderUserRoleFilter();
   renderAdminUsers();
 }
+  if (tabName === 'quanly')    renderDanhSachQuanLy();
   if (tabName === 'vouchers')    renderAdminVouchers?.();
 }
 
@@ -778,6 +778,70 @@ async function updateUserProfile() {
 function goToAdmin() {
   closeModal('profileModal');
   switchViewMode('admin');
+}
+
+// ── 005 US5: tab hồ sơ + submit profile/password qua server ──
+function switchProfileTab(tab) {
+  for (const t of ['info', 'edit', 'security']) {
+    document.getElementById(`ptab-${t}`)?.classList.toggle('active', t === tab);
+    document.getElementById(`pcontent-${t}`)?.classList.toggle('active', t === tab);
+  }
+  if (tab === 'edit' && currentUser) {
+    const ten = document.getElementById('profTen');
+    if (ten && !ten.value) {
+      ten.value = currentUser.ten_user || '';
+      document.getElementById('profDiaChi').value = currentUser.dia_chi || '';
+      document.getElementById('profSdt').value = currentUser.sdt || '';
+    }
+  }
+}
+
+async function handleProfileUpdate(e) {
+  e.preventDefault();
+  const ten = document.getElementById('profTen').value.trim();
+  const diaChi = document.getElementById('profDiaChi').value.trim();
+  const sdt = document.getElementById('profSdt').value.trim();
+  if (!ten) { showToast('⚠️ Họ tên không được để trống!'); return; }
+  try {
+    const res = await fetch('http://localhost:5000/api/cap-nhat-profile', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ten_user: ten, dia_chi: diaChi, sdt })
+    });
+    const result = await res.json();
+    showToast((result.status ? '✅ ' : '❌ ') + result.message);
+    if (result.status) {
+      currentUser.ten_user = ten;
+      currentUser.dia_chi = diaChi;
+      currentUser.sdt = sdt;
+      switchProfileTab('info');
+      openProfileModal();
+    }
+  } catch (err) {
+    showToast('❌ Lỗi kết nối đến máy chủ Backend!');
+  }
+}
+
+async function handleChangePassword(e) {
+  e.preventDefault();
+  const cu = document.getElementById('pwCu').value;
+  const moi = document.getElementById('pwMoi').value;
+  try {
+    const res = await fetch('http://localhost:5000/api/doi-mat-khau', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ mat_khau_cu: cu, mat_khau_moi: moi })
+    });
+    const result = await res.json();
+    showToast((result.status ? '✅ ' : '❌ ') + result.message);
+    if (result.status) {
+      document.getElementById('pwCu').value = '';
+      document.getElementById('pwMoi').value = '';
+      switchProfileTab('info');
+    }
+  } catch (err) {
+    showToast('❌ Lỗi kết nối đến máy chủ Backend!');
+  }
 }
 
 function goToUser() {
@@ -883,6 +947,12 @@ function updateHeaderForUser() {
 
   // --- PHÂN BIỆT HIỂN THỊ THEO VAI TRÒ CHUẨN (1=Admin, 2=Quản lý, 3=Seller, 4=Customer) ---
   const maQuyen = currentUser.ma_nhom_quyen || currentUser.Role_id;
+  const tenVaiTro = currentUser.ten_vai_tro || currentUser.ten_vai_tro_hien_thi;
+  const laAdmin = tenVaiTro === 'Admin' || maQuyen === 1;
+
+  // Tab Quan ly chi hien khi ten_vai_tro === 'Admin' (server van gate lai)
+  const menuQuanLy = document.getElementById('menu-quanly');
+  if (menuQuanLy) menuQuanLy.style.display = laAdmin ? 'block' : 'none';
 
   if (maQuyen === 1 || maQuyen === 2 || currentUser.role === 'Admin') {
       // 1. Nếu là Admin/Quản lý -> Hiện thanh Admin màu đen trên cùng
@@ -1115,7 +1185,6 @@ if (priceMin > 0 || priceMax !== Infinity) {
   const sort = document.getElementById('sortSelect')?.value || 'default';
   if (sort === 'price-asc')  filtered.sort((a, b) => a.price - b.price);
   if (sort === 'price-desc') filtered.sort((a, b) => b.price - a.price);
-  if (sort === 'rating')     filtered.sort((a, b) => (b.rating||0) - (a.rating||0));
   if (sort === 'bestseller') filtered.sort((a, b) => (b.sold||0) - (a.sold||0));
 
   renderUserProducts(filtered);
@@ -1131,6 +1200,32 @@ async function loadProducts() {
     }
   } catch (e) {
     console.error('Lỗi load sản phẩm:', e);
+  }
+}
+
+// ── 005 US1: tìm kiếm server-side (q + category_id) + empty-state ──
+async function timKiemSanPhamServer() {
+  const input = document.getElementById('userSearchInput');
+  const tuKhoa = (input?.value || '').trim();
+  const catSelect = document.getElementById('searchCategorySelect')?.value;
+  const params = new URLSearchParams();
+  if (tuKhoa) params.set('q', tuKhoa);
+  if (catSelect && catSelect !== 'all' && !isNaN(Number(catSelect))) {
+    params.set('category_id', catSelect);
+  }
+  try {
+    const res = await fetch(`http://localhost:5000/api/products?${params.toString()}`);
+    const result = await res.json();
+    if (result.status) {
+      products = result.data;
+      currentPage = 1;
+      renderUserProducts(products);
+    } else {
+      renderUserProducts([]);
+    }
+  } catch (e) {
+    console.error('Lỗi tìm kiếm sản phẩm:', e);
+    applyUserFilters();
   }
 }
 
@@ -1298,7 +1393,7 @@ function renderUserProducts(arr) {
     container.innerHTML = `
       <div class="empty-state" style="grid-column:1/-1;">
         <div class="icon">📦</div>
-        <p>Không có sản phẩm nào</p>
+        <p>Không tìm thấy sản phẩm</p>
       </div>`;
     document.getElementById('paginationWrap').innerHTML = '';
     return;
@@ -1334,7 +1429,7 @@ function renderUserProducts(arr) {
         ${p.old_price ? `<div style="font-size:12px; color:var(--text-muted); text-decoration:line-through;">${Number(p.old_price).toLocaleString('vi-VN')}đ</div>` : ''}
         <div class="card-price">${Number(p.price).toLocaleString('vi-VN')}đ</div>
         <div class="card-footer">
-          <span style="font-size:11px; color:var(--text-muted);">⭐ ${p.rating || 4.5} · Đã bán ${p.sold || 0}</span>
+          <span style="font-size:11px; color:var(--text-muted);">Đã bán ${p.sold || 0}</span>
           <button class="add-cart-btn" onclick="event.stopPropagation(); addToCart(${p.id}, 1, ${p.price})">+ Giỏ hàng</button>
         </div>
       </div>
@@ -1518,7 +1613,6 @@ async function openAddProductModal() {
   document.getElementById('prodPrice').value     = '';
   document.getElementById('prodOldPrice').value  = '';
   document.getElementById('prodStock').value     = '';
-  document.getElementById('prodRating').value    = '4.5';
   document.getElementById('prodEmoji').value     = '';
   document.getElementById('prodShop').value      = '';
   document.getElementById('prodDesc').value      = '';
@@ -1545,7 +1639,6 @@ async function openEditProductModal(productId) {
     document.getElementById('prodPrice').value     = p.price;
     document.getElementById('prodOldPrice').value  = p.old_price || '';
     document.getElementById('prodStock').value     = p.quantity;
-    document.getElementById('prodRating').value    = p.rating || 4.5;
     document.getElementById('prodEmoji').value     = p.emoji || '';
     document.getElementById('prodShop').value      = p.shop || '';
     document.getElementById('prodDesc').value      = p.description || '';
@@ -1630,7 +1723,6 @@ async function handleSaveProduct(e) {
         price       : price,
         old_price   : document.getElementById('prodOldPrice').value || null,
         quantity    : document.getElementById('prodStock').value,
-        rating      : document.getElementById('prodRating').value || 4.5,
         emoji       : emoji,
         description : document.getElementById('prodDesc').value.trim(),
         category_id : categoryId,
@@ -1821,7 +1913,6 @@ function openAddSellerProductModal() {
     document.getElementById('prodPrice').value     = '';
     document.getElementById('prodOldPrice').value  = '';
     document.getElementById('prodStock').value     = '';
-    document.getElementById('prodRating').value    = '4.5';
     document.getElementById('prodEmoji').value     = '';
     document.getElementById('prodDesc').value      = '';
 
@@ -2081,6 +2172,8 @@ async function handlePlaceOrder(e) {
       currentShippingFee = 25000;
       updateCartBadge();
       renderCartItems();
+      const maDon = (result.message.match(/#(\d+)/) || [])[1];
+      if (maDon) hienThiHoaDon(maDon);
     } else {
       showToast('❌ ' + result.message);
     }
@@ -2090,6 +2183,44 @@ async function handlePlaceOrder(e) {
   }
 }
 // ─── RENDER GIAO DIỆN GIỎ HÀNG ─────────────────────────────────────────────
+// ── 005 US3: hóa đơn sau thanh toán + mở lại từ lịch sử ──
+async function hienThiHoaDon(orderId) {
+  try {
+    const res = await fetch(`http://localhost:5000/api/don-hang/hoa-don/${orderId}`);
+    const result = await res.json();
+    if (!result.status) {
+      showToast('❌ ' + (result.message || 'Không thể tải hóa đơn!'));
+      return;
+    }
+    const d = result.data;
+    const items = d.Items || d.items || [];
+    const box = document.getElementById('invoiceContent');
+    if (box) {
+      box.innerHTML = `
+        <div style="font-size:13px; line-height:1.8;">
+          <div><b>Mã đơn:</b> #${d.OrderId}</div>
+          <div><b>Trạng thái:</b> ${d.Status}</div>
+          <div><b>Người nhận:</b> ${d.ReceiverName} — ${d.ReceiverPhone}</div>
+          <div><b>Địa chỉ:</b> ${d.ShippingAddress}</div>
+          <div><b>Thanh toán:</b> ${d.PaymentMethod}</div>
+          <hr style="border:none; border-top:1px solid var(--border); margin:10px 0;">
+          ${items.map(it => `
+            <div style="display:flex; justify-content:space-between; margin-bottom:4px;">
+              <span>${it.ProductName || it.product_name} × ${it.Quantity || it.quantity}</span>
+              <span>${Number(it.TotalPrice || it.total_price || 0).toLocaleString('vi-VN')}đ</span>
+            </div>`).join('')}
+          <hr style="border:none; border-top:1px solid var(--border); margin:10px 0;">
+          <div style="display:flex; justify-content:space-between;"><span>Tạm tính:</span><span>${Number(d.SubTotal || 0).toLocaleString('vi-VN')}đ</span></div>
+          <div style="display:flex; justify-content:space-between;"><span>Phí ship:</span><span>${Number(d.ShippingFee || 0).toLocaleString('vi-VN')}đ</span></div>
+          <div style="display:flex; justify-content:space-between;"><span>Giảm giá:</span><span>-${Number(d.DiscountAmount || 0).toLocaleString('vi-VN')}đ</span></div>
+          <div style="display:flex; justify-content:space-between; font-weight:bold; font-size:15px; margin-top:6px;"><span>Tổng cộng:</span><span style="color:var(--red);">${Number(d.TotalAmount || 0).toLocaleString('vi-VN')}đ</span></div>
+        </div>`;
+      document.getElementById('invoiceModal').classList.add('show');
+    }
+  } catch (e) {
+    showToast('❌ Lỗi tải hóa đơn!');
+  }
+}
 function renderCartItems() {
   const container = document.getElementById('cartItemsList');
 
@@ -2266,9 +2397,9 @@ function updateCheckoutSummary() {
 }
 
 function togglePaymentDetails(val) {
-  document.getElementById('bankDetailsBlock').style.display = val === 'BANK'    ? 'block' : 'none';
-  document.getElementById('momoBlock').style.display        = val === 'MOMO'    ? 'block' : 'none';
-  document.getElementById('zalopayBlock').style.display     = val === 'ZALOPAY' ? 'block' : 'none';
+  document.getElementById('bankDetailsBlock').style.display = val === 'Bank'    ? 'block' : 'none';
+  document.getElementById('momoBlock').style.display        = val === 'Momo'    ? 'block' : 'none';
+  document.getElementById('zalopayBlock').style.display     = val === 'VNPay' ? 'block' : 'none';
 }
 
 function applyCheckoutVoucher() {
@@ -2616,7 +2747,13 @@ function renderOrderHistoryList(orders) {
 
         <!-- Nút hành động nếu có thể hủy -->
         ${o.Status === 'Pending' ? `
-          <div style="padding:8px 14px; border-top:1px solid var(--border); text-align:right;">
+          <div style="padding:8px 14px; border-top:1px solid var(--border); text-align:right; display:flex; gap:8px; justify-content:flex-end;">
+            <button onclick="hienThiHoaDon(${o.OrderId})"
+              style="background:var(--primary); border:none; color:white;
+                     border-radius:6px; padding:5px 14px; cursor:pointer;
+                     font-family:inherit; font-size:13px;">
+              🧾 Xem hóa đơn
+            </button>
             <button onclick="huyDonHangCuaToi(${o.OrderId})"
               style="background:none; border:1px solid var(--red); color:var(--red);
                      border-radius:6px; padding:5px 14px; cursor:pointer;
@@ -2624,7 +2761,16 @@ function renderOrderHistoryList(orders) {
               ❌ Hủy đơn hàng
             </button>
           </div>
-        ` : ''}
+        ` : `
+          <div style="padding:8px 14px; border-top:1px solid var(--border); text-align:right;">
+            <button onclick="hienThiHoaDon(${o.OrderId})"
+              style="background:none; border:1px solid var(--primary); color:var(--primary);
+                     border-radius:6px; padding:5px 14px; cursor:pointer;
+                     font-family:inherit; font-size:13px;">
+              🧾 Xem hóa đơn
+            </button>
+          </div>
+        `}
       </div>
     `;
   }).join('');
@@ -2843,6 +2989,121 @@ function closeResetPasswordModal() {
   closeModal('resetPasswordModal');
 }
 
+// ─── QUẢN LÝ TÀI KHOẢN QUẢN LÝ — CHỈ ADMIN (003) ─────────────────────────────
+async function renderDanhSachQuanLy() {
+  const tbody = document.getElementById('tblQuanLyBody');
+  if (!tbody) return;
+  tbody.innerHTML = `<tr><td colspan="7" style="text-align:center; padding:20px;">Đang tải...</td></tr>`;
+  try {
+    const res = await fetch('http://localhost:5000/api/quan-ly');
+    const result = await res.json();
+    if (!result.status) {
+      tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;">${result.message || 'Không tải được danh sách'}</td></tr>`;
+      return;
+    }
+    if (!result.data.length) {
+      tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;">Chưa có tài khoản Quản lý nào</td></tr>`;
+      return;
+    }
+    tbody.innerHTML = result.data.map(q => `
+      <tr>
+        <td style="font-weight:700;">#${q.ma_user}</td>
+        <td style="font-weight:600;">${q.ten_user}</td>
+        <td>@${q.tendangnhap}</td>
+        <td>${q.sdt || '—'}</td>
+        <td>${q.dia_chi || '—'}</td>
+        <td>${q.trang_thai || 'active'}</td>
+        <td style="white-space:nowrap;">
+          <button class="admin-action-btn btn-edit" onclick="openModalSuaQuanLy(${q.ma_user}, '${String(q.ten_user).replace(/'/g, "\\'")}', '${String(q.dia_chi || '').replace(/'/g, "\\'")}', '${q.sdt || ''}')">Sửa</button>
+          <button class="admin-action-btn btn-delete" onclick="xoaQuanLy(${q.ma_user})">Xóa</button>
+        </td>
+      </tr>`).join('');
+  } catch (e) {
+    tbody.innerHTML = `<tr><td colspan="7" style="text-align:center; color:var(--red);">Lỗi kết nối!</td></tr>`;
+  }
+}
+
+function openModalTaoQuanLy() {
+  document.getElementById('quanLyModalTitle').textContent = 'Tạo tài khoản Quản lý';
+  document.getElementById('quanLyEditId').value = '';
+  document.getElementById('quanLyTen').value = '';
+  document.getElementById('quanLyTaiKhoan').value = '';
+  document.getElementById('quanLyMatKhau').value = '';
+  document.getElementById('quanLySdt').value = '';
+  document.getElementById('quanLyDiaChi').value = '';
+  document.getElementById('quanLyTaiKhoanGroup').style.display = 'block';
+  document.getElementById('quanLyMatKhauGroup').style.display = 'block';
+  document.getElementById('quanLyMessage').style.display = 'none';
+  document.getElementById('quanLyModal').classList.add('show');
+}
+
+function openModalSuaQuanLy(ma_user, ten_user, dia_chi, sdt) {
+  document.getElementById('quanLyModalTitle').textContent = 'Sửa tài khoản Quản lý';
+  document.getElementById('quanLyEditId').value = ma_user;
+  document.getElementById('quanLyTen').value = ten_user || '';
+  document.getElementById('quanLyDiaChi').value = dia_chi || '';
+  document.getElementById('quanLySdt').value = sdt || '';
+  document.getElementById('quanLyTaiKhoanGroup').style.display = 'none';
+  document.getElementById('quanLyMatKhauGroup').style.display = 'none';
+  document.getElementById('quanLyMessage').style.display = 'none';
+  document.getElementById('quanLyModal').classList.add('show');
+}
+
+async function handleLuuQuanLy(event) {
+  event.preventDefault();
+  const ma_user = document.getElementById('quanLyEditId').value;
+  const ten_user = document.getElementById('quanLyTen').value.trim();
+  const msgEl = document.getElementById('quanLyMessage');
+  try {
+    let res;
+    if (ma_user) {
+      res = await fetch(`http://localhost:5000/api/quan-ly/${ma_user}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ten_user: ten_user,
+          dia_chi: document.getElementById('quanLyDiaChi').value.trim(),
+          sdt: document.getElementById('quanLySdt').value.trim()
+        })
+      });
+    } else {
+      res = await fetch('http://localhost:5000/api/quan-ly', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ten_user: ten_user,
+          tendangnhap: document.getElementById('quanLyTaiKhoan').value.trim(),
+          mat_khau: document.getElementById('quanLyMatKhau').value,
+          sdt: document.getElementById('quanLySdt').value.trim(),
+          dia_chi: document.getElementById('quanLyDiaChi').value.trim()
+        })
+      });
+    }
+    const result = await res.json();
+    msgEl.textContent = result.message || '';
+    msgEl.style.display = 'block';
+    if (result.status) {
+      showToast(result.message);
+      closeModal('quanLyModal');
+      renderDanhSachQuanLy();
+    }
+  } catch (e) {
+    showToast('Lỗi kết nối!');
+  }
+}
+
+async function xoaQuanLy(ma_user) {
+  if (!confirm('Xóa tài khoản Quản lý này?')) return;
+  try {
+    const res = await fetch(`http://localhost:5000/api/quan-ly/${ma_user}`, { method: 'DELETE' });
+    const result = await res.json();
+    showToast((result.status ? '✅ ' : '❌ ') + result.message);
+    if (result.status) renderDanhSachQuanLy();
+  } catch (e) {
+    showToast('Lỗi kết nối!');
+  }
+}
+
 async function openProductDetail(productId) {
   const content = document.getElementById('productDetailContent');
   content.innerHTML = `<div style="text-align:center; padding:60px 0; color:var(--text-muted);">⏳ Đang tải...</div>`;
@@ -2924,8 +3185,6 @@ async function openProductDetail(productId) {
           <h2 style="margin:0 0 6px; font-size:20px;">${p.name}</h2>
 
           <div style="display:flex; align-items:center; gap:10px; margin-bottom:10px; font-size:13px; color:var(--text-muted); flex-wrap:wrap;">
-            <span>⭐ ${p.rating || 4.5}</span>
-            <span>·</span>
             <span>Đã bán ${p.sold || 0}</span>
             <span>·</span>
             <span>📁 ${p.category_name || '—'}</span>
@@ -3052,3 +3311,451 @@ function formatPriceInputs() {
 loadCategories();
 loadProducts();
 khoiPhucDangNhap();
+
+// ============================================================
+// 004 SELLER — GHI DE SELLER DUNG /api/seller/* (store tu session)
+// Hien thi message server + textContent chong XSS (2 lop voi BUS).
+// ============================================================
+async function renderSellerProducts() {
+  const tbody = document.getElementById('tblSellerProductsBody');
+  if (!tbody) return;
+  tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;">Đang tải...</td></tr>';
+  try {
+    const res = await fetch('http://localhost:5000/api/seller/san-pham');
+    const result = await res.json();
+    if (!result.status) {
+      tbody.innerHTML = '';
+      const tr = document.createElement('tr');
+      const td = document.createElement('td');
+      td.colSpan = 7;
+      td.style.textAlign = 'center';
+      td.textContent = result.message || 'Không tải được sản phẩm!';
+      tr.appendChild(td);
+      tbody.appendChild(tr);
+      if (res.status === 403) showToast('❌ ' + (result.message || 'Không có quyền!'));
+      return;
+    }
+    if (!result.data.length) {
+      tbody.innerHTML = '';
+      const tr = document.createElement('tr');
+      const td = document.createElement('td');
+      td.colSpan = 7;
+      td.style.textAlign = 'center';
+      td.textContent = 'Chưa có sản phẩm nào. Hãy thêm sản phẩm đầu tiên!';
+      tr.appendChild(td);
+      tbody.appendChild(tr);
+      return;
+    }
+    tbody.innerHTML = '';
+    result.data.forEach((p) => {
+      const tr = document.createElement('tr');
+      const tdAnh = document.createElement('td');
+      tdAnh.style.textAlign = 'center';
+      if (p.image_url) {
+        const img = document.createElement('img');
+        img.src = '/static/' + p.image_url;
+        img.alt = p.name || '';
+        img.style.cssText = 'width:60px;height:60px;object-fit:cover;border-radius:8px;border:1px solid #ddd;';
+        tdAnh.appendChild(img);
+      } else {
+        const sp = document.createElement('span');
+        sp.style.fontSize = '28px';
+        sp.textContent = p.emoji || '📦';
+        tdAnh.appendChild(sp);
+      }
+      tr.appendChild(tdAnh);
+      const tdTen = document.createElement('td');
+      const bTen = document.createElement('div');
+      bTen.style.fontWeight = '600';
+      bTen.textContent = p.name || '';
+      const dCat = document.createElement('div');
+      dCat.style.cssText = 'font-size:11px;color:var(--text-muted);';
+      dCat.textContent = p.category_name || '';
+      tdTen.appendChild(bTen);
+      tdTen.appendChild(dCat);
+      tr.appendChild(tdTen);
+      const tdGia = document.createElement('td');
+      tdGia.style.cssText = 'color:var(--red);font-weight:700;';
+      tdGia.textContent = Number(p.price || 0).toLocaleString('vi-VN') + 'đ';
+      tr.appendChild(tdGia);
+      const tdSl = document.createElement('td');
+      tdSl.style.textAlign = 'center';
+      tdSl.textContent = p.quantity || 0;
+      tr.appendChild(tdSl);
+      const tdTrang = document.createElement('td');
+      tdTrang.style.textAlign = 'center';
+      tdTrang.textContent = p.is_active ? 'Hiện' : 'Ẩn';
+      tr.appendChild(tdTrang);
+      const tdCn = document.createElement('td');
+      const btnSua = document.createElement('button');
+      btnSua.className = 'admin-action-btn btn-edit';
+      btnSua.textContent = '✏️ Sửa';
+      btnSua.onclick = () => openEditSellerProduct(p.id);
+      const btnAnHien = document.createElement('button');
+      btnAnHien.className = 'admin-action-btn btn-edit';
+      btnAnHien.textContent = p.is_active ? '🙈 Ẩn' : '👁️ Hiện';
+      btnAnHien.onclick = () => sellerAnHien(p.id, p.is_active ? 0 : 1);
+      const btnNhap = document.createElement('button');
+      btnNhap.className = 'admin-action-btn btn-edit';
+      btnNhap.textContent = '📦 Nhập';
+      btnNhap.onclick = () => sellerNhapHang(p.id);
+      const btnGia = document.createElement('button');
+      btnGia.className = 'admin-action-btn btn-edit';
+      btnGia.textContent = '💰 Giá';
+      btnGia.onclick = () => sellerDoiGia(p.id);
+      const btnXoa = document.createElement('button');
+      btnXoa.className = 'admin-action-btn btn-delete';
+      btnXoa.textContent = '🗑️ Ẩn';
+      btnXoa.onclick = () => deleteSellerProduct(p.id, p.name || '');
+      [btnSua, btnAnHien, btnNhap, btnGia, btnXoa].forEach((b) => tdCn.appendChild(b));
+      tr.appendChild(tdCn);
+      tbody.appendChild(tr);
+    });
+  } catch (e) {
+    showToast('❌ Lỗi kết nối!');
+  }
+}
+
+async function openEditSellerProduct(productId) {
+  try {
+    const res = await fetch('http://localhost:5000/api/seller/san-pham');
+    const result = await res.json();
+    if (!result.status) { showToast('❌ ' + (result.message || 'Không tải được!')); return; }
+    const p = (result.data || []).find((x) => x.id === productId);
+    if (!p) { showToast('❌ Không có quyền thao tác trên sản phẩm này!'); return; }
+    document.getElementById('adminProductModalTitle').textContent = '✏️ Chỉnh sửa sản phẩm';
+    document.getElementById('editProductId').value = p.id;
+    document.getElementById('editProductId').dataset.sellerMode = 'true';
+    document.getElementById('prodName').value = p.name || '';
+    document.getElementById('prodPrice').value = p.price || '';
+    document.getElementById('prodOldPrice').value = p.old_price || '';
+    document.getElementById('prodStock').value = p.quantity || 0;
+    document.getElementById('prodEmoji').value = p.emoji || '';
+    document.getElementById('prodDesc').value = p.description || '';
+    await loadCategoriesForProductModal(p.category_name);
+    document.getElementById('adminProductModal').classList.add('show');
+  } catch (e) {
+    showToast('❌ Lỗi kết nối!');
+  }
+}
+
+async function sellerAnHien(productId, isActive) {
+  try {
+    const res = await fetch(`http://localhost:5000/api/seller/san-pham/${productId}/an-hien`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ is_active: isActive })
+    });
+    const result = await res.json();
+    showToast((result.status ? '✅ ' : '❌ ') + (result.message || ''));
+    if (result.status) renderSellerProducts();
+  } catch (e) {
+    showToast('❌ Lỗi kết nối!');
+  }
+}
+
+async function sellerNhapHang(productId) {
+  const raw = prompt('Nhập số lượng nhập thêm (số nguyên > 0):', '10');
+  if (raw === null) return;
+  try {
+    const res = await fetch(`http://localhost:5000/api/seller/san-pham/${productId}/nhap-hang`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ so_luong: Number(raw) })
+    });
+    const result = await res.json();
+    showToast((result.status ? '✅ ' : '❌ ') + (result.message || ''));
+    if (result.status) renderSellerProducts();
+  } catch (e) {
+    showToast('❌ Lỗi kết nối!');
+  }
+}
+
+async function sellerDoiGia(productId) {
+  const raw = prompt('Nhập giá bán mới (> 0):', '');
+  if (raw === null) return;
+  try {
+    const res = await fetch(`http://localhost:5000/api/seller/san-pham/${productId}/gia`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ gia_moi: Number(raw) })
+    });
+    const result = await res.json();
+    showToast((result.status ? '✅ ' : '❌ ') + (result.message || ''));
+    if (result.status) renderSellerProducts();
+  } catch (e) {
+    showToast('❌ Lỗi kết nối!');
+  }
+}
+
+// Ghi de luu/xoa seller dung endpoint co gate (004)
+const _handleSaveProductGoc = handleSaveProduct;
+handleSaveProduct = async function (e) {
+  e.preventDefault();
+  const isSellerMode = document.getElementById('editProductId').dataset.sellerMode === 'true';
+  if (!isSellerMode) return _handleSaveProductGoc(e);
+  const productId = document.getElementById('editProductId').value;
+  const isEdit = !!productId;
+  const payload = {
+    name: document.getElementById('prodName').value.trim(),
+    price: document.getElementById('prodPrice').value,
+    old_price: document.getElementById('prodOldPrice').value || null,
+    quantity: document.getElementById('prodStock').value,
+    emoji: document.getElementById('prodEmoji').value.trim(),
+    description: document.getElementById('prodDesc').value.trim(),
+    category_id: document.getElementById('prodCategory').value
+  };
+  if (!payload.name) { showToast('⚠️ Tên sản phẩm không được trống!'); return; }
+  try {
+    const url = isEdit
+      ? `http://localhost:5000/api/seller/san-pham/${productId}`
+      : 'http://localhost:5000/api/seller/san-pham';
+    const res = await fetch(url, {
+      method: isEdit ? 'PUT' : 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    const result = await res.json();
+    showToast((result.status ? '✅ ' : '❌ ') + (result.message || ''));
+    if (result.status) {
+      closeModal('adminProductModal');
+      renderSellerProducts();
+      loadProducts();
+    }
+  } catch (err) {
+    showToast('❌ Lỗi kết nối!');
+  }
+};
+
+deleteSellerProduct = async function (productId) {
+  if (!confirm('Ẩn sản phẩm này khỏi khách hàng?')) return;
+  return sellerAnHien(productId, 0);
+};
+
+// ============================================================
+// 004 US2 — DON HANG SELLER dung /api/seller/don-hang (co gate)
+// ============================================================
+renderSellerOrders = async function () {
+  const tbody = document.getElementById('tblSellerOrdersBody');
+  if (!tbody) return;
+  tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;">Đang tải...</td></tr>';
+  try {
+    const res = await fetch('http://localhost:5000/api/seller/don-hang');
+    const result = await res.json();
+    tbody.innerHTML = '';
+    if (!result.status) {
+      const tr = document.createElement('tr');
+      const td = document.createElement('td');
+      td.colSpan = 7;
+      td.style.textAlign = 'center';
+      td.textContent = result.message || 'Không tải được đơn hàng!';
+      tr.appendChild(td);
+      tbody.appendChild(tr);
+      return;
+    }
+    if (!result.data.length) {
+      const tr = document.createElement('tr');
+      const td = document.createElement('td');
+      td.colSpan = 7;
+      td.style.textAlign = 'center';
+      td.textContent = 'Chưa có đơn hàng nào cho gian hàng này';
+      tr.appendChild(td);
+      tbody.appendChild(tr);
+      return;
+    }
+    const nhanTrangThai = {
+      Pending: 'Chờ duyệt', Confirmed: 'Đã xác nhận', Shipping: 'Đang giao',
+      Completed: 'Hoàn thành', Cancelled: 'Đã hủy'
+    };
+    const nutTiepTheo = { Pending: 'Confirmed', Confirmed: 'Shipping', Shipping: 'Completed' };
+    const nhanNut = { Confirmed: '✅ Xác nhận', Shipping: '🚚 Giao hàng', Completed: '🏁 Hoàn thành' };
+    result.data.forEach((o) => {
+      const tr = document.createElement('tr');
+      const tdId = document.createElement('td');
+      tdId.style.fontWeight = '700';
+      tdId.textContent = '#' + o.OrderId;
+      tr.appendChild(tdId);
+      const tdKh = document.createElement('td');
+      const dTen = document.createElement('div');
+      dTen.style.fontWeight = '600';
+      dTen.textContent = o.ReceiverName || '';
+      const dPhone = document.createElement('div');
+      dPhone.style.fontSize = '11px';
+      dPhone.textContent = '📞 ' + (o.ReceiverPhone || '');
+      tdKh.appendChild(dTen);
+      tdKh.appendChild(dPhone);
+      tr.appendChild(tdKh);
+      const tdTien = document.createElement('td');
+      tdTien.style.fontWeight = '700';
+      tdTien.textContent = Number(o.TotalAmount || 0).toLocaleString('vi-VN') + 'đ';
+      tr.appendChild(tdTien);
+      const tdTt = document.createElement('td');
+      tdTt.textContent = nhanTrangThai[o.Status] || o.Status;
+      tr.appendChild(tdTt);
+      const tdNgay = document.createElement('td');
+      tdNgay.style.fontSize = '12px';
+      tdNgay.textContent = o.CreatedAt || '—';
+      tr.appendChild(tdNgay);
+      const tdCn = document.createElement('td');
+      const tiep = nutTiepTheo[o.Status];
+      if (tiep) {
+        const btn = document.createElement('button');
+        btn.className = 'admin-action-btn btn-confirm';
+        btn.textContent = nhanNut[tiep];
+        btn.onclick = () => sellerCapNhatDon(o.OrderId, tiep);
+        tdCn.appendChild(btn);
+      } else {
+        tdCn.textContent = '—';
+      }
+      tr.appendChild(tdCn);
+      const tdHuy = document.createElement('td');
+      if (o.Status === 'Pending' || o.Status === 'Confirmed' || o.Status === 'Shipping') {
+        const btnHuy = document.createElement('button');
+        btnHuy.className = 'admin-action-btn btn-delete';
+        btnHuy.textContent = '✖ Hủy';
+        btnHuy.onclick = () => sellerCapNhatDon(o.OrderId, 'Cancelled');
+        tdHuy.appendChild(btnHuy);
+      } else {
+        tdHuy.textContent = '—';
+      }
+      tr.appendChild(tdHuy);
+      tbody.appendChild(tr);
+    });
+  } catch (e) {
+    showToast('❌ Lỗi kết nối!');
+  }
+};
+
+sellerCapNhatDon = async function (orderId, newStatus) {
+  if (!confirm(`Cập nhật đơn #${orderId} sang ${newStatus}?`)) return;
+  try {
+    const res = await fetch(`http://localhost:5000/api/seller/don-hang/${orderId}/trang-thai`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: newStatus })
+    });
+    const result = await res.json();
+    showToast((result.status ? '✅ ' : '❌ ') + (result.message || ''));
+    if (result.status) renderSellerOrders();
+  } catch (e) {
+    showToast('❌ Lỗi kết nối!');
+  }
+};
+
+// ============================================================
+// 004 US4+US5 — THONG KE + TRANG SHOP (endpoint co gate)
+// Dung lai .stat-val .filter-card; hien thi bang textContent.
+// ============================================================
+renderSellerOverview = async function () {
+  const container = document.getElementById('sellerOverviewContent');
+  if (!container) return;
+  container.innerHTML = '';
+  const dangTai = document.createElement('div');
+  dangTai.style.textAlign = 'center';
+  dangTai.textContent = 'Đang tải thống kê...';
+  container.appendChild(dangTai);
+  try {
+    const [rTk, rThang, rShop] = await Promise.all([
+      fetch('http://localhost:5000/api/seller/thong-ke/tong-quan'),
+      fetch('http://localhost:5000/api/seller/thong-ke/doanh-thu-theo-thang?year=2026'),
+      fetch('http://localhost:5000/api/seller/trang-shop')
+    ]);
+    const tk = await rTk.json();
+    const thang = await rThang.json();
+    const shop = await rShop.json();
+    container.innerHTML = '';
+    if (!tk.status) {
+      const p = document.createElement('p');
+      p.textContent = tk.message || 'Không tải được thống kê!';
+      container.appendChild(p);
+      return;
+    }
+    const d = tk.data || {};
+    const grid = document.createElement('div');
+    grid.className = 'filter-card';
+    const stats = [
+      ['Doanh thu', Number(d.doanh_thu || 0).toLocaleString('vi-VN') + 'đ'],
+      ['Tổng đơn', String(d.tong_don || 0)],
+      ['Chờ duyệt', String(d.cho_duyet || 0)],
+      ['Hoàn thành', String(d.hoan_thanh || 0)]
+    ];
+    stats.forEach(([nhan, giaTri]) => {
+      const box = document.createElement('div');
+      const lb = document.createElement('div');
+      lb.textContent = nhan;
+      const val = document.createElement('div');
+      val.className = 'stat-val';
+      val.textContent = giaTri;
+      box.appendChild(lb);
+      box.appendChild(val);
+      grid.appendChild(box);
+    });
+    container.appendChild(grid);
+    const tieuDe = document.createElement('h4');
+    tieuDe.textContent = 'Doanh thu 12 tháng (đơn Completed)';
+    container.appendChild(tieuDe);
+    const bang = document.createElement('div');
+    bang.className = 'filter-card';
+    (thang.data || []).forEach((m) => {
+      const dong = document.createElement('div');
+      dong.textContent = `Tháng ${m.thang}: ${Number(m.doanh_thu || 0).toLocaleString('vi-VN')}đ (${m.so_don || 0} đơn)`;
+      bang.appendChild(dong);
+    });
+    container.appendChild(bang);
+    if (shop.status) {
+      const form = document.createElement('div');
+      form.className = 'filter-card';
+      const tShop = document.createElement('h4');
+      tShop.textContent = 'Trang shop';
+      form.appendChild(tShop);
+      const tenLb = document.createElement('label');
+      tenLb.textContent = 'Tên shop';
+      const tenIn = document.createElement('input');
+      tenIn.id = 'sellerShopName';
+      tenIn.value = shop.data.store_name || '';
+      const gtLb = document.createElement('label');
+      gtLb.textContent = 'Giới thiệu';
+      const gtIn = document.createElement('textarea');
+      gtIn.id = 'sellerShopDesc';
+      gtIn.value = shop.data.description || '';
+      const tnLb = document.createElement('label');
+      tnLb.textContent = 'Thâm niên (0-100)';
+      const tnIn = document.createElement('input');
+      tnIn.id = 'sellerShopThamNien';
+      tnIn.type = 'number';
+      tnIn.min = '0';
+      tnIn.max = '100';
+      tnIn.value = shop.data.tham_nien ?? '';
+      const btn = document.createElement('button');
+      btn.className = 'btn-submit';
+      btn.textContent = '💾 Lưu trang shop';
+      btn.onclick = sellerLuuTrangShop;
+      [tenLb, tenIn, gtLb, gtIn, tnLb, tnIn, btn].forEach((el) => form.appendChild(el));
+      container.appendChild(form);
+    }
+  } catch (e) {
+    showToast('❌ Lỗi kết nối!');
+  }
+};
+
+async function sellerLuuTrangShop() {
+  const payload = {
+    ten_shop: document.getElementById('sellerShopName').value,
+    gioi_thieu: document.getElementById('sellerShopDesc').value,
+    tham_nien: document.getElementById('sellerShopThamNien').value === ''
+      ? null
+      : Number(document.getElementById('sellerShopThamNien').value)
+  };
+  try {
+    const res = await fetch('http://localhost:5000/api/seller/trang-shop', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    const result = await res.json();
+    showToast((result.status ? '✅ ' : '❌ ') + (result.message || ''));
+    if (result.status) renderSellerOverview();
+  } catch (e) {
+    showToast('❌ Lỗi kết nối!');
+  }
+}

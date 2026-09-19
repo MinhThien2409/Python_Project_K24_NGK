@@ -237,12 +237,13 @@ class GianHangDao:
 
     def _tao_store_va_nang_quyen(self, cursor, req):
         """Tạo Stores từ đơn và nâng user thành Seller, trả mã lỗi."""
-        # 2. User đã là Seller → không duyệt lại
+        # 2. User đã là Seller → không duyệt lại.
+        #    T039: Role_Id đã chuyển sang bảng Accounts (008-split-user-table).
         cursor.execute(
-            "SELECT Role_id FROM Users WHERE UserId=?", (req.UserId,))
+            "SELECT Role_Id FROM Accounts WHERE UserId=?", (req.UserId,))
         user = cursor.fetchone()
         if not user: return KET_QUA_KHONG_TIM_THAY
-        if user.Role_id == ROLE_SELLER:
+        if user.Role_Id == ROLE_SELLER:
             return KET_QUA_DA_LA_SELLER
         # 3. Tạo Stores mới từ dữ liệu đơn
         cursor.execute("""
@@ -251,9 +252,10 @@ class GianHangDao:
             VALUES (?, ?, ?, ?, ?, 1)
         """, (req.ShopName, req.UserId, req.BusinessPhone,
               req.Category, req.Description))
-        # 4. Đổi Role user thành Seller (3) — sửa lỗi cũ gán 13 (không tồn tại)
+        # 4. Đổi Role user thành Seller (3) — sửa lỗi cũ gán 13 (không tồn tại).
+        #    T039: Role_Id đã chuyển sang bảng Accounts (008-split-user-table).
         cursor.execute(
-            "UPDATE Users SET Role_id=3 WHERE UserId=?", (req.UserId,))
+            "UPDATE Accounts SET Role_Id=3 WHERE UserId=?", (req.UserId,))
         return None
 
     def tu_choi_yeu_cau(self, request_id, reviewed_by, ly_do):

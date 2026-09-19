@@ -65,6 +65,12 @@ class MockUserDao:
             return {"role_none": True}
         if self.banned:
             return {"banned": True}
+        # Không có user cấu hình (thiếu đầu vào) → như DB không tìm thấy dòng.
+        if self.user is None:
+            return None
+        # Mật khẩu không khớp → như DB trả về không có dòng (UserBus từ chối).
+        if self.user.mat_khau != password:
+            return None
         return self.user
 
     def kiem_tra_tendangnhap_ton_tai(self, tendangnhap):
@@ -238,11 +244,17 @@ class FakeUserDaoBus:
         user = self.users.get(username)
         if not user:
             return None
-        if username in self.mat_khau and self.mat_khau[username] != password:
+        # Ưu tiên mật khẩu đã cập nhật trong self.mat_khau (sau đổi/cấp lại),
+        # fallback về user.mat_khau ban đầu. Sửa lỗi: trước đây so user.mat_khau
+        # trước nên mật khẩu mới luôn bị từ chối.
+        expected = self.mat_khau.get(username, user.mat_khau)
+        if expected != password:
             return None
         thong_tin = self.thong_tin.get(user.ma_user, {})
-        if thong_tin.get('trang_thai') == 'banned':
+        if username in getattr(self, "_bang_ban", {}) or thong_tin.get('trang_thai') == 'banned':
             return {"banned": True}
+        if username in getattr(self, "_bang_role_none", {}):
+            return {"role_none": True}
         return user
 
     def lay_thong_tin_user(self, ma_user):
@@ -269,7 +281,11 @@ class FakeUserDaoBus:
     def cap_nhat_mat_khau(self, ma_user, mat_khau_moi):
         for username, user in self.users.items():
             if user.ma_user == ma_user:
+                user.mat_khau = mat_khau_moi
                 self.mat_khau[username] = mat_khau_moi
+                thong_tin = self.thong_tin.get(ma_user)
+                if isinstance(thong_tin, dict):
+                    thong_tin["Password"] = mat_khau_moi
                 return True
         return False
 

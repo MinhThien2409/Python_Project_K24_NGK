@@ -21,13 +21,21 @@ CREATE TABLE Users (
     FullName   VARCHAR(100) NOT NULL,
     Address    VARCHAR(255) NULL,
     Phone      VARCHAR(20)  NULL,
-    NationalId VARCHAR(20)  NULL,
-    Username   VARCHAR(50)  NOT NULL,
-    Password   VARCHAR(255) NOT NULL,
-    Role_Id    INT          NULL,
-    trang_thai VARCHAR(10)  NULL DEFAULT 'active',
-    CONSTRAINT CK_Users_Admin_KhongDuocKhoa  CHECK (NOT (trang_thai = 'banned' AND Role_Id = 1)),
-    CONSTRAINT CK_Users_QuanLy_KhongDuocKhoa CHECK (NOT (trang_thai = 'banned' AND Role_Id = 2))
+    NationalId VARCHAR(20)  NULL
+);
+
+-- ═══════════ TÀI KHOẢN (tách ra khỏi Users) ═══════════
+CREATE TABLE Accounts (
+    AccountId   INT AUTO_INCREMENT PRIMARY KEY,
+    UserId      INT NOT NULL UNIQUE,
+    Username    VARCHAR(50)  NOT NULL UNIQUE,
+    Password    VARCHAR(255) NOT NULL,
+    Role_Id     INT          NULL,
+    trang_thai  VARCHAR(10)  NULL DEFAULT 'active',
+    CONSTRAINT FK_Accounts_Users      FOREIGN KEY (UserId) REFERENCES Users (UserId),
+    CONSTRAINT FK_Accounts_Roles       FOREIGN KEY (Role_Id) REFERENCES Roles (RoleId),
+    CONSTRAINT CK_Accounts_Admin_KhongDuocKhoa  CHECK (NOT (trang_thai = 'banned' AND Role_Id = 1)),
+    CONSTRAINT CK_Accounts_QuanLy_KhongDuocKhoa CHECK (NOT (trang_thai = 'banned' AND Role_Id = 2))
 );
 
 CREATE TABLE Stores (

@@ -3,6 +3,7 @@ venv/
 .env
 back_end/DBconfig.py
 .idea/
+.pi/
 __pycache__/
 .specify/
 .vscode/
@@ -19,3 +20,4 @@ Thumbs.db
 *.tmp
 *.swp
 *.log
+test_output.txt

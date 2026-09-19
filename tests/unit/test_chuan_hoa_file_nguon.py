@@ -29,15 +29,18 @@ TEN_VAI_TRO = {
     ROLE_ID_CUSTOMER: "Customer",
 }
 
-CK_ADMIN_NOT_BANNED = "CK_Users_Admin_KhongDuocKhoa"
+CK_ADMIN_NOT_BANNED = "Admin_KhongDuocKhoa"
 
 RE_ROLE = re.compile(
     r"INSERT \[dbo\]\.\[Roles\] \(\[RoleId\], \[RoleName\]\) VALUES \((\d+), N'([^']*)'\)"
 )
-RE_USER = re.compile(
-    r"INSERT \[dbo\]\.\[Users\] [^\n]*?VALUES \("
-    r"(\d+), N'[^']*', (?:N'[^']*'|NULL), (?:N'[^']*'|NULL), (?:N'[^']*'|NULL), "
-    r"N'[^']*', N'[^']*', (\d+)(?:, N'[^']*')?\)"
+# 008-split-user-table: hồ sơ ở bảng Users (5 cột), đăng nhập ở bảng Accounts (6 cột)
+RE_USER_HO_SO = re.compile(
+    r"INSERT \[dbo\]\.\[Users\] [^\n]*?VALUES \((\d+), N'[^']*', (?:N'[^']*'|NULL), "
+    r"(?:N'[^']*'|NULL), (?:N'[^']*'|NULL)\)"
+)
+RE_ACCOUNT = re.compile(
+    r"INSERT \[dbo\]\.\[Accounts\] [^\n]*?VALUES \((\d+), N'[^']*', N'[^']*', (\d+)(?:, N'[^']*')?\)"
 )
 RE_STORE = re.compile(
     r"INSERT \[dbo\]\.\[Stores\] [^\n]*?VALUES \("
@@ -49,8 +52,12 @@ RE_STORE = re.compile(
 def load_dump(ten_file):
     duong_dan = DUMP_DIR / ten_file
     assert duong_dan.exists(), f"Thiếu file dump: {duong_dan}"
-    with io.open(str(duong_dan), "r", encoding="utf-16", newline="") as f:
-        return f.read()
+    raw = duong_dan.read_bytes()
+    if raw[:2] == b"\xff\xfe":
+        return raw.decode("utf-16")
+    if raw[:3] == b"\xef\xbb\xbf":
+        return raw.decode("utf-8-sig")
+    return raw.decode("utf-8-sig", errors="replace")
 
 
 def _lay_roles(noi_dung):
@@ -58,7 +65,12 @@ def _lay_roles(noi_dung):
 
 
 def _lay_users(noi_dung):
-    return {int(uid): int(role) for uid, role in RE_USER.findall(noi_dung)}
+    """Vai trò của từng người dùng lấy từ Accounts (Role_Id nằm ở bảng đăng nhập)."""
+    return {int(uid): int(role) for uid, role in RE_ACCOUNT.findall(noi_dung)}
+
+def _lay_ho_so(noi_dung):
+    """Danh sách UserId có hồ sơ ở bảng Users."""
+    return {int(uid) for uid in RE_USER_HO_SO.findall(noi_dung)}
 
 
 def _lay_stores(noi_dung):
@@ -103,9 +115,22 @@ def test_khong_con_vai_tro_cu_ngoai_4_vai_tro_chuan(ten_file):
 @pytest.mark.parametrize("ten_file", DUMP_FILES)
 def test_moi_user_chi_tham_chieu_vai_tro_hop_le(ten_file):
     users = _lay_users(load_dump(ten_file))
-    assert users, f"File {ten_file}: không tìm thấy dòng INSERT Users nào"
+    assert users, f"File {ten_file}: không tìm thấy dòng INSERT Accounts nào"
     sai = {uid: role for uid, role in users.items() if role not in ROLE_IDS_HOP_LE}
     assert not sai, f"File {ten_file}: users có Role_Id ngoài {{1,2,3,4}}: {sai}"
+
+@pytest.mark.parametrize("ten_file", DUMP_FILES)
+def test_hai_bang_sinh_1_1(ten_file):
+    """008: mỗi hồ sơ Users khớp đúng một dòng Accounts (UserId 1-1, không mồ côi)."""
+    noi_dung = load_dump(ten_file)
+    ho_so = _lay_ho_so(noi_dung)
+    tai_khoan = _lay_users(noi_dung)
+    assert ho_so and tai_khoan, (
+        f"File {ten_file}: Users hồ sơ hoặc Accounts không có dòng INSERT nào"
+    )
+    assert ho_so == set(tai_khoan), (
+        f"File {ten_file}: UserId hai bảng lệch nhau — thiếu hồ sơ {sorted(ho_so ^ set(tai_khoan))}"
+    )
 
 
 @pytest.mark.parametrize("ten_file", DUMP_FILES)
@@ -185,7 +210,7 @@ def test_co_cua_hang_ngung_hoat_dong_cua_seller(ten_file):
         )
 
 
-# ── T008/T032 (seed): Users có cột trang_thai (database.sql thêm mới) ─────────
+# ── T008/T032 (seed): bảng Accounts có cột trang_thai (database.sql thêm mới) ─
 def test_database_sql_co_cot_trang_thai():
     noi_dung = load_dump("database.sql")
     assert re.search(r"\[trang_thai\] \[varchar\]\(10\) NULL", noi_dung), (
@@ -223,7 +248,7 @@ def test_seller_requests_status_default_chu_thuong(ten_file):
 
 
 # ── T031 (US3): ràng buộc mới không khóa Quản lý + không còn Role_id=13 ──────
-CK_QUAN_LY_NOT_BANNED = "CK_Users_QuanLy_KhongDuocKhoa"
+CK_QUAN_LY_NOT_BANNED = "QuanLy_KhongDuocKhoa"
 
 RE_CHECK_QUAN_LY = re.compile(r"CHECK\s*\(NOT\s*\(trang_thai\s*=\s*N?'banned'\s*AND\s*Role_Id\s*=\s*2\)\)")
 
@@ -252,7 +277,7 @@ def test_khong_con_role_id_13_trong_backend():
 
 
 # ── T008 (003-US1): seed đúng 1 Admin + trigger + CHECK ───────────────────────
-TRIGGER_MOT_ADMIN = "TRG_Users_ChiMotAdmin"
+TRIGGER_MOT_ADMIN = "TRG_Accounts_ChiMotAdmin"
 
 
 @pytest.mark.parametrize("ten_file", DUMP_FILES)

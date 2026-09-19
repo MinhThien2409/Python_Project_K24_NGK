@@ -232,7 +232,13 @@ class DonHangDao:
             conn.close()
 
     def _sql_tat_ca_don_hang(self):
-        """Câu lệnh lấy toàn bộ đơn kèm tên khách hàng."""
+        """Câu lệnh lấy toàn bộ đơn kèm tên khách hàng.
+
+        T040 (008-split-user-table): KHÔNG cần sửa — truy vấn chỉ dùng
+        `u.FullName` và `o.UserId` đều thuộc bảng `Users` (hồ sơ), không tham
+        chiếu cột nào đã chuyển sang `Accounts` (Username/Password/Role_Id/
+        trang_thai).
+        """
         return """
         SELECT
             o.OrderId,
@@ -292,7 +298,11 @@ class DonHangDao:
                 "hoan_thanh": row.hoan_thanh, "da_huy": row.da_huy}
 
     def _dem_san_pham_va_user(self, cursor):
-        """Đếm tổng sản phẩm và người dùng."""
+        """Đếm tổng sản phẩm và người dùng.
+
+        T040 (008-split-user-table): `COUNT(*) FROM Users` đếm hồ sơ — bảng
+        `Users` còn nguyên sau khi tách; không cần sửa.
+        """
         cursor.execute("SELECT COUNT(*) AS tong FROM Products")
         p = cursor.fetchone()
         cursor.execute("SELECT COUNT(*) AS tong FROM Users")

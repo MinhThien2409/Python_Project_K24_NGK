@@ -17,18 +17,31 @@ INSERT INTO Roles (RoleId, RoleName) VALUES
 (3, 'Seller'),
 (4, 'Customer');
 
+-- ═══════════ HỒ SƠ (tách ra khỏi Accounts) ═══════════
+INSERT INTO Users (UserId, FullName, Address, Phone, NationalId) VALUES
+(1,  'Nguyễn Văn An',      '120 An Liễng, Phường 12, Hà Nội',        '0901111111', '111111111'),
+(2,  'Lê Thị Quản Lý',     '12 Nguyễn Huệ, Quận 1, TP. Hồ Chí Minh','0901111112', '111111112'),
+(3,  'Trần Văn Bán',       '18A Cộng Hòa, Quận Tân Bình, TP. HCM',  '0901111113', '111111113'),
+(4,  'Phạm Thị Buôn',      '105 Trần Hưng Đạo, Quận 1, TP. HCM',    '0901111114', '111111114'),
+(5,  'Hoàng Văn Shop',     'Số 45 Phan Đăng Lưu, Quận Phú Nhuận, TP. HCM', '0901111115', '111111115'),
+(6,  'Nguyễn Minh Khách',  '88 Võ Văn Ngân, TP. Thủ Đức, TP. HCM',  '0901111116', '111111116'),
+(7,  'Trịnh Quỳnh Anh',    '220/15 Nguyễn Trãi, Quận 5, TP. HCM',    '0901111117', '111111117'),
+(8,  'Đặng Tuấn Kiệt',     'Số 5 Tôn Đức Thắng, Quận 1, TP. HCM',    '0901111118', '111111118'),
+(9,  'Vũ Ngọc Hà',         '15 Ngõ 34 Xuân La, Tây Hồ, Hà Nội',      '0901111119', '111111119'),
+(10, 'Lâm Hồng Nhung',     '9B Mai Thị Lựu, Quận 1, TP. HCM',        '0901111120', '111111120');
+
 -- ═══════════ TÀI KHOẢN ═══════════
-INSERT INTO Users (UserId, FullName, Address, Phone, NationalId, Username, Password, Role_Id, trang_thai) VALUES
-(1,  'Nguyễn Văn An',      '120 An Liễng, Phường 12, Hà Nội',        '0901111111', '111111111', 'admin',   '123456', 1, 'active'),
-(2,  'Lê Thị Quản Lý',     '12 Nguyễn Huệ, Quận 1, TP. Hồ Chí Minh','0901111112', '111111112', 'quanly1', '123456', 2, 'active'),
-(3,  'Trần Văn Bán',       '18A Cộng Hòa, Quận Tân Bình, TP. HCM',  '0901111113', '111111113', 'seller1', '123456', 3, 'active'),
-(4,  'Phạm Thị Buôn',      '105 Trần Hưng Đạo, Quận 1, TP. HCM',    '0901111114', '111111114', 'seller2', '123456', 3, 'active'),
-(5,  'Hoàng Văn Shop',     'Số 45 Phan Đăng Lưu, Quận Phú Nhuận, TP. HCM', '0901111115', '111111115', 'seller3', '123456', 3, 'active'),
-(6,  'Nguyễn Minh Khách',  '88 Võ Văn Ngân, TP. Thủ Đức, TP. HCM',  '0901111116', '111111116', 'khach1',  '123456', 4, 'active'),
-(7,  'Trịnh Quỳnh Anh',    '220/15 Nguyễn Trãi, Quận 5, TP. HCM',    '0901111117', '111111117', 'khach2',  '123456', 4, 'active'),
-(8,  'Đặng Tuấn Kiệt',     'Số 5 Tôn Đức Thắng, Quận 1, TP. HCM',    '0901111118', '111111118', 'khach3',  '123456', 4, 'active'),
-(9,  'Vũ Ngọc Hà',         '15 Ngõ 34 Xuân La, Tây Hồ, Hà Nội',      '0901111119', '111111119', 'khach4',  '123456', 4, 'active'),
-(10, 'Lâm Hồng Nhung',     '9B Mai Thị Lựu, Quận 1, TP. HCM',        '0901111120', '111111120', 'khach5',  '123456', 4, 'banned');
+INSERT INTO Accounts (UserId, Username, Password, Role_Id, trang_thai) VALUES
+(1, 'admin',   '123456', 1, 'active'),
+(2, 'quanly1', '123456', 2, 'active'),
+(3, 'seller1', '123456', 3, 'active'),
+(4, 'seller2', '123456', 3, 'active'),
+(5, 'seller3', '123456', 3, 'active'),
+(6, 'khach1',  '123456', 4, 'active'),
+(7, 'khach2',  '123456', 4, 'active'),
+(8, 'khach3',  '123456', 4, 'active'),
+(9, 'khach4',  '123456', 4, 'active'),
+(10, 'khach5', '123456', 4, 'banned');
 
 -- ═══════════ GIAN HÀNG ═══════════
 INSERT INTO Stores (StoreId, StoreName, Address, UserId, Phone, Category, Description, IsActive, CreatedAt) VALUES

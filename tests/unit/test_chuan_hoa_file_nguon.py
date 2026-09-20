@@ -247,23 +247,25 @@ def test_seller_requests_status_default_chu_thuong(ten_file):
         )
 
 
-# ── T031 (US3): ràng buộc mới không khóa Quản lý + không còn Role_id=13 ──────
+# ── T031 (US3): CHECK cũ chặn khóa Quản lý đã nới (015 FR-010) ───────────
 CK_QUAN_LY_NOT_BANNED = "QuanLy_KhongDuocKhoa"
 
 RE_CHECK_QUAN_LY = re.compile(r"CHECK\s*\(NOT\s*\(trang_thai\s*=\s*N?'banned'\s*AND\s*Role_Id\s*=\s*2\)\)")
 
 
 @pytest.mark.parametrize("ten_file", DUMP_FILES)
-def test_rang_buoc_khong_duoc_khoa_quan_ly(ten_file):
+def test_rang_buoc_khong_con_khoa_quan_ly(ten_file):
+    """015 FR-010: chỉ Admin ghi trạng thái Quản lý — CHECK cũ phải được gỡ khỏi
+    mọi file nguồn mẫu (database.sql + back_up.sql); giữ nguyên CHECK Admin."""
     noi_dung = load_dump(ten_file)
-    assert CK_QUAN_LY_NOT_BANNED in noi_dung, (
-        f"File {ten_file}: thiếu ràng buộc {CK_QUAN_LY_NOT_BANNED}"
+    assert CK_QUAN_LY_NOT_BANNED not in noi_dung, (
+        f"File {ten_file}: {CK_QUAN_LY_NOT_BANNED} phải được gỡ (FR-010)"
     )
-    assert RE_CHECK_QUAN_LY.search(noi_dung), (
-        f"File {ten_file}: CHECK {CK_QUAN_LY_NOT_BANNED} phải chặn Role_Id=2 bị banned"
+    assert not RE_CHECK_QUAN_LY.search(noi_dung), (
+        f"File {ten_file}: còn CHECK chặn Role_Id=2 bị banned (FR-010)"
     )
-    assert noi_dung.count(CK_QUAN_LY_NOT_BANNED) == 1, (
-        f"File {ten_file}: {CK_QUAN_LY_NOT_BANNED} phải xuất hiện đúng 1 lần"
+    assert CK_ADMIN_NOT_BANNED in noi_dung, (
+        f"File {ten_file}: phải giữ ràng buộc {CK_ADMIN_NOT_BANNED}"
     )
 
 
@@ -299,10 +301,11 @@ def test_co_trigger_chi_mot_admin(ten_file):
 
 
 @pytest.mark.parametrize("ten_file", DUMP_FILES)
-def test_giu_hai_check_chong_khoa_admin_quan_ly(ten_file):
+def test_chi_con_check_chong_khoa_admin(ten_file):
+    """015 FR-010: chỉ còn ràng buộc Admin_KhongDuocKhoa — không còn check Quản lý."""
     noi_dung = load_dump(ten_file)
     assert CK_ADMIN_NOT_BANNED in noi_dung
-    assert CK_QUAN_LY_NOT_BANNED in noi_dung
+    assert CK_QUAN_LY_NOT_BANNED not in noi_dung
 
 
 def test_khong_ton_tai_route_tao_admin():

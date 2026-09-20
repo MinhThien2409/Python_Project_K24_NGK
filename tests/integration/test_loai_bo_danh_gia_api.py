@@ -118,11 +118,7 @@ def test_post_kem_rating_van_200_va_khong_luu(customer_client):
                "image_url": None, "category_id": 14, "store_id": 6,
                "rating": 4.9}
     r = client.post("/api/products", json=payload)
-    assert r.status_code == 200
-    assert r.json["status"] is True
-    nid = r.json.get("product_id")
-    assert nid is not None
-    assert "rating" not in store.san_pham[nid]
+    assert r.status_code in (404, 405)  # 009 FR-011: route write admin đã gỡ
 
 
 def test_put_kem_rating_van_200_va_khong_luu(customer_client):
@@ -132,9 +128,7 @@ def test_put_kem_rating_van_200_va_khong_luu(customer_client):
                "image_url": None, "category_id": 14, "store_id": 6,
                "rating": "xxx"}
     r = client.put("/api/products/1", json=payload)
-    assert r.status_code == 200
-    assert r.json["status"] is True
-    assert "rating" not in store.san_pham[1]
+    assert r.status_code in (404, 405)  # 009 FR-011: route write admin đã gỡ
 
 
 # ── T008: sort/filter không còn tùy chọn rating ──

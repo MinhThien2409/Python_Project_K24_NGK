@@ -10,34 +10,42 @@ logger = logging.getLogger(__name__)
 
 class DonHangDao:
     # ─── GHI ───
-    def tao_don_hang(self, order: DonHang, order_items: list):
-        """Tạo đơn hàng mới kèm trừ kho trong transaction."""
+    def tao_don_hang(self, orders: list):
+        """Tạo N đơn + chi tiết trong 1 giao dịch; trả list OrderId mới.
+
+        All-or-nothing (plan.md D3): 1 đơn thất bại (hết hàng) → rollback toàn
+        bộ, không đơn nào được tạo. Mỗi phần tử là 1 DonHang đã nhóm theo shop
+        (BUS đảm nhiệm), Items của nó chỉ chứa sản phẩm cùng StoreId.
+        """
         conn = DBconnection().get_connection()
         if not conn:
             return False
         cursor = conn.cursor()
         try:
-            new_order_id = self._chen_order_lay_id(cursor, order)
-            loi_kho = self._chen_items_tru_kho(cursor, conn, new_order_id, order_items)
-            if loi_kho:
-                return loi_kho
+            cac_order_id = []
+            for order in orders:
+                new_order_id = self._chen_order_lay_id(cursor, order)
+                loi_kho = self._chen_items_tru_kho(cursor, conn, new_order_id,
+                                                   order.Items)
+                if loi_kho:
+                    return loi_kho
+                cac_order_id.append(new_order_id)
             conn.commit()
-            return new_order_id
+            return cac_order_id
         except Exception as e:
             conn.rollback()
-            logger.exception("Lỗi tạo đơn hàng + chi tiết: %s", e)
+            logger.exception("Lỗi tạo N đơn hàng + chi tiết: %s", e)
             return False
         finally:
             cursor.close()
             conn.close()
 
     def _chen_order_lay_id(self, cursor, order):
-        """Chèn Orders và trả về OrderId mới sinh."""
+        """Chèn Orders và trả về OrderId mới sinh (MySQL: cursor.lastrowid)."""
         sql_order = """
         INSERT INTO Orders (Status, ShippingFee, UserId, ReceiverName,
                             ReceiverPhone, ShippingAddress, PaymentMethod,
                             SubTotal, DiscountAmount, TotalAmount, Note)
-        OUTPUT INSERTED.OrderId
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """
         cursor.execute(sql_order, (
@@ -53,8 +61,7 @@ class DonHangDao:
             float(order.TotalAmount or 0),
             str(order.Note) if order.Note else None
         ))
-        row_moi = cursor.fetchone()
-        return row_moi[0] if row_moi else None
+        return cursor.lastrowid
 
     def _chen_items_tru_kho(self, cursor, conn, new_order_id, order_items):
         """Chèn OrderItems kèm trừ kho, thiếu hàng thì rollback và báo lỗi."""
@@ -411,7 +418,7 @@ class DonHangDao:
             u.FullName   AS CustomerName,
             o.ReceiverName, o.ReceiverPhone, o.ShippingAddress,
             o.PaymentMethod, o.SubTotal, o.DiscountAmount,
-            o.TotalAmount, o.CreatedAt
+            o.TotalAmount, o.CreatedAt, o.Note AS Note
         FROM Orders o
         LEFT JOIN Users u ON o.UserId = u.UserId
         INNER JOIN OrderItems oi ON o.OrderId = oi.OrderId
@@ -617,24 +624,46 @@ class DonHangDao:
         return [dict(zip(item_columns, ir)) for ir in item_rows]
 
     def lay_store_ids_cua_san_pham(self, product_ids):
-        """Trả về danh sách StoreId duy nhất của các sản phẩm trong đơn."""
+        """Trả dict {ProductId: StoreId} của các sản phẩm trong đơn (nhóm theo shop)."""
         if not product_ids:
-            return []
+            return {}
         conn = DBconnection().get_connection()
         if not conn:
-            return []
+            return {}
         cursor = conn.cursor()
         try:
             placeholders = ",".join(["?"] * len(product_ids))
             # Tham số hóa được kiểm soát: placeholders chỉ sinh từ số lượng id
             cursor.execute(
-                f"SELECT DISTINCT StoreId FROM Products WHERE ProductId IN ({placeholders})",
+                f"SELECT ProductId, StoreId FROM Products WHERE ProductId IN ({placeholders})",
                 tuple(product_ids)
             )
-            return [row[0] for row in cursor.fetchall()]
+            return {row.ProductId: row.StoreId for row in cursor.fetchall()}
         except Exception as e:
             logger.exception("Lỗi lay_store_ids_cua_san_pham: %s", e)
-            return []
+            return {}
+        finally:
+            cursor.close()
+            conn.close()
+
+    def lay_ten_cua_cac_store(self, store_ids):
+        """Trả dict {StoreId: StoreName} của các shop trong đơn (011 US2)."""
+        if not store_ids:
+            return {}
+        conn = DBconnection().get_connection()
+        if not conn:
+            return {}
+        cursor = conn.cursor()
+        try:
+            placeholders = ",".join(["?"] * len(store_ids))
+            cursor.execute(
+                f"SELECT StoreId, StoreName FROM Stores WHERE StoreId IN ({placeholders})",
+                tuple(store_ids)
+            )
+            return {row.StoreId: row.StoreName for row in cursor.fetchall()}
+        except Exception as e:
+            logger.exception("Lỗi lay_ten_cua_cac_store: %s", e)
+            return {}
         finally:
             cursor.close()
             conn.close()

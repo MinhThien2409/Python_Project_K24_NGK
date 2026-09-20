@@ -21,16 +21,6 @@
 * { margin: 0; padding: 0; box-sizing: border-box; }
 body { font-family: 'Be Vietnam Pro', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
 
-/* Tab View Navigation (User vs Admin toggle for demo) */
-.view-switcher {
-  background: #1A1714; color: #fff; padding: 8px 24px; display: flex; justify-content: space-between; align-items: center; font-size: 13px;
-}
-.view-switcher .btns { display: flex; gap: 10px; }
-.view-switcher button {
-  background: rgba(255,255,255,0.2); border: none; color: #fff; padding: 4px 12px; border-radius: 6px; cursor: pointer; font-weight: 600;
-}
-.view-switcher button.active { background: var(--accent); color: #1A1714; }
-
 /* HEADER & TOPBAR */
 .topbar { background: var(--primary-dark); color: #fff; font-size: 12px; padding: 6px 0; text-align: center; }
 .topbar span { margin: 0 16px; opacity: 0.9; }
@@ -93,6 +83,8 @@ nav { background: var(--white); border-bottom: 1px solid var(--border); }
 
 .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.55); z-index: 250; align-items: center; justify-content: center; }
 .modal-overlay.show { display: flex; }
+/* 017 US3: hóa đơn luôn nằm trên Lịch sử đơn — chỉ đổi thứ tự lớp, tái dùng modal-box */
+#invoiceModal.modal-overlay.show { z-index: 260; }
 .modal-box { background: var(--white); border-radius: var(--radius); width: 540px; max-width: 95vw; padding: 28px; position: relative; max-height: 90vh; overflow-y: auto; }
 .modal-close { position: absolute; top: 16px; right: 16px; background: var(--bg); border: none; border-radius: 6px; width: 32px; height: 32px; cursor: pointer; }
 
@@ -137,6 +129,7 @@ th { background: #F9F7F4; font-weight: 700; }
 .status-pending { background: var(--accent-light); color: var(--accent); }
 .status-confirmed { background: #E8F8EF; color: var(--green); }
 .status-cancelled { background: var(--red-light); color: var(--red); }
+.status-hidden { background: var(--bg); color: var(--text-muted); }  /* 015 FR-024: sản phẩm Đang ẩn (dùng biến sẵn có) */
 
 .toast { position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%) translateY(80px); background: #1A1714; color: #fff; padding: 12px 24px; border-radius: 99px; font-size: 14px; font-weight: 600; z-index: 300; transition: transform 0.3s ease; }
 .toast.show { transform: translateX(-50%) translateY(0); }
@@ -270,6 +263,13 @@ footer {
 .btn-delete { background: var(--red-light); color: var(--red); }
 .btn-confirm { background: var(--green-light); color: var(--green); }
 .btn-cancel { background: var(--red-light); color: var(--red); }
+
+/* 10. Thanh bộ lọc danh sách (013) — flex 1 hàng, xuống dòng khi hẹp */
+.filter-bar { display:flex; flex-wrap:wrap; gap:10px; align-items:flex-end; }
+.filter-bar .filter-item { display:flex; flex-direction:column; gap:4px; }
+.filter-bar label { font-size:11px; font-weight:700; text-transform:uppercase; color:var(--text-muted); }
+.filter-bar select, .filter-bar input { padding:6px 12px; border-radius:6px; border:1px solid var(--border); font-size:13px; font-family:inherit; outline:none; }
+.filter-bar select:focus, .filter-bar input:focus { border-color:var(--primary); }
 
 .profile-modal-header {
   display: flex;

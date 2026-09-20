@@ -34,8 +34,7 @@ CREATE TABLE Accounts (
     trang_thai  VARCHAR(10)  NULL DEFAULT 'active',
     CONSTRAINT FK_Accounts_Users      FOREIGN KEY (UserId) REFERENCES Users (UserId),
     CONSTRAINT FK_Accounts_Roles       FOREIGN KEY (Role_Id) REFERENCES Roles (RoleId),
-    CONSTRAINT CK_Accounts_Admin_KhongDuocKhoa  CHECK (NOT (trang_thai = 'banned' AND Role_Id = 1)),
-    CONSTRAINT CK_Accounts_QuanLy_KhongDuocKhoa CHECK (NOT (trang_thai = 'banned' AND Role_Id = 2))
+    CONSTRAINT CK_Accounts_Admin_KhongDuocKhoa  CHECK (NOT (trang_thai = 'banned' AND Role_Id = 1))
 );
 
 CREATE TABLE Stores (

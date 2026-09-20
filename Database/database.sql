@@ -301,8 +301,7 @@ CREATE TABLE [dbo].[Accounts](
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
 , CONSTRAINT [FK_Accounts_Users] FOREIGN KEY( [UserId]) REFERENCES [Users] ([UserId]) ON DELETE RESTRICT ON UPDATE RESTRICT
 , CONSTRAINT [FK_Accounts_Roles] FOREIGN KEY( [Role_Id]) REFERENCES [Roles] ([RoleId]) ON DELETE RESTRICT ON UPDATE RESTRICT,
- CONSTRAINT [CK_Accounts_Admin_KhongDuocKhoa] CHECK (NOT (trang_thai = N'banned' AND Role_Id = 1)),
- CONSTRAINT [CK_Accounts_QuanLy_KhongDuocKhoa] CHECK (NOT (trang_thai = N'banned' AND Role_Id = 2))
+ CONSTRAINT [CK_Accounts_Admin_KhongDuocKhoa] CHECK (NOT (trang_thai = N'banned' AND Role_Id = 1))
 ) ON [PRIMARY]
 GO
 INSERT [dbo].[CartItems] ([CartId], [ProductId], [Quantity], [UnitPrice]) VALUES (1, 1, 1, CAST(0.00 AS Decimal(18, 2)))

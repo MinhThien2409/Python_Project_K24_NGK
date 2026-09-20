@@ -25,7 +25,8 @@ class GioHangDao:
                 ci.UnitPrice AS UnitPrice,
                 p.ProductName AS ProductName,
                 p.Emoji AS Emoji,
-                p.ImageUrl AS ImageUrl
+                p.ImageUrl AS ImageUrl,
+                p.StoreId AS StoreId
             FROM CartItems ci
             LEFT JOIN Products p ON ci.ProductId = p.ProductId
             WHERE ci.CartId = ?
@@ -41,43 +42,6 @@ class GioHangDao:
             cursor.close()
             conn.close()
 
-    def lay_store_ids_trong_gio(self, cart_id):
-        """Lấy danh sách Shop (StoreId) đang có trong giỏ hàng"""
-        conn = DBconnection.get_connection()
-        if conn is None: return []
-        cursor = conn.cursor()
-        try:
-            cursor.execute("""
-                SELECT DISTINCT p.StoreId, s.StoreName
-                FROM CartItems ci
-                INNER JOIN Products p ON ci.ProductId = p.ProductId
-                LEFT JOIN Stores s ON p.StoreId = s.StoreId
-                WHERE ci.CartId = ?
-            """, (cart_id,))
-            return [{"store_id": r[0], "store_name": r[1]} for r in cursor.fetchall()]
-        except Exception as e:
-            logger.exception("Lỗi lay_store_ids_trong_gio: %s", e)
-            return []
-        finally:
-            cursor.close();
-            conn.close()
-
-    def lay_store_id_san_pham(self, product_id):
-        """Lấy StoreId của 1 sản phẩm"""
-        conn = DBconnection.get_connection()
-        if conn is None: return None
-        cursor = conn.cursor()
-        try:
-            cursor.execute("SELECT StoreId FROM Products WHERE ProductId = ?", (product_id,))
-            row = cursor.fetchone()
-            return row[0] if row else None
-        finally:
-            cursor.close();
-            conn.close()
-
-    # ─── GHI ───
-
-    # 1. LẤY HOẶC TẠO MỚI GIỎ HÀNG CHO USER
     def lay_hoac_tao_gio_hang(self, user_id):
         """Lấy CartId hiện có của user, chưa có thì tạo giỏ mới."""
         conn = DBconnection().get_connection()
@@ -91,13 +55,12 @@ class GioHangDao:
             if row:
                 cart_id = row[0]
             else:
-                # Nếu chưa có, tạo giỏ hàng mới
+                # Nếu chưa có, tạo giỏ hàng mới — MySQL: CreatedAt có DEFAULT
+                # CURRENT_TIMESTAMP, lấy id mới qua cursor.lastrowid
                 cursor.execute(
-                    "INSERT INTO Carts (UserId, TotalAmount, CreatedAt) "
-                    "OUTPUT INSERTED.CartId VALUES (?, 0, GETDATE())",
+                    "INSERT INTO Carts (UserId, TotalAmount) VALUES (?, 0)",
                     (user_id,))
-                fetched = cursor.fetchone()
-                cart_id = fetched[0] if fetched else None
+                cart_id = cursor.lastrowid
                 conn.commit()
 
             return cart_id

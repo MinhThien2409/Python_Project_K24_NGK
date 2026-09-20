@@ -27,13 +27,17 @@ def _lay_route_table():
 
 
 def test_tat_ca_route_contract_con_ton_tai():
-    """Mọi route trong contract phải còn (chưa bị xóa nhầm)."""
+    """Mọi route trong contract phải còn (chưa bị xóa nhầm).
+
+    009 FR-011: /api/thong-ke/tong-quan, /api/thong-ke/doanh-thu-theo-thang,
+    /api/don-hang/cua-seller đã bị gỡ có chủ đích (chức năng chuyển sang
+    /api/seller/*) nên không còn nằm trong danh sách bắt buộc.
+    """
     src = (REPO / "app.py").read_text(encoding="utf-8")
     bat_buoc = [
         "/api/dang-nhap", "/api/dang-ky", "/api/phien",
         "/api/categories", "/api/products",
         "/api/gio-hang/them", "/api/don-hang/dat-hang",
-        "/api/don-hang/cua-seller", "/api/thong-ke/tong-quan",
         "/api/quan-ly", "/api/seller/san-pham",
         "/api/seller/don-hang", "/api/seller/trang-shop",
         "/api/duyet-seller", "/api/cap-lai-mat-khau",
@@ -43,10 +47,10 @@ def test_tat_ca_route_contract_con_ton_tai():
 
 
 def test_so_luong_route_khop_contract():
-    """Tổng số route /api/* (tính theo cặp path+method) khớp inventory 54."""
+    """Số route /api/* (path+method) nằm trong khoảng hợp lý sau FR-011 (009)."""
     routes = _lay_route_table()
-    assert 50 <= len(routes) <= 60, \
-        f"Số route /api/* lạ: {len(routes)} (kỳ vọng ~54)"
+    assert 44 <= len(routes) <= 56, \
+        f"Số route /api/* lạ: {len(routes)} (kỳ vọng ~46 sau khi gỡ 8 route cũ)"
 
 
 def test_trang_chu_tra_200():

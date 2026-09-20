@@ -20,4 +20,7 @@ Thumbs.db
 *.tmp
 *.swp
 *.log
+.env*
+node_modules/
+build/
 test_output.txt

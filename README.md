@@ -92,10 +92,20 @@ DB_CONFIG = {
 
 ### 5. Tạo cơ sở dữ liệu
 
+Dùng đúng 2 file MySQL (`schema_mysql.sql` + `seed_demo_mysql.sql`), LUÔN kèm
+`--default-character-set=utf8mb4` để tiếng Việt không bị hỏng (lỗi mojibake
+"Quß║ún l├¢" xảy ra khi client mặc định dùng CP850 trên Windows):
+
 ```bash
-mysql -u root -p < Database/database.sql
-mysql -u root -p PobbyDB < Database/seed_demo_mysql.sql
+mysql -u root -p --default-character-set=utf8mb4 < Database/schema_mysql.sql
+mysql -u root -p --default-character-set=utf8mb4 PobbyDB < Database/seed_demo_mysql.sql
 ```
+
+> Trên Windows có thể chạy luôn `Database/import_mysql.bat` (hỏi mật khẩu MySQL).
+>
+> Nếu dữ liệu hiện có đã bị lỗi tiếng Việt, chạy script sửa mã hóa:
+> `mysql -u root -p --default-character-set=utf8mb4 < Database/fix_utf8mb4.sql`
+> (dữ liệu sẽ được chuyển ngược CP850 → UTF-8 về đúng bản gốc, an toàn chạy lại).
 
 ## ▶️ Chạy dự án
 

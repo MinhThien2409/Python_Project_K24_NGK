@@ -91,11 +91,15 @@ def test_mat_khau_moi_khong_xuat_hien_trong_danh_sach(client, app_voi_dao):
     resp = client.post("/api/cap-lai-mat-khau", json={"ma_user": 9})
     mat_khau_moi = resp.get_json()["data"]["mat_khau_moi"]
 
-    # GET /api/users và lay_danh_sach_user KHÔNG chứa mật khẩu mới (FR-011)
+    # 015 FR-012: Quản lý được phép GET /api/users (SC-004) — danh sách vẫn
+    # không chứa mật khẩu mới (bất biến FR-011) khi truy vấn qua API.
     resp = client.get("/api/users")
     assert resp.status_code == 200
-    assert mat_khau_moi not in str(resp.get_json())
+    assert resp.get_json()["status"] is True
+    noi_dung_api = str(resp.get_json()["data"])
+    assert mat_khau_moi not in noi_dung_api
 
+    # lay_danh_sach_user KHÔNG chứa mật khẩu mới (FR-011)
     danh_sach = user_dao.lay_danh_sach_user()
     assert mat_khau_moi not in str(danh_sach)
 

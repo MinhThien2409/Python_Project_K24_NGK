@@ -2,6 +2,12 @@
 -- Dữ liệu demo cho database PobbyDB (tách riêng khỏi file tạo bảng).
 -- Yêu cầu chạy trước: Database/schema_mysql.sql
 --
+-- ⚠️ IMPORT QUAN TRỌNG (tiếng Việt): luôn import với
+--     mysql -u root -p --default-character-set=utf8mb4 < Database/seed_demo_mysql.sql
+--   Nếu quên cờ này, client Windows mặc định dùng CP850 → dữ liệu bị lỗi
+--   mojibake (thấy "Quß║ún l├¢" thay vì "Quản lý"). Có thể chạy
+--   Database/fix_utf8mb4.sql để sửa dữ liệu đã bị hỏng.
+
 -- Bộ tài khoản demo (mật khẩu đều là 123456):
 --     admin    → Admin
 --     quanly1  → Quản lý
@@ -60,16 +66,16 @@ INSERT INTO Categories (CategoryId, CategoryName) VALUES
 
 -- ═══════════ SẢN PHẨM ═══════════
 INSERT INTO Products (ProductId, ProductName, Quantity, Price, CategoryId, StoreId, Description, OldPrice, ImageUrl, SoldCount, Emoji, IsActive) VALUES
-(1,  'iPhone 15 Pro Max',     10,  32000000.00, 1, 1, 'Hàng chính hãng VN/A, bảo hành 12 tháng', 35000000.00, NULL, 120,  '📱', 1),
-(2,  'Samsung Galaxy S25',    15,  25000000.00, 1, 1, 'Mới nhất 2026, tích hợp AI thông minh',    28000000.00, NULL, 85,   '📦', 1),
-(3,  'MacBook Air M3',        8,   31000000.00, 2, 1, 'Chip M3 siêu mạnh mẽ, pin trâu 18 tiếng',  34000000.00, NULL, 42,   '📦', 1),
-(4,  'Áo Hoodie Local Brand', 50,  450000.00,   3, 2, 'Chất liệu cotton 100% thoáng mát, form rộng', 650000.00, NULL, 320, '🧥', 1),
-(5,  'Giày Sneaker Nike',     30,  2200000.00,  3, 2, 'Giày thể thao nam nữ, êm chân, bền bỉ',    2800000.00,  NULL, 98,   '📦', 1),
-(6,  'Balo Du Lịch',          40,  890000.00,   3, 2, 'Chống nước nhẹ, nhiều ngăn tiện dụng',      1200000.00,  NULL, 115,  '🎒', 1),
-(7,  'Nồi chiên không dầu',   12,  2500000.00,  4, 3, 'Dung tích 5L, công nghệ Rapid Air',         3200000.00,  NULL, 64,   '📦', 1),
+(1,  'iPhone 15 Pro Max',     10,  32000000.00, 1, 1, 'Hàng chính hãng VN/A, bảo hành 12 tháng', 35000000.00, 'images/products/iphone-15-pro-max.png', 120,  '📱', 1),
+(2,  'Samsung Galaxy S25',    15,  25000000.00, 1, 1, 'Mới nhất 2026, tích hợp AI thông minh',    28000000.00, 'images/products/samsung.jpg', 85,   '📦', 1),
+(3,  'MacBook Air M3',        8,   31000000.00, 2, 1, 'Chip M3 siêu mạnh mẽ, pin trâu 18 tiếng',  34000000.00, 'images/products/macbook.jpg', 42,   '📦', 1),
+(4,  'Áo Hoodie Local Brand', 50,  450000.00,   3, 2, 'Chất liệu cotton 100% thoáng mát, form rộng', 650000.00, 'images/products/hoodie-local-brand.png', 320, '🧥', 1),
+(5,  'Giày Sneaker Nike',     30,  2200000.00,  3, 2, 'Giày thể thao nam nữ, êm chân, bền bỉ',    2800000.00,  'images/products/giay-nike-air-max.png', 98,   '📦', 1),
+(6,  'Balo Du Lịch',          40,  890000.00,   3, 2, 'Chống nước nhẹ, nhiều ngăn tiện dụng',      1200000.00,  'images/products/tui_xach.png', 115,  '🎒', 1),
+(7,  'Nồi chiên không dầu',   12,  2500000.00,  4, 3, 'Dung tích 5L, công nghệ Rapid Air',         3200000.00,  'images/products/noi-chien-khong-dau.jpg', 64,   '📦', 1),
 (8,  'Máy xay sinh tố',       20,  1150000.00,  4, 3, 'Cối thủy tinh 1.5L, 6 lưỡi dao',            1500000.00,  NULL, 130,  '🥤', 1),
-(9,  'Sách Lập trình Python', 100, 120000.00,   5, 3, 'Giáo trình thực hành từ con số 0',          180000.00,   NULL, 890,  '📦', 1),
-(10, 'Đồng hồ Casio',         22,  1800000.00,  6, 3, 'Chống nước 50m, tuổi thọ pin 10 năm',       2200000.00,  NULL, 53,   '⌚', 1);
+(9,  'Sách Lập trình Python', 100, 120000.00,   5, 3, 'Giáo trình thực hành từ con số 0',          180000.00,   'images/products/sach-python.jpg', 890,  '📦', 1),
+(10, 'Đồng hồ Casio',         22,  1800000.00,  6, 3, 'Chống nước 50m, tuổi thọ pin 10 năm',       2200000.00,  'images/products/dong-ho-casio.jpg', 53,   '⌚', 1);
 
 -- ═══════════ GIỎ HÀNG ═══════════
 INSERT INTO Carts (CartId, UserId, TotalAmount, CreatedAt) VALUES

@@ -79,11 +79,14 @@ def test_sp_an_bi_tu_choi(customer_client):
     assert "không còn kinh doanh" in r.json["message"]
 
 
-def test_conflict_shop_khac(customer_client):
+def test_them_mon_shop_khac_thanh_cong_tren_api(customer_client):
+    """011 US1: giỏ mở nhiều shop — thêm món shop khác THÀNH CÔNG, không conflict."""
     client = _dung_cu(customer_client)
     _login(client)
     r = client.post("/api/gio-hang/them", json={"ProductId": 1, "Quantity": 1})
     assert r.json["status"] is True
     r = client.post("/api/gio-hang/them", json={"ProductId": 3, "Quantity": 1})
-    assert r.json["status"] is False
-    assert r.json.get("conflict") is True
+    assert r.json["status"] is True
+    assert "conflict" not in r.json
+    gio = client.get("/api/gio-hang/5").json["data"]
+    assert len(gio) == 2  # cả hai món của hai shop đều còn trong giỏ

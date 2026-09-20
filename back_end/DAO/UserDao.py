@@ -126,7 +126,7 @@ class UserDao:
         cursor = conn.cursor()
         try:
             cursor.execute("""
-                SELECT u.UserId, u.FullName, a.Username, u.Phone,
+                SELECT u.UserId, u.FullName, a.Username, u.Phone, u.Address,
                        a.Role_Id, r.RoleName,
                        COALESCE(a.trang_thai, 'active') AS trang_thai
                 FROM Users u
@@ -141,9 +141,10 @@ class UserDao:
                     "ten_user": r[1],
                     "tendangnhap": r[2],
                     "sdt": r[3],
-                    "ma_nhom_quyen": r[4],
-                    "ten_nhom_quyen": r[5],
-                    "trang_thai": r[6]
+                    "dia_chi": r[4],
+                    "ma_nhom_quyen": r[5],
+                    "ten_nhom_quyen": r[6],
+                    "trang_thai": r[7]
                 }
                 for r in rows
             ]

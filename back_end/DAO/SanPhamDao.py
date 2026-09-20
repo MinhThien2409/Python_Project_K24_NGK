@@ -306,25 +306,6 @@ class SanPhamDao:
         finally:
             cursor.close(); conn.close()
 
-    def xoa(self, product_id):
-        """Xóa mềm — chỉ đặt IsActive = 0, không xóa khỏi DB."""
-        conn = DBconnection.get_connection()
-        if conn is None: return False
-        cursor = conn.cursor()
-        try:
-            cursor.execute(
-                "UPDATE Products SET IsActive = 0 WHERE ProductId = ?",
-                (product_id,)
-            )
-            conn.commit()
-            return cursor.rowcount > 0
-        except Exception as e:
-            logger.exception("Lỗi xoa SanPham: %s", e)
-            conn.rollback()
-            return False
-        finally:
-            cursor.close(); conn.close()
-
     def cap_nhat_so_luong_ban(self, product_id, so_luong_ban_them):
         """Tăng SoldCount và giảm Quantity sau khi đặt hàng thành công."""
         conn = DBconnection.get_connection()

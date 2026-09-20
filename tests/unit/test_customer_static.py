@@ -23,19 +23,25 @@ def _bo_dong_log(src):
     )
 
 
-# ── SQL toàn placeholder ? (không %s / NOW() / lastrowid) ──
+# ── SQL toàn placeholder ? (không %s); lấy id qua lastrowid (MySQL) ──
 def test_gio_hang_dao_khong_con_mysql_dialect():
+    """016 US4: GioHangDao dùng lastrowid, hết OUTPUT/GETDATE (MySQL chuẩn)."""
     src = _bo_dong_log(_doc("back_end/DAO/GioHangDao.py"))
     assert "%s" not in src
     assert "NOW()" not in _doc("back_end/DAO/GioHangDao.py")
-    assert "lastrowid" not in _doc("back_end/DAO/GioHangDao.py")
+    assert "OUTPUT INSERTED" not in _doc("back_end/DAO/GioHangDao.py")
+    assert "GETDATE(" not in _doc("back_end/DAO/GioHangDao.py")
+    # MySQL: lấy CartId tự tăng qua cursor.lastrowid
+    assert "lastrowid" in _doc("back_end/DAO/GioHangDao.py")
 
 
 def test_don_hang_dao_khong_con_mysql_dialect():
+    """016 US4: DonHangDao._chen_order_lay_id bỏ OUTPUT, trả lastrowid."""
     src = _bo_dong_log(_doc("back_end/DAO/DonHangDao.py"))
     assert "%s" not in src
-    assert "lastrowid" not in src
-    assert "OUTPUT INSERTED" in src
+    assert "lastrowid" in src
+    assert "OUTPUT INSERTED" not in src
+    assert "fetchone()" not in src.split("_chen_order_lay_id")[1][:600]
 
 
 def test_san_pham_dao_tim_kiem_dung_placeholder():

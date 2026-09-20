@@ -80,7 +80,7 @@ def test_hoa_don_cheo_403(customer_client):
     client = _dung_cu(customer_client)
     _login(client)
     r = _dat(client)
-    ma_don = int(r.json["message"].split("#")[-1])
+    ma_don = r.json["data"]["order_ids"][0]
     _login(client, 6)
     r2 = client.get(f"/api/don-hang/hoa-don/{ma_don}")
     assert r2.status_code == 403

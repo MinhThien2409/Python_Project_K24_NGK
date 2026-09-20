@@ -21,8 +21,46 @@ class DonHangBus:
         """Khởi tạo BUS đơn hàng với DAO mặc định."""
         self.dao = DonHangDao()
 
+    def _nhom_items_theo_shop(self, dh: DonHang):
+        """Nhóm Items theo StoreId; trả (ds_don, ds_store_tong) hoặc dict lỗi."""
+        product_ids = [item.ProductId for item in dh.Items]
+        store_map = self.dao.lay_store_ids_cua_san_pham(product_ids)
+
+        nhom = {}
+        for item in dh.Items:
+            store_id = store_map.get(int(item.ProductId))
+            if store_id is None:
+                return {"status": False,
+                        "message": f"Không tìm thấy StoreId của sản phẩm '{item.ProductName}'!"}
+            nhom.setdefault(int(store_id), []).append(item)
+
+        if not nhom:
+            return {"status": False, "message": "Giỏ hàng trống, vui lòng thêm sản phẩm!"}
+        tong_ship = float(dh.ShippingFee or 0)
+        if tong_ship < 0:
+            return {"status": False, "message": "Phí vận chuyển không hợp lệ!"}
+        ship_moi_don = tong_ship / len(nhom)
+
+        ds_don = []
+        ds_store_tong = []
+        for store_id in sorted(nhom):
+            items = nhom[store_id]
+            sub_total = float(sum(float(i.TotalPrice or 0) for i in items))
+            tong_don = sub_total + ship_moi_don
+            don = DonHang(
+                UserId=dh.UserId, ReceiverName=dh.ReceiverName,
+                ReceiverPhone=dh.ReceiverPhone, ShippingAddress=dh.ShippingAddress,
+                PaymentMethod=dh.PaymentMethod, Status='Pending',
+                ShippingFee=ship_moi_don, SubTotal=sub_total,
+                DiscountAmount=0,
+                TotalAmount=tong_don, Note=dh.Note)
+            don.Items = items
+            ds_don.append(don)
+            ds_store_tong.append((store_id, tong_don))
+        return ds_don, ds_store_tong
+
     def tao_don_hang(self, dh: DonHang):
-        """Validate thanh toán rồi tạo đơn 1 shop duy nhất."""
+        """Validate thanh toán, nhóm Items theo shop, tạo N đơn all-or-nothing."""
         if not dh.ReceiverName or not dh.ReceiverPhone or not dh.ShippingAddress:
             return {"status": False, "message": "Vui lòng điền đầy đủ thông tin người nhận hàng!"}
 
@@ -37,28 +75,47 @@ class DonHangBus:
 
         if dh.TotalAmount <= 0:
             return {"status": False, "message": "Tổng tiền đơn hàng không hợp lệ!"}
+        if float(dh.ShippingFee or 0) < 0:
+            return {"status": False, "message": "Phí vận chuyển không hợp lệ!"}
 
-        product_ids = [item.ProductId for item in dh.Items]
-        store_ids = self.dao.lay_store_ids_cua_san_pham(product_ids)
-        if len(set(store_ids)) > 1:
+        nhom = self._nhom_items_theo_shop(dh)
+        if isinstance(nhom, dict):
+            return nhom
+        ds_don, ds_store_tong = nhom
+
+        kq = self._tao_toan_bo_don(ds_don, ds_store_tong)
+        return kq
+
+    def _loi_tu_dao(self, result):
+        """Lỗi hết hàng/không tồn tại trả về từ DAO (đã rollback toàn bộ)."""
+        if not isinstance(result, dict):
+            return None
+        if result.get('error') == 'out_of_stock':
+            return {"status": False, "message":
+                    f"Sản phẩm '{result['product_name']}' chỉ còn {result['available']} sản phẩm trong kho!"}
+        if result.get('error') == 'not_found':
+            return {"status": False, "message":
+                    f"Không tìm thấy sản phẩm {result['product_name']}!"}
+        return None
+
+    def _tao_toan_bo_don(self, ds_don, ds_store_tong):
+        """Gọi DAO tạo N đơn; trả payload thành công/hồi lỗi cụ thể."""
+        result = self.dao.tao_don_hang(ds_don)
+        loi = self._loi_tu_dao(result)
+        if loi:
+            return loi
+        if not result:
             return {"status": False,
-                    "message": "Đơn hàng chỉ được chứa sản phẩm từ 1 shop duy nhất!"}
-
-        dh.Status = 'Pending'
-        result = self.dao.tao_don_hang(dh, dh.Items)
-
-        # Xử lý lỗi hết hàng trả về từ DAO
-        if isinstance(result, dict):
-            if result.get('error') == 'out_of_stock':
-                return {"status": False,
-                        "message": f"Sản phẩm '{result['product_name']}' chỉ còn {result['available']} sản phẩm trong kho!"}
-            if result.get('error') == 'not_found':
-                return {"status": False,
-                        "message": f"Không tìm thấy sản phẩm {result['product_name']}!"}
-
-        if result:
-            return {"status": True, "message": f"Đặt hàng thành công! Mã đơn: #{result}"}
-        return {"status": False, "message": "Hệ thống bận, vui lòng thử lại sau!"}
+                    "message": "Không thể tạo đơn hàng, vui lòng thử lại sau!"}
+        ten_store = self.dao.lay_ten_cua_cac_store([sid for sid, _ in ds_store_tong])
+        orders = [
+            {"order_id": oid, "store_id": sid,
+             "store_name": ten_store.get(sid, f"Shop #{sid}"), "total": tong}
+            for oid, (sid, tong) in zip(result, ds_store_tong)
+        ]
+        return {"status": True,
+                "message": f"Đặt hàng thành công! {len(result)} đơn hàng đã được tạo.",
+                "data": {"order_ids": result, "orders": orders}}
 
     def lay_don_hang_cua_toi(self, user_id):
         """Lấy danh sách đơn hàng của chính khách đang đăng nhập."""

@@ -271,6 +271,7 @@ class FakeUserDaoBus:
                 "ten_user": user.ten_user,
                 "tendangnhap": username,
                 "sdt": user.sdt,
+                "dia_chi": user.dia_chi,
                 "ma_nhom_quyen": user.ma_nhom_quyen,
                 "ten_nhom_quyen": VAI_TRO_MAP.get(user.ma_nhom_quyen),
                 "trang_thai": (self.thong_tin.get(user.ma_user) or {}).get("trang_thai") or "active",
@@ -871,10 +872,19 @@ class MockDonHangCustomerDao:
         self.store_ids = store_ids or {}
 
     def lay_store_ids_cua_san_pham(self, product_ids):
-        return list({self.store_ids.get(int(pid), 1) for pid in (product_ids or [])})
+        return {int(pid): self.store_ids.get(int(pid), 1) for pid in (product_ids or [])}
 
-    def tao_don_hang(self, dh, items):
-        return self.ket_qua_tao
+    def tao_don_hang(self, orders):
+        """Tạo N đơn trong 1 giao dịch; trả list OrderId hoặc dict lỗi (011)."""
+        self._ds_don = list(orders)
+        if isinstance(self.ket_qua_tao, list):
+            return self.ket_qua_tao
+        if isinstance(self.ket_qua_tao, dict):
+            return self.ket_qua_tao
+        return [self.ket_qua_tao]
+
+    def lay_ten_cua_cac_store(self, store_ids):
+        return {int(sid): f"Shop {int(sid)}" for sid in (store_ids or [])}
 
     def lay_chi_tiet_don_hang(self, order_id):
         don = self.don_hang.get(int(order_id))
@@ -992,41 +1002,63 @@ class FakeDonHangCustomerStore:
         self.next_id = next_id
 
     def lay_store_ids_cua_san_pham(self, product_ids):
-        return list({self.san_pham.get(int(pid), {}).get("store_id", 1)
-                     for pid in (product_ids or [])})
+        return {int(pid): self.san_pham.get(int(pid), {}).get("store_id", 1)
+                for pid in (product_ids or [])}
 
-    def tao_don_hang(self, dh, items):
-        for it in items:
-            sp = self.san_pham.get(int(it.ProductId))
-            if not sp:
-                return {"error": "not_found", "product_name": f"#{it.ProductId}"}
-            if int(it.Quantity or 0) > int(sp.get("quantity", 0)):
-                return {"error": "out_of_stock", "product_name": sp.get("name"),
-                        "available": sp.get("quantity", 0)}
-        for it in items:
-            sp = self.san_pham.get(int(it.ProductId))
-            sp["quantity"] = int(sp.get("quantity", 0)) - int(it.Quantity or 0)
-        nid = self.next_id
-        self.next_id += 1
-        self.don_hang[nid] = {"OrderId": nid, "UserId": int(dh.UserId),
-                              "Status": "Pending",
-                              "ReceiverName": dh.ReceiverName,
-                              "ReceiverPhone": dh.ReceiverPhone,
-                              "ShippingAddress": dh.ShippingAddress,
-                              "PaymentMethod": dh.PaymentMethod,
-                              "SubTotal": float(dh.SubTotal or 0),
-                              "ShippingFee": float(dh.ShippingFee or 0),
-                              "DiscountAmount": float(dh.DiscountAmount or 0),
-                              "TotalAmount": float(dh.TotalAmount or 0),
-                              "CreatedAt": f"2026-09-18 10:00:{nid:02d}",
-                              "Items": [{"ProductId": int(it.ProductId),
-                                         "ProductName": it.ProductName,
-                                         "Emoji": it.Emoji,
-                                         "Quantity": int(it.Quantity or 0),
-                                         "UnitPrice": float(it.UnitPrice or 0),
-                                         "TotalPrice": float(it.TotalPrice or 0)}
-                                        for it in items]}
-        return nid
+    def lay_ten_cua_cac_store(self, store_ids):
+        return {int(sid): f"Shop {int(sid)}" for sid in (store_ids or [])}
+
+    def tao_don_hang(self, orders):
+        """Tạo N đơn + chi tiết trong 1 giao dịch (all-or-nothing); trả list OrderId."""
+        # Kiểm tra kho TẤT CẢ đơn trước — 1 shop hết hàng thì không đơn nào được tạo
+        for don in orders:
+            for it in don.Items:
+                sp = self.san_pham.get(int(it.ProductId))
+                if not sp:
+                    return {"error": "not_found",
+                            "product_name": f"#{it.ProductId}"}
+                if int(it.Quantity or 0) > int(sp.get("quantity", 0)):
+                    return {"error": "out_of_stock",
+                            "product_name": sp.get("name"),
+                            "available": sp.get("quantity", 0)}
+        cac_id = []
+        for don in orders:
+            for it in don.Items:
+                sp = self.san_pham.get(int(it.ProductId))
+                sp["quantity"] = int(sp.get("quantity", 0)) - int(it.Quantity or 0)
+            nid = self.next_id
+            self.next_id += 1
+            self.don_hang[nid] = {"OrderId": nid, "UserId": int(don.UserId),
+                                  "Status": "Pending",
+                                  "ReceiverName": don.ReceiverName,
+                                  "ReceiverPhone": don.ReceiverPhone,
+                                  "ShippingAddress": don.ShippingAddress,
+                                  "PaymentMethod": don.PaymentMethod,
+                                  "SubTotal": float(don.SubTotal or 0),
+                                  "ShippingFee": float(don.ShippingFee or 0),
+                                  "DiscountAmount": float(don.DiscountAmount or 0),
+                                  "TotalAmount": float(don.TotalAmount or 0),
+                                  "CreatedAt": f"2026-09-18 10:00:{nid:02d}",
+                                  "Items": [{"ProductId": int(it.ProductId),
+                                              "ProductName": it.ProductName,
+                                              "Emoji": it.Emoji,
+                                              "Quantity": int(it.Quantity or 0),
+                                              "UnitPrice": float(it.UnitPrice or 0),
+                                              "TotalPrice": float(it.TotalPrice or 0)}
+                                             for it in don.Items]}
+            cac_id.append(nid)
+        return cac_id
+
+    def lay_trang_thai(self, order_id):
+        don = self.don_hang.get(int(order_id))
+        return don.get("Status") if don else None
+
+    def cap_nhat_trang_thai(self, order_id, new_status):
+        don = self.don_hang.get(int(order_id))
+        if not don:
+            return False
+        don["Status"] = new_status
+        return True
 
     def lay_chi_tiet_don_hang(self, order_id):
         don = self.don_hang.get(int(order_id))

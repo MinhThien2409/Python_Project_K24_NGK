@@ -7,7 +7,10 @@ Customer → HTTP 403 + body hợp đồng; GET /api/categories vẫn công khai
 US2 (T023): GET /api/seller-requests, POST /api/duyet-seller/<id>,
 POST /api/tu-choi-seller/<id> → HTTP 403 khi không đủ quyền.
 
-US3 (T034): GET /api/users, PUT /api/users/<ma_user>/status → HTTP 403.
+US3 (T034): GET /api/users, PUT /api/users/<ma_user>/status → HTTP 403 khi chưa
+đăng nhập / Seller / Customer. Quản lý và Admin truy cập bình thường (015
+FR-008/FR-012): Quản lý được xem danh sách và khóa/mở khóa Khách hàng; Quản lý
+không tác động được lên Quản lý khác.
 
 US4 (T043): POST /api/cap-lai-mat-khau → HTTP 403.
 
@@ -161,6 +164,47 @@ def test_users_thuong_user_403(client, gan_nguoi_dung, role_id, username, ma_use
     resp = client.put(f"/api/users/{ma_user}/status", json={"status": "banned"})
     assert resp.status_code == 403
     assert resp.get_json()["message"] == "Bạn không có quyền thực hiện chức năng này!"
+
+# ── US3/015 FR-008+FR-012: Quản lý được truy cập, nhưng giới hạn Quản lý ─────
+def test_quan_ly_xem_danh_sach_users_ok(client, gan_nguoi_dung):
+    """015 FR-012: Quản lý được truy cập GET /api/users (trước đây bị chặn 403)."""
+    gan_nguoi_dung(role_id=2, username="manager1", ma_user=8)
+    client.post("/api/dang-nhap",
+                json={"tendangnhap": "manager1", "mat_khau": "123456"})
+
+    resp = client.get("/api/users")
+    body = resp.get_json()
+    assert resp.status_code == 200
+    assert body["status"] is True
+    assert len(body["data"]) >= 1
+
+def test_quan_ly_khoa_customer_ok(client, gan_nguoi_dung):
+    """Quyền cũ giữ nguyên: Quản lý khóa/mở khóa Khách hàng thành công."""
+    user_dao = gan_nguoi_dung(role_id=2, username="manager1", ma_user=8)
+    user_dao.users["customer1"] = _user(9, 4, "customer1")
+    user_dao.thong_tin[9] = _thong_tin(9, 4)
+    client.post("/api/dang-nhap",
+                json={"tendangnhap": "manager1", "mat_khau": "123456"})
+
+    resp = client.put("/api/users/9/status", json={"status": "banned"})
+    body = resp.get_json()
+    assert resp.status_code == 200
+    assert body["status"] is True
+    assert body["message"] == "Đã khóa tài khoản!"
+
+def test_quan_ly_khoa_quan_ly_khac_bi_cham(client, gan_nguoi_dung):
+    """015 FR-009(1): Quản lý không khóa được Quản lý khác → từ chối + thông báo."""
+    user_dao = gan_nguoi_dung(role_id=2, username="manager1", ma_user=8)
+    user_dao.users["manager2"] = _user(7, 2, "manager2")
+    user_dao.thong_tin[7] = _thong_tin(7, 2)
+    client.post("/api/dang-nhap",
+                json={"tendangnhap": "manager1", "mat_khau": "123456"})
+
+    resp = client.put("/api/users/7/status", json={"status": "banned"})
+    body = resp.get_json()
+    assert resp.status_code == 200
+    assert body["status"] is False
+    assert body["message"] == "Không thể khóa tài khoản Quản lý!"
 
 
 # ── US4: cấp lại mật khẩu ────────────────────────────────────────────────────

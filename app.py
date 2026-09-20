@@ -105,8 +105,8 @@ def api_dang_xuat():
 # ==========================================
 @app.route('/api/users', methods=['GET'])
 def get_users_api():
-    """Lấy danh sách user (quyền Quản lý)."""
-    gate = user_bus.kiem_tra_quyen_quan_ly(session.get('user_id'))
+    """Lấy danh sách tài khoản (quyền Admin — 009 US2)."""
+    gate = user_bus.kiem_tra_quyen_xem_danh_sach(session.get('user_id'))
     if not gate.get('status'):
         return jsonify(gate), 403
     ket_qua = user_bus.lay_danh_sach_user()
@@ -196,8 +196,8 @@ def api_dang_ky_gian_hang():
 
 @app.route('/api/seller-requests', methods=['GET'])
 def api_lay_yeu_cau():
-    """Lấy danh sách đơn đăng ký bán hàng (quyền Quản lý)."""
-    gate = user_bus.kiem_tra_quyen_quan_ly(session.get('user_id'))
+    """Lấy danh sách đơn đăng ký bán hàng (quyền Quản lý — 009 US3)."""
+    gate = user_bus.kiem_tra_quyen_duyet_seller(session.get('user_id'))
     if not gate.get('status'):
         return jsonify(gate), 403
     return jsonify(gian_hang_bus.lay_danh_sach_yeu_cau())
@@ -205,8 +205,8 @@ def api_lay_yeu_cau():
 
 @app.route('/api/duyet-seller/<int:request_id>', methods=['POST'])
 def api_duyet_seller(request_id):
-    """Duyệt đơn đăng ký bán hàng (quyền Quản lý)."""
-    gate = user_bus.kiem_tra_quyen_quan_ly(session.get('user_id'))
+    """Duyệt đơn đăng ký bán hàng (quyền Quản lý — 009 US3)."""
+    gate = user_bus.kiem_tra_quyen_duyet_seller(session.get('user_id'))
     if not gate.get('status'):
         return jsonify(gate), 403
     return jsonify(gian_hang_bus.duyet_yeu_cau(session.get('user_id'), request_id))
@@ -214,8 +214,8 @@ def api_duyet_seller(request_id):
 
 @app.route('/api/tu-choi-seller/<int:request_id>', methods=['POST'])
 def api_tu_choi_seller(request_id):
-    """Từ chối đơn đăng ký bán hàng kèm lý do (quyền Quản lý)."""
-    gate = user_bus.kiem_tra_quyen_quan_ly(session.get('user_id'))
+    """Từ chối đơn đăng ký bán hàng kèm lý do (quyền Quản lý — 009 US3)."""
+    gate = user_bus.kiem_tra_quyen_duyet_seller(session.get('user_id'))
     if not gate.get('status'):
         return jsonify(gate), 403
     data = request.json
@@ -294,47 +294,6 @@ def get_products_by_store(store_id):
 def get_product_detail(product_id):
     """Lấy chi tiết một sản phẩm theo mã."""
     return jsonify(san_pham_bus.lay_theo_id(product_id))
-
-
-@app.route('/api/products', methods=['POST'])
-def add_product():
-    """Thêm sản phẩm mới vào gian hàng."""
-    d = request.json
-    return jsonify(san_pham_bus.them_san_pham(
-        ten         = d.get('name'),
-        mo_ta       = d.get('description'),
-        gia         = d.get('price'),
-        gia_goc     = d.get('old_price'),
-        so_luong    = d.get('quantity'),
-        emoji       = d.get('emoji'),
-        image_url=d.get('image_url'),
-        category_id = d.get('category_id'),
-        store_id    = d.get('store_id', 1)
-    ))
-
-
-@app.route('/api/products/<int:product_id>', methods=['PUT'])
-def update_product(product_id):
-    """Cập nhật thông tin sản phẩm."""
-    d = request.json
-    return jsonify(san_pham_bus.sua_san_pham(
-        product_id  = product_id,
-        ten         = d.get('name'),
-        mo_ta       = d.get('description'),
-        gia         = d.get('price'),
-        gia_goc     = d.get('old_price'),
-        so_luong    = d.get('quantity'),
-        emoji       = d.get('emoji'),
-        image_url=d.get('image_url'),
-        category_id = d.get('category_id'),
-        store_id    = d.get('store_id', 1)
-    ))
-
-
-@app.route('/api/products/<int:product_id>', methods=['DELETE'])
-def delete_product(product_id):
-    """Xóa mềm sản phẩm (ẩn khỏi cửa hàng)."""
-    return jsonify(san_pham_bus.xoa_san_pham(product_id))
 
 
 # ==========================================
@@ -431,19 +390,12 @@ def api_lay_hoa_don(order_id):
     return jsonify(ket_qua)
 
 # ==========================================
+# ==========================================
 # API QUẢN LÝ ĐƠN HÀNG (ADMIN)
 # ==========================================
-@app.route('/api/don-hang/tat-ca', methods=['GET'])
-def api_lay_tat_ca_don_hang():
-    """Lấy toàn bộ đơn hàng cho quản trị."""
-    return jsonify(don_hang_bus.lay_tat_ca_don_hang())
+# 009: /api/don-hang/tat-ca + /api/don-hang/<id>/trang-thai (quản trị) đã bị gỡ
+# (chức năng thuộc Seller /api/seller/don-hang* — xem FR-011 spec 009).
 
-@app.route('/api/don-hang/<int:order_id>/trang-thai', methods=['PUT'])
-def api_cap_nhat_trang_thai(order_id):
-    """Cập nhật trạng thái đơn hàng (quản trị)."""
-    data = request.json
-    new_status = data.get('status')
-    return jsonify(don_hang_bus.thay_doi_trang_thai(order_id, new_status))
 @app.route('/api/don-hang/cua-toi/<int:user_id>', methods=['GET'])
 def api_lay_don_hang_cua_toi(user_id):
     """Lấy đơn hàng của chính mình, chặn xem đơn người khác."""
@@ -479,29 +431,17 @@ def api_cap_nhat_so_luong():
         data.get('ProductId'),
         data.get('Quantity')
     ))
-@app.route('/api/thong-ke/tong-quan', methods=['GET'])
-def api_thong_ke_tong_quan():
-    """Lấy thống kê tổng quan cho quản trị."""
-    return jsonify(don_hang_bus.lay_thong_ke_tong_quan())
-
-@app.route('/api/thong-ke/doanh-thu-theo-thang', methods=['GET'])
-def api_doanh_thu_theo_thang():
-    """Lấy doanh thu theo tháng trong năm cho quản trị."""
-    year = request.args.get('year', 2026, type=int)
-    return jsonify(don_hang_bus.lay_doanh_thu_theo_thang(year))
-@app.route('/api/don-hang/cua-seller/<int:store_id>', methods=['GET'])
-def api_lay_don_hang_cua_seller(store_id):
-    """Lấy đơn hàng của một gian hàng."""
-    return jsonify(don_hang_bus.lay_don_hang_cua_seller(store_id))
 @app.route('/api/users/<int:ma_user>/status', methods=['PUT'])
 def update_user_status(ma_user):
-    """Khóa/mở khóa tài khoản user (quyền Quản lý)."""
-    gate = user_bus.kiem_tra_quyen_quan_ly(session.get('user_id'))
+    """Khóa/mở khóa tài khoản Seller/Khách hàng bởi Quản lý."""
+    ma_nguoi_thao_tac = session.get('user_id')
+    gate = user_bus.kiem_tra_quyen_quan_ly(ma_nguoi_thao_tac)
     if not gate.get('status'):
         return jsonify(gate), 403
     data   = request.json or {}
-    status = data.get('status')  # 'active' hoặc 'banned'
-    return jsonify(user_bus.cap_nhat_trang_thai(session.get('user_id'), ma_user, status))
+    status = data.get('status')
+    return jsonify(user_bus.cap_nhat_trang_thai(
+        ma_nguoi_thao_tac, ma_user, status, "Quản lý"))
 
 
 # ==========================================

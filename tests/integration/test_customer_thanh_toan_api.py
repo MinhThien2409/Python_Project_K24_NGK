@@ -60,7 +60,7 @@ def test_checkout_tao_don_tru_kho_trong_gio(customer_client):
     client.post("/api/gio-hang/them", json={"ProductId": 1, "Quantity": 2})
     r = client.post("/api/don-hang/dat-hang", json=_payload())
     assert r.json["status"] is True
-    assert "Mã đơn" in r.json["message"]
+    assert r.json["data"]["order_ids"][0] > 0
     assert don_store.san_pham[1]["quantity"] == 3
     r2 = client.get("/api/gio-hang/5")
     assert r2.json["status"] is True
@@ -72,7 +72,7 @@ def test_hoa_don_khop_tung_dong_tien(customer_client):
     _login(client)
     r = client.post("/api/don-hang/dat-hang", json=_payload())
     assert r.json["status"] is True
-    ma_don = int(r.json["message"].split("#")[-1])
+    ma_don = r.json["data"]["order_ids"][0]
     r2 = client.get(f"/api/don-hang/hoa-don/{ma_don}")
     assert r2.status_code == 200
     assert r2.json["status"] is True
@@ -95,7 +95,7 @@ def test_hoa_don_khach_khac_403(customer_client):
     client, _ = _dung_cu(customer_client)
     _login(client)
     r = client.post("/api/don-hang/dat-hang", json=_payload())
-    ma_don = int(r.json["message"].split("#")[-1])
+    ma_don = r.json["data"]["order_ids"][0]
     _login(client, 6)
     r2 = client.get(f"/api/don-hang/hoa-don/{ma_don}")
     assert r2.status_code == 403

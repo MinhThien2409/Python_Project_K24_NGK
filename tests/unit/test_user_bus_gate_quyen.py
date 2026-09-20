@@ -68,7 +68,7 @@ def test_khoa_quyen_quan_ly_role_lạ(mock_user_dao):
     assert ket_qua["message"] == "Dữ liệu vai trò không hợp lệ!"
 
 
-@pytest.mark.parametrize("role_id", [1, 2], ids=["admin", "quan-ly"])
+@pytest.mark.parametrize("role_id", [2], ids=["quan-ly"])
 def test_khoa_quyen_quan_ly_cho_phep(mock_user_dao, role_id):
     bus = UserBus()
     bus.dao = mock_user_dao(
@@ -77,6 +77,16 @@ def test_khoa_quyen_quan_ly_cho_phep(mock_user_dao, role_id):
     ket_qua = bus.kiem_tra_quyen_quan_ly(8)
     assert ket_qua["status"] is True
     assert ket_qua["data"]["ma_user"] == 8
+
+def test_khoa_quyen_quan_ly_tu_choi_admin(mock_user_dao):
+    """009: gate thu hẹp còn Quản lý — Admin không còn dùng gate này."""
+    bus = UserBus()
+    bus.dao = mock_user_dao(
+        thong_tin={"UserId": 8, "Role_Id": 1, "trang_thai": "active"}
+    )
+    ket_qua = bus.kiem_tra_quyen_quan_ly(8)
+    assert ket_qua["status"] is False
+    assert ket_qua["message"] == "Bạn không có quyền thực hiện chức năng này!"
 
 
 # ── kiem_tra_nguoi_dung_hoat_dong ────────────────────────────────────────────

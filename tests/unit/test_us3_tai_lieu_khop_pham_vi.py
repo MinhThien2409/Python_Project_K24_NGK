@@ -48,9 +48,16 @@ def test_endpoint_khop_2_chieu_voi_contract():
     duong = {u[1].split("<")[0].rstrip("/") for u in urls}
     thieu = [u for u in duong if u.rstrip("/") not in src.replace("<int:", "<")]
     # chuẩn hóa so sánh theo tiền tố route
+    # 009 FR-011: endpoint admin/staff toàn cục đã bị gỡ (chức năng chuyển sang
+    # /api/seller/*) — contract 007 cleanup cũ còn liệt kê, chúng được loại trừ.
+    DA_GOTHEO_FR011_009 = {
+        "/api/thong-ke/tong-quan",
+        "/api/thong-ke/doanh-thu-theo-thang",
+        "/api/don-hang/cua-seller",
+    }
     that = []
     for u in thieu:
         base = u.split("<")[0]
-        if base not in src:
+        if base not in DA_GOTHEO_FR011_009 and base not in src:
             that.append(u)
     assert that == [], f"Contract có mà app.py thiếu: {that[:10]}"

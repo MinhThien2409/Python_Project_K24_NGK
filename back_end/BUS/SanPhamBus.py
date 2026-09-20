@@ -135,17 +135,6 @@ class SanPhamBus:
             return {"status": True, "message": "Cập nhật sản phẩm thành công!"}
         return {"status": False, "message": "Lỗi khi cập nhật sản phẩm!"}
 
-    # ─── XÓA SẢN PHẨM (xóa mềm) ────────────────────────────────────────────
-
-    def xoa_san_pham(self, product_id):
-        """Xóa mềm sản phẩm theo mã."""
-        if not product_id:
-            return {"status": False, "message": "Thiếu ID sản phẩm!"}
-        ok = self.dao.xoa(product_id)
-        if ok:
-            return {"status": True, "message": "Đã xóa sản phẩm thành công!"}
-        return {"status": False, "message": "Lỗi khi xóa sản phẩm!"}
-
     # ─── CẬP NHẬT SỐ LƯỢNG BÁN ─────────────────────────────────────────────
 
     def cap_nhat_so_luong_ban(self, product_id, so_luong):

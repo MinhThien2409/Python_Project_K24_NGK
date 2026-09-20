@@ -10,15 +10,6 @@
 </head>
 <body>
 
-<!-- Nút chuyển đổi giao diện (Ẩn mặc định, chỉ hiện cho Admin) -->
-<div class="view-switcher" id="viewSwitcher" style="display:none; background: #1A1714; color: #fff; padding: 8px 24px; justify-content: space-between; align-items: center; font-size: 13px;">
-  <span>💡 Chế độ xem (Admin only):</span>
-  <div class="btns" style="display: flex; gap: 10px;">
-    <button id="btnViewUser" class="active" onclick="switchViewMode('user')" style="background: var(--accent); color: #1A1714; border: none; padding: 4px 12px; border-radius: 6px; cursor: pointer; font-weight: 600;">👤 Khách hàng</button>
-    <button id="btnViewAdmin" onclick="switchViewMode('admin')" style="background: rgba(255,255,255,0.2); color: #fff; border: none; padding: 4px 12px; border-radius: 6px; cursor: pointer; font-weight: 600;">🛠️ Quản trị viên</button>
-  </div>
-</div>
-
 <div id="userInterface">
   <div class="topbar">
     <span>🎉 Chào mừng đến với Pobby – Mua sắm thông minh & Tiện lợi</span>
@@ -47,10 +38,6 @@
             <span class="icon">👤</span>
             <span class="label" id="userBtnLabel">Tên user</span>
           </button>
-        <button class="hdr-btn" id="hdrProfileBtn" onclick="openProfileModal()" style="display:none;">
-          <span class="icon">⚙️</span>
-          <span class="label">Tài khoản</span>
-        </button>
         <button class="hdr-btn" id="hdrHistoryBtn" onclick="openOrderHistoryModal()" style="display:none;">
           <span class="icon">📋</span>
           <span class="label">Lịch sử đơn</span>
@@ -66,7 +53,7 @@
         </button>
 
         <!-- Nút Kênh Người Bán (Chỉ hiện cho tài khoản Seller) -->
-        <button class="hdr-btn" id="hdrGoSellerBtn" onclick="switchViewMode('seller')" style="display:none;">
+        <button class="hdr-btn" id="hdrGoSellerBtn" onclick="showSellerDashboard()" style="display:none;">
           <span class="icon">🏪</span>
           <span class="label">Kênh Người Bán</span>
         </button>
@@ -194,63 +181,26 @@
 <div id="adminInterface" style="display:none;">
 <div class="topbar" style="background:#3D1F1A; display: flex; justify-content: space-between; align-items: center; padding: 8px 24px;">
     <span style="font-size: 13px; font-weight: 700;">🛠️ HỆ THỐNG QUẢN TRỊ VIÊN POOBY ADMIN v2.5</span>
-    <button onclick="switchViewMode('user')" style="background: var(--accent); color: var(--text); border: none; padding: 6px 16px; border-radius: 6px; font-weight: 700; cursor: pointer; font-family: inherit; font-size: 12px; box-shadow: 0 2px 4px rgba(0,0,0,0.2);">
-      🛍️ Quay lại trang Mua sắm
-    </button>
+    <button onclick="handleLogout()" style="background:transparent; border:1px solid rgba(255,255,255,.4); color:#FFFFFF; font-size:12px; font-weight:600; padding:5px 12px; border-radius:6px; cursor:pointer;">🚪 Đăng xuất</button>
   </div>
 
   <div class="admin-layout">
     <aside class="admin-menu">
-      <div class="admin-menu-item active" id="menu-dashboard" onclick="switchAdminTab('dashboard')">📈 Thống kê doanh thu</div>
-      <div class="admin-menu-item" id="menu-products" onclick="switchAdminTab('products')">📦 Quản lý sản phẩm</div>
       <div class="admin-menu-item" id="menu-categories" onclick="switchAdminTab('categories')">📁 Quản lý danh mục</div>
-      <div class="admin-menu-item" id="menu-orders" onclick="switchAdminTab('orders')">📋 Quản lý đơn hàng</div>
       <div class="admin-menu-item" id="menu-sellers" onclick="switchAdminTab('sellers')">🏪 Duyệt người bán hàng <span id="sellerPendingBadge" style="color:red; font-weight:bold;"></span></div>
-      <div class="admin-menu-item" id="menu-users" onclick="switchAdminTab('users')">👥 Quản lý tài khoản</div>
-      <div class="admin-menu-item" id="menu-quanly" onclick="switchAdminTab('quanly')" style="display:none;">🛡️ Quản lý</div>
-      <div class="admin-menu-item" id="menu-vouchers" onclick="switchAdminTab('vouchers')">🎟️ Quản lý voucher</div>
+      <div class="admin-menu-item active" id="menu-users" onclick="switchAdminTab('users')">👥 Quản lý tài khoản</div>
     </aside>
 
     <main class="main">
-      <div id="pane-dashboard" class="admin-pane" style="display:block;">
-        <div class="admin-card">
-          <h3>Tổng quan hệ thống</h3>
-          <div class="stats-grid" style="margin-top:14px;">
-            <div class="stat-box"><div>Doanh thu hệ thống</div><div class="stat-val" id="statRevenue">0đ</div></div>
-            <div class="stat-box"><div>Tổng đơn hàng</div><div class="stat-val" id="statOrders">0</div></div>
-            <div class="stat-box"><div>Tổng sản phẩm</div><div class="stat-val" id="statProducts">0</div></div>
-            <div class="stat-box"><div>Đơn đang chờ</div><div class="stat-val" id="statPending">0</div></div>
-          </div>
-        </div>
-        <div class="admin-card">
-          <h3 style="margin-bottom:12px;">🔥 Sản phẩm bán chạy nhất</h3>
-          <div id="bestSellersChart" style="display:flex; flex-direction:column; gap:8px;"></div>
-        </div>
-        <div class="admin-card">
-          <h3 style="margin-bottom:12px;">📋 Đơn hàng gần đây</h3>
-          <table style="width:100%; border-collapse:collapse; font-size:13.5px;">
-            <thead><tr><th style="text-align:left; padding:8px; border-bottom:1px solid var(--border);">Mã đơn</th><th style="text-align:left; padding:8px; border-bottom:1px solid var(--border);">Khách hàng</th><th style="text-align:left; padding:8px; border-bottom:1px solid var(--border);">Tổng tiền</th><th style="text-align:left; padding:8px; border-bottom:1px solid var(--border);">Trạng thái</th><th style="text-align:left; padding:8px; border-bottom:1px solid var(--border);">Ngày đặt</th></tr></thead>
-            <tbody id="tblRecentOrders"></tbody>
-          </table>
-        </div>
-      </div>
-
-      <div id="pane-products" class="admin-pane" style="display:none;">
-        <div class="admin-card" style="display:flex; justify-content:space-between; align-items:center;">
-          <h3>Danh sách sản phẩm hệ thống</h3>
-          <button class="checkout-btn" style="background:var(--primary);" onclick="openAddProductModal()">+ Thêm sản phẩm mới</button>
-        </div>
-        <div class="admin-card">
-          <table>
-            <thead><tr><th>Hình</th><th>Tên sản phẩm</th><th>Danh mục</th><th>Giá cả</th><th>Tồn kho</th><th>Đã bán</th><th>Thao tác</th></tr></thead>
-            <tbody id="tblAdminProductsBody"></tbody>
-          </table>
-        </div>
-      </div>
-
       <div id="pane-categories" class="admin-pane" style="display:none;">
         <div class="admin-card">
           <h3>Quản lý danh mục sản phẩm</h3>
+          <div class="filter-bar" style="margin-top:12px;">
+            <div class="filter-item">
+              <label for="catSearchFilter">Tìm kiếm</label>
+              <input type="text" id="catSearchFilter" placeholder="Tìm tên danh mục..." oninput="renderAdminCategories()">
+            </div>
+          </div>
           <div id="catMessage" style="margin-top:12px; font-size:13px; display:none;"></div>
           <div class="form-group" style="flex-direction:row; margin-top:12px;">
             <input type="text" id="newCatName" placeholder="Tên danh mục mới" style="flex:1;" />
@@ -263,29 +213,20 @@
         </div>
       </div>
 
-      <div id="pane-orders" class="admin-pane" style="display:none;">
-        <div class="admin-card" style="display:flex; justify-content:space-between; align-items:center;">
-          <h3>Quản lý danh sách đơn hàng</h3>
-          <select id="orderFilterStatus" onchange="renderAdminOrders()" style="padding:6px; border-radius:6px; border:1px solid var(--border);">
-            <option value="all">Tất cả trạng thái</option>
-            <option value="pending">Chờ duyệt</option>
-            <option value="confirmed">Đã xác nhận</option>
-            <option value="shipping">Đang giao</option>
-            <option value="done">Hoàn thành</option>
-            <option value="cancelled">Đã hủy</option>
-          </select>
-        </div>
-        <div class="admin-card">
-          <table>
-            <thead><tr><th>Mã đơn</th><th>Khách hàng</th><th>Sản phẩm</th><th>Tổng tiền</th><th>Trạng thái</th><th>Ngày đặt</th><th>Thao tác</th></tr></thead>
-            <tbody id="tblAdminOrdersBody"></tbody>
-          </table>
-        </div>
-      </div>
-
       <div id="pane-sellers" class="admin-pane" style="display:none;">
         <div class="admin-card">
           <h3>Danh sách yêu cầu đăng ký làm người bán hàng</h3>
+          <div class="filter-bar" style="margin-top:12px;">
+            <div class="filter-item">
+              <label for="sellerReqFilterStatus">Trạng thái</label>
+              <select id="sellerReqFilterStatus" onchange="renderAdminSellers()">
+                <option value="all">Tất cả</option>
+                <option value="pending">Chờ duyệt</option>
+                <option value="approved">Đã duyệt</option>
+                <option value="rejected">Từ chối</option>
+              </select>
+            </div>
+          </div>
           <table>
             <thead><tr><th>Tên cửa hàng</th><th>Chủ sở hữu</th><th>Số điện thoại</th><th>Mặt hàng</th><th>Mô tả</th><th>Trạng thái</th><th>Lý do từ chối</th><th>Thao tác</th></tr></thead>
             <tbody id="tblAdminSellersBody"></tbody>
@@ -294,17 +235,25 @@
       </div>
 
       <div id="pane-users" class="admin-pane" style="display:none;">
-        <div class="admin-card" style="display:flex; justify-content:space-between; align-items:center;">
-          <h3>Quản lý tài khoản người dùng</h3>
-          <div style="display:flex; gap:10px;">
-            <select id="userRoleFilter" onchange="renderAdminUsers()" style="padding:6px; border-radius:6px; border:1px solid var(--border);">
-              <option value="all">Tất cả vai trò</option>
-              <option value="Customer">Khách hàng</option>
-              <option value="Seller">Người bán</option>
-              <option value="Quản lý">Quản lý</option>
-              <option value="Admin">Quản trị viên</option>
-            </select>
-            <input type="text" id="userSearchFilter" placeholder="Tìm tên/email..." oninput="renderAdminUsers()" style="padding:6px; border-radius:6px; border:1px solid var(--border);">
+        <div class="admin-card">
+          <div style="display:flex; justify-content:space-between; align-items:center;">
+            <h3>Quản lý tài khoản người dùng</h3>
+          </div>
+          <div class="filter-bar" style="margin-top:12px;">
+            <div class="filter-item">
+              <label for="userRoleFilter">Vai trò</label>
+              <select id="userRoleFilter" onchange="renderAdminUsers()">
+                <option value="all">Tất cả vai trò</option>
+                <option value="Customer">Khách hàng</option>
+                <option value="Seller">Người bán</option>
+                <option value="Quản lý">Quản lý</option>
+                <option value="Admin">Quản trị viên</option>
+              </select>
+            </div>
+            <div class="filter-item">
+              <label for="userSearchFilter">Tìm kiếm</label>
+              <input type="text" id="userSearchFilter" placeholder="Tìm tên/email..." oninput="renderAdminUsers()">
+            </div>
           </div>
         </div>
         <div class="admin-card">
@@ -315,32 +264,6 @@
         </div>
       </div>
 
-      <div id="pane-quanly" class="admin-pane" style="display:none;">
-        <div class="admin-card filter-card" style="display:flex; justify-content:space-between; align-items:center;">
-          <h3>Quản lý tài khoản Quản lý</h3>
-          <button class="btn-submit" style="padding:8px 16px;" onclick="openModalTaoQuanLy()">+ Tạo Quản lý mới</button>
-        </div>
-        <div class="admin-card">
-          <table>
-            <thead><tr><th>ID</th><th>Họ tên</th><th>Tên đăng nhập</th><th>Điện thoại</th><th>Địa chỉ</th><th>Trạng thái</th><th>Thao tác</th></tr></thead>
-            <tbody id="tblQuanLyBody"></tbody>
-          </table>
-        </div>
-      </div>
-
-      <div id="pane-vouchers" class="admin-pane" style="display:none;">
-        <div class="admin-card" style="display:flex; justify-content:space-between; align-items:center;">
-          <h3>Quản lý Voucher giảm giá</h3>
-          <button class="checkout-btn" style="background:var(--primary); padding:8px 16px;" onclick="openAddVoucherModal()">+ Tạo Voucher mới</button>
-        </div>
-        <div class="admin-card">
-          <table>
-            <thead><tr><th>Mã voucher</th><th>Loại giảm</th><th>Giá trị</th><th>Điều kiện</th><th>Số lượng</th><th>Đã dùng</th><th>Thao tác</th></tr></thead>
-            <tbody id="tblAdminVouchersBody"></tbody>
-          </table>
-        </div>
-</div>
-
     </main>
   </div>
 </div>
@@ -349,38 +272,139 @@
 <div id="sellerDashboard" style="display:none;">
   <div class="topbar" style="background:#e67e22; display: flex; justify-content: space-between; align-items: center; padding: 8px 24px;">
     <span style="font-size: 13px; font-weight: 700; color:white;">🏪 POBBY SELLER CENTER – Trung tâm người bán</span>
-    <button onclick="switchViewMode('user')" style="background: rgba(255,255,255,0.2); color: white; border: none; padding: 6px 16px; border-radius: 6px; font-weight: 700; cursor: pointer;">← Về trang mua sắm</button>
+    <button onclick="handleLogout()" style="background:transparent; border:1px solid rgba(255,255,255,.5); color:#FFFFFF; font-size:12px; font-weight:600; padding:5px 12px; border-radius:6px; cursor:pointer;">🚪 Đăng xuất</button>
   </div>
   <div class="admin-layout">
     <aside class="admin-menu">
       <div class="admin-menu-item active" id="smenu-overview" onclick="switchSellerTab('overview')">📊 Tổng quan gian hàng</div>
       <div class="admin-menu-item" id="smenu-products" onclick="switchSellerTab('products')">📦 Sản phẩm của tôi</div>
+      <div class="admin-menu-item" id="smenu-nhaphang" onclick="switchSellerTab('nhaphang')">📦 Quản lý nhập hàng</div>
       <div class="admin-menu-item" id="smenu-orders" onclick="switchSellerTab('orders')">📋 Đơn hàng</div>
+      <div class="admin-menu-item" id="smenu-shop" onclick="switchSellerTab('shop')">🏪 Trang shop</div>
+      <div class="admin-menu-item" id="smenu-gia" onclick="switchSellerTab('gia')">💰 Quản lý giá bán</div>
     </aside>
     <main class="admin-main">
       <div id="spane-overview" class="admin-pane" style="display:block;">
         <div id="sellerOverviewContent"></div>
       </div>
       <div id="spane-products" class="admin-pane" style="display:none;">
-        <div class="admin-card" style="display:flex;justify-content:space-between;align-items:center;">
-          <h3>📦 Sản phẩm gian hàng của tôi</h3>
-          <button class="checkout-btn" style="background:var(--primary); padding:6px 12px;" onclick="openAddSellerProductModal()">+ Thêm sản phẩm</button>
+        <div class="admin-card">
+          <div style="display:flex;justify-content:space-between;align-items:center;">
+            <h3>📦 Sản phẩm gian hàng của tôi</h3>
+            <button class="checkout-btn" style="background:var(--primary); padding:6px 12px;" onclick="openAddSellerProductModal()">+ Thêm sản phẩm</button>
+          </div>
+          <div class="filter-bar" style="margin-top:14px;">
+            <div class="filter-item">
+              <label for="spFilterStock">Tồn kho</label>
+              <select id="spFilterStock" onchange="renderSellerProducts()">
+                <option value="all">Tất cả</option>
+                <option value="in-stock">Còn hàng (&gt;5)</option>
+                <option value="low-stock">Sắp hết (1–5)</option>
+                <option value="out-of-stock">Hết hàng (0)</option>
+              </select>
+            </div>
+            <div class="filter-item">
+              <label for="spSearchFilter">Tìm kiếm</label>
+              <input type="text" id="spSearchFilter" placeholder="Tìm tên sản phẩm..." oninput="renderSellerProducts()">
+            </div>
+          </div>
         </div>
         <div class="admin-card">
           <table>
-            <thead><tr><th>Ảnh</th><th>Tên sản phẩm</th><th>Giá</th><th>Tồn kho</th><th>Đã bán</th><th>Thao tác</th></tr></thead>
+            <thead><tr><th>Ảnh</th><th>Tên sản phẩm</th><th>Giá</th><th>Tồn kho</th><th>Trạng thái</th><th>Thao tác</th></tr></thead>
             <tbody id="tblSellerProductsBody"></tbody>
+          </table>
+        </div>
+      </div>
+      <div id="spane-nhaphang" class="admin-pane" style="display:none;">
+        <div class="admin-card">
+          <h3>📦 Quản lý nhập hàng</h3>
+          <p style="font-size:13px; color:var(--text-muted); margin-bottom:14px;">
+            Nhập số lượng hàng về kho cho từng sản phẩm (kể cả sản phẩm đang ẩn).
+          </p>
+          <div class="filter-bar">
+            <div class="filter-item">
+              <label for="nhSearchFilter">Tìm kiếm</label>
+              <input type="text" id="nhSearchFilter" placeholder="Tìm tên sản phẩm..." oninput="renderSellerNhapHang()">
+            </div>
+            <div class="filter-item">
+              <label for="nhFilterStock">Tồn kho</label>
+              <select id="nhFilterStock" onchange="renderSellerNhapHang()">
+                <option value="all">Tất cả</option>
+                <option value="in-stock">Còn hàng (&gt;5)</option>
+                <option value="low-stock">Sắp hết (1–5)</option>
+                <option value="out-of-stock">Hết hàng (0)</option>
+              </select>
+            </div>
+          </div>
+        </div>
+        <div class="admin-card">
+          <table>
+            <thead><tr><th>Tên sản phẩm</th><th>Tồn kho</th><th>Số lượng nhập</th><th>Trạng thái</th><th>Thao tác</th></tr></thead>
+            <tbody id="spNhapHangBody"></tbody>
           </table>
         </div>
       </div>
       <div id="spane-orders" class="admin-pane" style="display:none;">
         <div class="admin-card">
           <h3>📋 Đơn hàng cần xử lý</h3>
+          <div class="filter-bar" style="margin-top:12px;">
+            <div class="filter-item">
+              <label for="soFilterStatus">Trạng thái</label>
+              <select id="soFilterStatus" onchange="renderSellerOrders()">
+                <option value="all">Tất cả</option>
+                <option value="Pending">Chờ duyệt</option>
+                <option value="Confirmed">Đã xác nhận</option>
+                <option value="Shipping">Đang giao</option>
+                <option value="Completed">Hoàn thành</option>
+                <option value="Cancelled">Đã hủy</option>
+              </select>
+            </div>
+          </div>
           <table>
-            <thead><tr><th>Mã đơn</th><th>Khách hàng</th><th>Sản phẩm</th><th>Tổng tiền</th><th>Trạng thái</th><th>Ngày đặt</th><th>Thao tác</th></tr></thead>
+            <thead><tr><th>Mã đơn</th><th>Khách hàng</th><th>Sản phẩm</th><th>Tổng tiền</th><th>Trạng thái</th><th>Ngày đặt</th><th>Chi tiết</th><th>Thao tác</th></tr></thead>
             <tbody id="tblSellerOrdersBody"></tbody>
           </table>
         </div>
+      </div>
+      <div id="spane-shop" class="admin-pane" style="display:none;">
+        <div class="admin-card">
+          <h3>🏪 Trang shop</h3>
+          <p style="font-size:13px; color:var(--text-muted); margin-bottom:14px;">
+            Chỉnh sửa thông tin gian hàng của bạn. Thay đổi sẽ hiển thị ngay cho khách hàng.
+          </p>
+          <form id="sellerShopForm">
+            <div class="form-group">
+              <label>Tên shop</label>
+              <input type="text" id="sellerShopName" required placeholder="Nhập tên shop...">
+            </div>
+            <div class="form-group">
+              <label>Giới thiệu</label>
+              <textarea id="sellerShopDesc" rows="4" placeholder="Giới thiệu về gian hàng của bạn..."></textarea>
+            </div>
+            <div class="form-group">
+              <label>Thâm niên (0-100 năm)</label>
+              <input type="number" id="sellerShopThamNien" min="0" max="100" placeholder="Số năm kinh doanh">
+            </div>
+            <button type="button" class="btn-submit" onclick="sellerLuuTrangShop()">💾 Lưu trang shop</button>
+          </form>
+        </div>
+        <div id="sellerShopContent"></div>
+      </div>
+      <div id="spane-gia" class="admin-pane" style="display:none;">
+        <div class="admin-card">
+          <h3>💰 Quản lý giá bán</h3>
+          <p style="font-size:13px; color:var(--text-muted); margin-bottom:14px;">
+            Nhập giá bán mới cho từng sản phẩm rồi bấm “Lưu giá” để cập nhật.
+          </p>
+        </div>
+        <div class="admin-card">
+          <table>
+            <thead><tr><th>Tên sản phẩm</th><th>Giá hiện tại</th><th>Giá bán mới</th><th>Tồn kho</th><th>Thao tác</th></tr></thead>
+            <tbody id="tblSellerGiaBody"></tbody>
+          </table>
+        </div>
+        <div id="sellerGiaContent"></div>
       </div>
     </main>
   </div>
@@ -395,19 +419,9 @@
       <button class="close-btn" style="background:none; border:none; font-size:20px; cursor:pointer;" onclick="closeCart()">✕</button>
     </div>
     <div class="cart-items" id="cartItemsList"></div>
-    <div style="padding:12px 24px; border-top:1px solid var(--border);">
-      <div style="display:flex; gap:8px;">
-        <input type="text" id="cartVoucherInput" placeholder="🎟️ Nhập mã voucher..." style="flex:1; border:1px solid var(--border); border-radius:6px; padding:8px;">
-        <button onclick="applyCartVoucher()" style="background:var(--primary); color:white; border:none; border-radius:6px; padding:8px 12px; font-weight:bold; cursor:pointer;">Áp dụng</button>
-      </div>
-      <div id="cartVoucherMsg" style="font-size:12px; margin-top:6px;"></div>
-    </div>
     <div class="cart-footer">
       <div style="display:flex; justify-content:space-between; font-size:14px;">
         <span>Tạm tính:</span><span id="cartSubtotalText" style="font-weight:bold;">0đ</span>
-      </div>
-      <div id="cartDiscountRow" style="display:none; justify-content:space-between; font-size:14px; color:var(--green);">
-        <span>Giảm giá voucher:</span><span id="cartDiscountText">-0đ</span>
       </div>
       <div style="display:flex; justify-content:space-between; font-weight:bold; font-size:16px; margin-top:8px;">
         <span>Tổng cộng tiền:</span><span id="cartTotalText" style="color:var(--red);">0đ</span>
@@ -450,7 +464,6 @@
     <!-- Tabs: Thông tin | Chỉnh sửa | Bảo mật -->
     <div class="profile-tabs">
       <div class="profile-tab active" id="ptab-info"    onclick="switchProfileTab('info')">Thông tin</div>
-      <div class="profile-tab" id="ptab-edit"    onclick="switchProfileTab('edit')">Chỉnh sửa</div>
       <div class="profile-tab" id="ptab-security" onclick="switchProfileTab('security')">Bảo mật</div>
     </div>
 
@@ -462,29 +475,13 @@
 
       <!-- Nút điều hướng -->
       <div style="margin-top:16px; display:flex; flex-direction:column; gap:0;">
-        <button class="profile-action-btn primary" id="btnGoAdminFromProfile" style="display:none;" onclick="closeModal('profileModal'); switchViewMode('admin');">
-          🛠️ Vào khu vực Quản trị hệ thống
-        </button>
-        <button class="profile-action-btn" id="btnGoSellerFromProfile" style="display:none;" onclick="closeModal('profileModal'); switchViewMode('sellerDashboard');">
+        <button class="profile-action-btn" id="btnGoSellerFromProfile" style="display:none;" onclick="closeModal('profileModal'); showSellerDashboard();">
           🏪 Vào Trung tâm Người bán
-        </button>
-        <button class="profile-action-btn" onclick="openOrderHistoryModal(); closeModal('profileModal');">
-          📋 Xem lịch sử đơn hàng
         </button>
         <button class="profile-action-btn danger" onclick="handleLogout()">
           🚪 Đăng xuất khỏi tài khoản
         </button>
       </div>
-    </div>
-
-    <!-- Tab 2: Chinh sua thong tin (005 US5) -->
-    <div class="profile-tab-content" id="pcontent-edit">
-      <form onsubmit="handleProfileUpdate(event)">
-        <div class="form-group"><label>Họ tên</label><input type="text" id="profTen" required></div>
-        <div class="form-group"><label>Địa chỉ</label><input type="text" id="profDiaChi"></div>
-        <div class="form-group"><label>Số điện thoại</label><input type="tel" id="profSdt" placeholder="0901234567"></div>
-        <button type="submit" class="btn-submit" style="width:100%;">Lưu thay đổi</button>
-      </form>
     </div>
 
     <!-- Tab 3: Doi mat khau (005 US5) -->
@@ -553,13 +550,6 @@
         💙 ZaloPay: <b>0987654321</b> – POBBY STORE
       </div>
 
-      <!-- VOUCHER -->
-      <div style="display:flex; gap:8px; margin-bottom:10px;">
-        <input type="text" id="checkoutVoucherInput" placeholder="🎟️ Mã voucher..." style="flex:1; border:1px solid var(--border); border-radius:6px; padding:6px;">
-        <button type="button" onclick="applyCheckoutVoucher()" style="background:var(--primary); color:white; border:none; border-radius:6px; padding:6px 10px; font-weight:bold; cursor:pointer;">Áp dụng</button>
-      </div>
-      <div id="checkoutVoucherMsg" style="font-size:12px; margin-bottom:10px;"></div>
-
       <!-- TỔNG KẾT -->
       <div style="background:var(--bg); border-radius:8px; padding:12px 14px; margin-bottom:14px; font-size:13px;">
         <div style="display:flex; justify-content:space-between; margin-bottom:6px;">
@@ -567,9 +557,6 @@
         </div>
         <div style="display:flex; justify-content:space-between; margin-bottom:6px;">
           <span>Phí vận chuyển:</span><span id="checkoutShipText" style="color:var(--green);">0đ</span>
-        </div>
-        <div id="checkoutDiscRow" style="display:none; justify-content:space-between; color:var(--green); margin-bottom:6px;">
-          <span>Giảm voucher:</span><span id="checkoutDiscText">-0đ</span>
         </div>
         <div style="display:flex; justify-content:space-between; font-weight:bold; font-size:15px; padding-top:8px; border-top:1px solid var(--border);">
           <span>Tổng thanh toán:</span>
@@ -757,23 +744,6 @@
   </div>
 </div>
 
-<div class="modal-overlay" id="quanLyModal">
-  <div class="modal-box" style="width:440px;">
-    <button class="modal-close" onclick="closeModal('quanLyModal')">✕</button>
-    <h3 id="quanLyModalTitle" style="margin-bottom:14px;">Tạo tài khoản Quản lý</h3>
-    <form onsubmit="handleLuuQuanLy(event)">
-      <input type="hidden" id="quanLyEditId">
-      <div class="form-group"><label>Họ tên</label><input type="text" id="quanLyTen" required maxlength="100"></div>
-      <div class="form-group" id="quanLyTaiKhoanGroup"><label>Tên đăng nhập</label><input type="text" id="quanLyTaiKhoan" required maxlength="50"></div>
-      <div class="form-group" id="quanLyMatKhauGroup"><label>Mật khẩu (tối thiểu 6 ký tự)</label><input type="password" id="quanLyMatKhau" required></div>
-      <div class="form-group"><label>Số điện thoại</label><input type="text" id="quanLySdt" maxlength="20"></div>
-      <div class="form-group"><label>Địa chỉ</label><input type="text" id="quanLyDiaChi" maxlength="255"></div>
-      <div id="quanLyMessage" style="margin-top:10px; font-size:13px; display:none;"></div>
-      <button type="submit" class="btn-submit" style="width:100%; margin-top:10px;">Lưu thông tin</button>
-    </form>
-  </div>
-</div>
-
 <div class="modal-overlay" id="resetPasswordModal">
   <div class="modal-box" style="width:400px;">
     <button class="modal-close" onclick="closeResetPasswordModal()">✕</button>
@@ -792,25 +762,11 @@
   </div>
 </div>
 
-<div class="modal-overlay" id="adminVoucherModal">
-  <div class="modal-box" style="width:400px;">
-    <button class="modal-close" onclick="closeModal('adminVoucherModal')">✕</button>
-    <h3 id="adminVoucherModalTitle" style="margin-bottom:14px;">🎟️ Tạo voucher mới</h3>
-    <form onsubmit="handleSaveVoucher(event)">
-      <input type="hidden" id="editVoucherId">
-      <div class="form-group"><label>Mã voucher</label><input type="text" id="voucherCode" required style="text-transform:uppercase;"></div>
-      <div class="form-group">
-        <label>Loại giảm giá</label>
-        <select id="voucherType" style="padding:8px; border-radius:6px; border:1px solid var(--border);">
-          <option value="percent">% Phần trăm</option>
-          <option value="fixed">Số tiền cố định (đ)</option>
-        </select>
-      </div>
-      <div class="form-group"><label>Giá trị giảm</label><input type="number" id="voucherValue" required></div>
-      <div class="form-group"><label>Đơn tối thiểu (đ)</label><input type="number" id="voucherMinOrder" value="0"></div>
-      <div class="form-group"><label>Số lượng</label><input type="number" id="voucherQty" required></div>
-      <button type="submit" class="btn-submit" style="width:100%;">Lưu voucher</button>
-    </form>
+<div class="modal-overlay" id="sellerOrderDetailModal">
+  <div class="modal-box" style="width:540px;">
+    <button class="modal-close" onclick="closeModal('sellerOrderDetailModal')">✕</button>
+    <h3 style="margin-bottom:14px;">🔍 Chi tiết đơn hàng</h3>
+    <div id="sellerOrderDetailContent"></div>
   </div>
 </div>
 

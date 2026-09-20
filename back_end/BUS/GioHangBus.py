@@ -33,7 +33,7 @@ class GioHangBus:
         return kho, None
 
     def xu_ly_them_vao_gio(self, user_id, product_id, quantity, unit_price, force=False):
-        """Thêm vào giỏ: check kho + giá DB + luật 1-shop."""
+        """Thêm vào giỏ: check kho + giá DB — giỏ mở cho nhiều shop (011 US1)."""
         so_luong = self._ep_so_luong(quantity)
         if not user_id or not product_id or so_luong <= 0:
             return {"status": False, "message": "Thông tin sản phẩm không hợp lệ!"}
@@ -43,17 +43,6 @@ class GioHangBus:
         cart_id = self.dao.lay_hoac_tao_gio_hang(user_id)
         if not cart_id:
             return {"status": False, "message": "Lỗi hệ thống khởi tạo giỏ hàng!"}
-        new_store_id = self.dao.lay_store_id_san_pham(product_id)
-        if not new_store_id:
-            return {"status": False, "message": "Không tìm thấy thông tin gian hàng!"}
-        cac_store = self.dao.lay_store_ids_trong_gio(cart_id)
-        store_khac = next((s for s in cac_store if s['store_id'] != new_store_id), None)
-        if store_khac and not force:
-            return {"status": False, "conflict": True, "message": (
-                f"Giỏ hàng đang có sản phẩm từ '{store_khac['store_name']}'. "
-                "Mỗi đơn hàng chỉ mua từ 1 shop. Xóa giỏ cũ để thêm sản phẩm này?")}
-        if force and store_khac:
-            self.dao.xoa_toan_bo_gio(cart_id)
         gia_chuan = float(kho.get("price", 0))
         if not self.dao.them_vao_gio_hang(cart_id, product_id, so_luong, gia_chuan):
             return {"status": False, "message": "Không thể thêm sản phẩm vào giỏ!"}

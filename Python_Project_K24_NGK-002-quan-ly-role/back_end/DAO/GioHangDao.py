@@ -1,0 +1,185 @@
+import logging
+
+from back_end.DBconnection import DBconnection
+from back_end.Model.GioHang import GioHang
+from back_end.Model.CartItem import CartItem
+
+logger = logging.getLogger(__name__)
+
+
+class GioHangDao:
+
+    # ─── ĐỌC ───
+
+    # 4. LẤY TOÀN BỘ DỮ LIỆU GIỎ HÀNG ĐỂ HIỂN THỊ
+    def lay_chi_tiet_gio_hang(self, cart_id):
+        """Lấy toàn bộ dòng hàng trong giỏ kèm thông tin sản phẩm."""
+        conn = DBconnection().get_connection()
+        if not conn: return []
+        cursor = conn.cursor()
+        try:
+            sql = """
+            SELECT ci.CartId AS CartId,
+                ci.ProductId AS ProductId,
+                ci.Quantity AS Quantity,
+                ci.UnitPrice AS UnitPrice,
+                p.ProductName AS ProductName,
+                p.Emoji AS Emoji,
+                p.ImageUrl AS ImageUrl,
+                p.StoreId AS StoreId
+            FROM CartItems ci
+            LEFT JOIN Products p ON ci.ProductId = p.ProductId
+            WHERE ci.CartId = ?
+            """
+            cursor.execute(sql, (cart_id,))
+            rows = cursor.fetchall()
+            columns = [col[0] for col in cursor.description]
+            return [dict(zip(columns, row)) for row in rows]
+        except Exception as e:
+            logger.exception("Lỗi lấy chi tiết giỏ hàng: %s", e)
+            return []
+        finally:
+            cursor.close()
+            conn.close()
+
+    def lay_hoac_tao_gio_hang(self, user_id):
+        """Lấy CartId hiện có của user, chưa có thì tạo giỏ mới."""
+        conn = DBconnection().get_connection()
+        if not conn: return None
+        cursor = conn.cursor()
+        try:
+            # Kiểm tra xem user đã có giỏ hàng chưa
+            cursor.execute("SELECT * FROM Carts WHERE UserId = ?", (user_id,))
+            row = cursor.fetchone()
+
+            if row:
+                cart_id = row[0]
+            else:
+                # Nếu chưa có, tạo giỏ hàng mới — MySQL: CreatedAt có DEFAULT
+                # CURRENT_TIMESTAMP, lấy id mới qua cursor.lastrowid
+                cursor.execute(
+                    "INSERT INTO Carts (UserId, TotalAmount) VALUES (?, 0)",
+                    (user_id,))
+                cart_id = cursor.lastrowid
+                conn.commit()
+
+            return cart_id
+        except Exception as e:
+            logger.exception("Lỗi lấy/tạo giỏ hàng: %s", e)
+            conn.rollback()
+            return None
+        finally:
+            cursor.close()
+            conn.close()
+
+    # 2. THÊM HOẶC CẬP NHẬT SỐ LƯỢNG SẢN PHẨM VÀO GIỎ
+    def them_vao_gio_hang(self, cart_id, product_id, quantity, unit_price):
+        """Thêm sản phẩm vào giỏ, đã có thì cộng dồn số lượng."""
+        conn = DBconnection().get_connection()
+        if not conn: return False
+        cursor = conn.cursor()
+        try:
+            # Kiểm tra sản phẩm đã có trong giỏ chưa
+            cursor.execute("SELECT Quantity FROM CartItems WHERE CartId = ? AND ProductId = ?", (cart_id, product_id))
+            row = cursor.fetchone()
+
+            if row:
+                # Nếu đã có -> Cộng dồn số lượng
+                new_qty = row[0] + quantity
+                cursor.execute("UPDATE CartItems SET Quantity = ? WHERE CartId = ? AND ProductId = ?",
+                               (new_qty, cart_id, product_id))
+            else:
+                # Nếu chưa có -> Thêm mới
+                cursor.execute("INSERT INTO CartItems (CartId, ProductId, Quantity, UnitPrice) VALUES (?, ?, ?, ?)",
+                               (cart_id, product_id, quantity, unit_price))
+
+            conn.commit()
+            return True
+        except Exception as e:
+            logger.exception("Lỗi thêm chi tiết giỏ hàng: %s", e)
+            conn.rollback()
+            return False
+        finally:
+            cursor.close()
+            conn.close()
+
+    # 3. TỰ ĐỘNG TÍNH LẠI TỔNG TIỀN CỦA GIỎ HÀNG
+    def cap_nhat_tong_tien(self, cart_id):
+        """Tính lại TotalAmount của giỏ từ CartItems."""
+        conn = DBconnection().get_connection()
+        if not conn: return False
+        cursor = conn.cursor()
+        try:
+            # Tính tổng (Quantity * UnitPrice) từ CartItems và cập nhật ngược lại Carts
+            sql = """
+                UPDATE Carts
+                SET TotalAmount = COALESCE((SELECT SUM(Quantity * UnitPrice) FROM CartItems WHERE CartId = ?), 0)
+                WHERE CartId = ?
+                """
+            cursor.execute(sql, (cart_id, cart_id))
+            conn.commit()
+            return True
+        except Exception as e:
+            logger.exception("Lỗi cập nhật tổng tiền giỏ hàng: %s", e)
+            conn.rollback()
+            return False
+        finally:
+            cursor.close()
+            conn.close()
+
+    def xoa_khoi_gio(self, cart_id, product_id):
+        """Xóa một sản phẩm khỏi giỏ hàng."""
+        conn = DBconnection.get_connection()
+        if conn is None: return False
+        cursor = conn.cursor()
+        try:
+            cursor.execute(
+                "DELETE FROM CartItems WHERE CartId=? AND ProductId=?",
+                (cart_id, product_id)
+            )
+            conn.commit()
+            return cursor.rowcount > 0
+        except Exception as e:
+            logger.exception("Lỗi xóa khỏi giỏ: %s", e)
+            conn.rollback()
+            return False
+        finally:
+            cursor.close();
+            conn.close()
+
+    def cap_nhat_so_luong(self, cart_id, product_id, quantity):
+        """Cập nhật số lượng một dòng hàng trong giỏ."""
+        conn = DBconnection.get_connection()
+        if conn is None: return False
+        cursor = conn.cursor()
+        try:
+            cursor.execute(
+                "UPDATE CartItems SET Quantity=? WHERE CartId=? AND ProductId=?",
+                (quantity, cart_id, product_id)
+            )
+            conn.commit()
+            return cursor.rowcount > 0
+        except Exception as e:
+            logger.exception("Lỗi cập nhật số lượng: %s", e)
+            conn.rollback()
+            return False
+        finally:
+            cursor.close();
+            conn.close()
+
+    def xoa_toan_bo_gio(self, cart_id):
+        """Xóa hết sản phẩm trong giỏ — dùng khi người dùng đổi sang shop khác"""
+        conn = DBconnection.get_connection()
+        if conn is None: return False
+        cursor = conn.cursor()
+        try:
+            cursor.execute("DELETE FROM CartItems WHERE CartId = ?", (cart_id,))
+            conn.commit()
+            return True
+        except Exception as e:
+            logger.exception("Lỗi xoa_toan_bo_gio: %s", e)
+            conn.rollback()
+            return False
+        finally:
+            cursor.close();
+            conn.close()

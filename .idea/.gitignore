@@ -3,3 +3,8 @@
 /workspace.xml
 # Editor-based HTTP Client requests
 /httpRequests/
+.venv/
+.idea/
+back_end/DBconfig.py
+__pycache__/
+*.pyc

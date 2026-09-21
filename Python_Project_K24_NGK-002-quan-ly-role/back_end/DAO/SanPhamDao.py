@@ -339,26 +339,29 @@ class SanPhamDao:
                 SET ProductName = ?, Description = ?,
                     Price       = ?, OldPrice    = ?,
                     Quantity    = ?,
-                    Emoji       = ?, ImageUrl = ?, CategoryId  = ?,
-                    IsActive    = ?
+                    Emoji       = ?,
+                    ImageUrl    = COALESCE(?, ImageUrl),   -- không gửi ảnh thì giữ ảnh cũ
+                    CategoryId  = ?
                 WHERE ProductId = ? AND StoreId = ?
             """
             cursor.execute(sql, (
                 sp.ProductName, sp.Description,
-                sp.Price,       sp.OldPrice,
+                sp.Price, sp.OldPrice,
                 sp.Quantity,
-                sp.Emoji,  sp.ImageUrl,     sp.CategoryId,
-                sp.IsActive,
+                sp.Emoji, sp.ImageUrl,
+                sp.CategoryId,
                 sp.ProductId, int(store_id)
             ))
             conn.commit()
-            return cursor.rowcount > 0
+            # BUS đã kiểm tra quyền sở hữu bằng lay_store_id() → không dựa vào rowcount
+            return True
         except Exception as e:
             logger.exception("Lỗi sua_theo_store SanPham: %s", e)
             conn.rollback()
             return False
         finally:
-            cursor.close(); conn.close()
+            cursor.close();
+            conn.close()
 
     def an_hien_theo_store(self, product_id, store_id, is_active):
         """An/hien san pham voi ownership WHERE ProductId AND StoreId."""

@@ -7,6 +7,12 @@ from back_end.Model.OrderItem import OrderItem
 
 logger = logging.getLogger(__name__)
 
+# LƯU Ý (MySQL):
+# - Placeholder dùng %s (mysql-connector-python / PyMySQL) thay cho ? của pyodbc.
+# - Kết quả trả về là tuple → truy cập theo chỉ số (row[0]) thay vì row.TenCot.
+# - SUM(...) trong MySQL trả Decimal → ép int()/float() để JSON hóa được.
+# - "SELECT TOP (n)" (SQL Server) → "LIMIT n" ở cuối câu lệnh.
+
 
 class DonHangDao:
     # ─── GHI ───
@@ -46,7 +52,7 @@ class DonHangDao:
         INSERT INTO Orders (Status, ShippingFee, UserId, ReceiverName,
                             ReceiverPhone, ShippingAddress, PaymentMethod,
                             SubTotal, DiscountAmount, TotalAmount, Note)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         """
         cursor.execute(sql_order, (
             str(order.Status),
@@ -68,13 +74,13 @@ class DonHangDao:
         sql_item = """
         INSERT INTO OrderItems (OrderId, ProductId, ProductName, Emoji,
                                 Quantity, UnitPrice, TotalPrice)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
+        VALUES (%s, %s, %s, %s, %s, %s, %s)
         """
-        # Lệnh trừ kho — atomic, có điều kiện Quantity >= ? để không bị âm
+        # Lệnh trừ kho — atomic, có điều kiện Quantity >= %s để không bị âm
         sql_tru_kho = """
         UPDATE Products
-        SET Quantity = Quantity - ?
-        WHERE ProductId = ? AND Quantity >= ?
+        SET Quantity = Quantity - %s
+        WHERE ProductId = %s AND Quantity >= %s
         """
         for item in order_items:
             qty = int(item.Quantity or 0)
@@ -96,15 +102,15 @@ class DonHangDao:
     def _xu_ly_thieu_hang(self, cursor, conn, item):
         """Rollback khi thiếu hàng và trả dict lỗi tồn kho."""
         cursor.execute(
-            "SELECT ProductName, Quantity FROM Products WHERE ProductId = ?",
+            "SELECT ProductName, Quantity FROM Products WHERE ProductId = %s",
             (item.ProductId,)
         )
         info = cursor.fetchone()
         conn.rollback()
         if info:
             return {"error": "out_of_stock",
-                    "product_name": info.ProductName,
-                    "available": info.Quantity}
+                    "product_name": info[0],
+                    "available": info[1]}
         return {"error": "not_found", "product_name": f"#{item.ProductId}"}
 
     # ─── ĐỌC ───
@@ -116,7 +122,7 @@ class DonHangDao:
         cursor = conn.cursor()
         try:
             cursor.execute(
-                "SELECT * FROM Orders WHERE UserId = ? ORDER BY CreatedAt DESC",
+                "SELECT * FROM Orders WHERE UserId = %s ORDER BY CreatedAt DESC",
                 (ma_user,)
             )
             rows = cursor.fetchall()
@@ -143,7 +149,7 @@ class DonHangDao:
         """Đọc toàn bộ OrderItems của một đơn hàng."""
         cursor2 = conn.cursor()
         try:
-            cursor2.execute("SELECT * FROM OrderItems WHERE OrderId = ?", (order_id,))
+            cursor2.execute("SELECT * FROM OrderItems WHERE OrderId = %s", (order_id,))
             item_rows = cursor2.fetchall()
             item_columns = [col[0] for col in cursor2.description]
             return [dict(zip(item_columns, ir)) for ir in item_rows]
@@ -176,14 +182,14 @@ class DonHangDao:
 
     def _doc_trang_thai_hien_tai(self, cursor, order_id):
         """Đọc Status hiện tại của đơn, thiếu thì trả None."""
-        cursor.execute("SELECT Status FROM Orders WHERE OrderId = ?", (order_id,))
+        cursor.execute("SELECT Status FROM Orders WHERE OrderId = %s", (order_id,))
         row = cursor.fetchone()
         return row[0] if row else None
 
     def _ghi_trang_thai_moi(self, cursor, order_id, new_status):
         """Ghi Status mới và trả số dòng ảnh hưởng."""
         cursor.execute(
-            "UPDATE Orders SET Status = ? WHERE OrderId = ?",
+            "UPDATE Orders SET Status = %s WHERE OrderId = %s",
             (new_status, order_id)
         )
         return cursor.rowcount
@@ -198,24 +204,24 @@ class DonHangDao:
     def _cong_sold_count(self, cursor, order_id):
         """Cộng SoldCount theo Quantity từng item khi đơn hoàn thành."""
         cursor.execute(
-            "SELECT ProductId, Quantity FROM OrderItems WHERE OrderId = ?",
+            "SELECT ProductId, Quantity FROM OrderItems WHERE OrderId = %s",
             (order_id,)
         )
         for item in cursor.fetchall():
             cursor.execute(
-                "UPDATE Products SET SoldCount = COALESCE(SoldCount, 0) + ? WHERE ProductId = ?",
+                "UPDATE Products SET SoldCount = COALESCE(SoldCount, 0) + %s WHERE ProductId = %s",
                 (item[1], item[0])
             )
 
     def _hoan_ton_kho(self, cursor, order_id):
         """Hoàn lại tồn kho theo Quantity từng item khi đơn bị hủy."""
         cursor.execute(
-            "SELECT ProductId, Quantity FROM OrderItems WHERE OrderId = ?",
+            "SELECT ProductId, Quantity FROM OrderItems WHERE OrderId = %s",
             (order_id,)
         )
         for item in cursor.fetchall():
             cursor.execute(
-                "UPDATE Products SET Quantity = Quantity + ? WHERE ProductId = ?",
+                "UPDATE Products SET Quantity = Quantity + %s WHERE ProductId = %s",
                 (item[1], item[0])
             )
 
@@ -268,7 +274,7 @@ class DonHangDao:
 
     def lay_thong_ke_tong_quan(self):
         """Thống kê tổng quan shop (dict thuần, lỗi trả {})."""
-        conn = DBconnection.get_connection()
+        conn = DBconnection().get_connection()
         if conn is None:
             return {}
         cursor = conn.cursor()
@@ -300,9 +306,10 @@ class DonHangDao:
             FROM Orders
         """)
         row = cursor.fetchone()
-        return {"doanh_thu": float(row.doanh_thu), "tong_don": row.tong_don,
-                "cho_duyet": row.cho_duyet, "dang_giao": row.dang_giao,
-                "hoan_thanh": row.hoan_thanh, "da_huy": row.da_huy}
+        # MySQL: SUM() trả Decimal (hoặc NULL nếu bảng rỗng) → ép kiểu tường minh
+        return {"doanh_thu": float(row[0] or 0), "tong_don": int(row[1] or 0),
+                "cho_duyet": int(row[2] or 0), "dang_giao": int(row[3] or 0),
+                "hoan_thanh": int(row[4] or 0), "da_huy": int(row[5] or 0)}
 
     def _dem_san_pham_va_user(self, cursor):
         """Đếm tổng sản phẩm và người dùng.
@@ -314,7 +321,7 @@ class DonHangDao:
         p = cursor.fetchone()
         cursor.execute("SELECT COUNT(*) AS tong FROM Users")
         u = cursor.fetchone()
-        return p.tong, u.tong
+        return p[0], u[0]
 
     def _top_san_pham_chung(self, cursor):
         """Top 5 sản phẩm bán chạy toàn shop."""
@@ -332,9 +339,9 @@ class DonHangDao:
             ORDER BY p.SoldCount DESC
             LIMIT 5
         """)
-        return [{"id": r.ProductId, "name": r.ProductName, "emoji": r.Emoji or "📦",
-                 "image_url": r.ImageUrl, "sold": r.SoldCount or 0,
-                 "price": float(r.Price), "category": r.CategoryName or "—"}
+        return [{"id": r[0], "name": r[1], "emoji": r[2] or "📦",
+                 "image_url": r[3], "sold": r[4] or 0,
+                 "price": float(r[5] or 0), "category": r[6] or "—"}
                 for r in cursor.fetchall()]
 
     def _don_gan_day_chung(self, cursor):
@@ -352,14 +359,15 @@ class DonHangDao:
             ORDER BY o.CreatedAt DESC
             LIMIT 5
         """)
-        return [{"order_id": r.OrderId, "receiver_name": r.ReceiverName,
-                 "customer_name": r.FullName or "—",
-                 "total_amount": float(r.TotalAmount), "status": r.Status,
-                 "created_at": str(r.CreatedAt)} for r in cursor.fetchall()]
+        return [{"order_id": r[0], "receiver_name": r[1],
+                 "customer_name": r[5] or "—",
+                 "total_amount": float(r[2] or 0), "status": r[3],
+                 "created_at": str(r[4]) if r[4] else ""}
+                for r in cursor.fetchall()]
 
     def lay_doanh_thu_theo_thang(self, year):
         """Doanh thu 12 tháng của đơn Completed (list thuần, lỗi trả [])."""
-        conn = DBconnection.get_connection()
+        conn = DBconnection().get_connection()
         if conn is None:
             return []
         cursor = conn.cursor()
@@ -370,7 +378,7 @@ class DonHangDao:
                     COALESCE(SUM(TotalAmount), 0) AS doanh_thu,
                     COUNT(*) AS so_don
                 FROM Orders
-                WHERE YEAR(CreatedAt) = ?
+                WHERE YEAR(CreatedAt) = %s
                   AND Status = 'Completed'
                 GROUP BY MONTH(CreatedAt)
                 ORDER BY thang
@@ -387,8 +395,8 @@ class DonHangDao:
         """Dựng đủ 12 tháng từ rows doanh thu chung."""
         data = {i: {"thang": i, "doanh_thu": 0, "so_don": 0} for i in range(1, 13)}
         for r in rows:
-            data[r.thang] = {"thang": r.thang, "doanh_thu": float(r.doanh_thu),
-                             "so_don": r.so_don}
+            data[int(r[0])] = {"thang": int(r[0]), "doanh_thu": float(r[1] or 0),
+                               "so_don": int(r[2] or 0)}
         return list(data.values())
 
     def lay_don_hang_cua_seller(self, store_id):
@@ -423,7 +431,7 @@ class DonHangDao:
         LEFT JOIN Users u ON o.UserId = u.UserId
         INNER JOIN OrderItems oi ON o.OrderId = oi.OrderId
         INNER JOIN Products p   ON oi.ProductId = p.ProductId
-        WHERE p.StoreId = ?
+        WHERE p.StoreId = %s
         ORDER BY o.CreatedAt DESC
         """
 
@@ -438,7 +446,7 @@ class DonHangDao:
                        oi.UnitPrice, oi.TotalPrice
                 FROM OrderItems oi
                 INNER JOIN Products p ON oi.ProductId = p.ProductId
-                WHERE oi.OrderId = ? AND p.StoreId = ?
+                WHERE oi.OrderId = %s AND p.StoreId = %s
             """, (don["OrderId"], store_id))
             item_rows = cursor2.fetchall()
             item_columns = [col[0] for col in cursor2.description]
@@ -456,7 +464,7 @@ class DonHangDao:
             return None
         cursor = conn.cursor()
         try:
-            cursor.execute("SELECT Status FROM Orders WHERE OrderId = ?", (order_id,))
+            cursor.execute("SELECT Status FROM Orders WHERE OrderId = %s", (order_id,))
             row = cursor.fetchone()
             return row[0] if row else None
         except Exception as e:
@@ -474,11 +482,11 @@ class DonHangDao:
         cursor = conn.cursor()
         try:
             cursor.execute("""
-                SELECT CASE WHEN EXISTS (
+                SELECT EXISTS (
                     SELECT 1 FROM OrderItems oi
                     JOIN Products p ON oi.ProductId = p.ProductId
-                    WHERE oi.OrderId = ? AND p.StoreId = ?
-                ) THEN 1 ELSE 0 END
+                    WHERE oi.OrderId = %s AND p.StoreId = %s
+                )
             """, (order_id, store_id))
             row = cursor.fetchone()
             return bool(row[0]) if row else False
@@ -521,37 +529,40 @@ class DonHangDao:
             FROM Orders o
             JOIN OrderItems oi ON o.OrderId = oi.OrderId
             JOIN Products p ON oi.ProductId = p.ProductId
-            WHERE p.StoreId = ?
+            WHERE p.StoreId = %s
         """, (store_id,))
         row = cursor.fetchone()
-        return {"doanh_thu": float(row[0] or 0), "tong_don": row[1] or 0,
-                "cho_duyet": row[2] or 0, "dang_giao": row[3] or 0,
-                "hoan_thanh": row[4] or 0, "da_huy": row[5] or 0}
+        return {"doanh_thu": float(row[0] or 0), "tong_don": int(row[1] or 0),
+                "cho_duyet": int(row[2] or 0), "dang_giao": int(row[3] or 0),
+                "hoan_thanh": int(row[4] or 0), "da_huy": int(row[5] or 0)}
 
     def _top_sp_cua_store(self, cursor, store_id):
         """Top 5 sản phẩm bán chạy của 1 store."""
-        # TOP (?) voi int da ep — comment theo Nguyen tac V
         cursor.execute("""
-            SELECT TOP (?)
+            SELECT
                 p.ProductId, p.ProductName, p.SoldCount, p.Price
             FROM Products p
-            WHERE p.StoreId = ?
+            WHERE p.StoreId = %s
             ORDER BY p.SoldCount DESC
-        """, (5, store_id))
+            LIMIT %s
+        """, (store_id, 5))
         return [{"id": r[0], "name": r[1], "sold": r[2] or 0,
                  "price": float(r[3] or 0)} for r in cursor.fetchall()]
 
     def _don_gan_day_cua_store(self, cursor, store_id):
         """5 đơn gần nhất có sản phẩm của 1 store."""
+        # SQL Server: SELECT TOP (?) ...  →  MySQL: LIMIT ở cuối câu lệnh.
+        # DISTINCT để 1 đơn có nhiều item của shop không bị lặp lại.
         cursor.execute("""
-            SELECT TOP (?)
+            SELECT DISTINCT
                 o.OrderId, o.TotalAmount, o.Status, o.CreatedAt
             FROM Orders o
             JOIN OrderItems oi ON o.OrderId = oi.OrderId
             JOIN Products p ON oi.ProductId = p.ProductId
-            WHERE p.StoreId = ?
+            WHERE p.StoreId = %s
             ORDER BY o.CreatedAt DESC
-        """, (5, store_id))
+            LIMIT %s
+        """, (store_id, 5))
         return [{"order_id": r[0], "total_amount": float(r[1] or 0),
                  "status": r[2], "created_at": str(r[3]) if r[3] else ""}
                 for r in cursor.fetchall()]
@@ -570,7 +581,7 @@ class DonHangDao:
                 FROM Orders o
                 JOIN OrderItems oi ON o.OrderId = oi.OrderId
                 JOIN Products p ON oi.ProductId = p.ProductId
-                WHERE p.StoreId = ? AND YEAR(o.CreatedAt) = ?
+                WHERE p.StoreId = %s AND YEAR(o.CreatedAt) = %s
                     AND o.Status = 'Completed'
                 GROUP BY MONTH(o.CreatedAt)
             """, (store_id, year))
@@ -587,7 +598,7 @@ class DonHangDao:
         data = {i: {"thang": i, "doanh_thu": 0, "so_don": 0} for i in range(1, 13)}
         for r in rows:
             data[int(r[0])] = {"thang": int(r[0]), "doanh_thu": float(r[1] or 0),
-                               "so_don": r[2] or 0}
+                               "so_don": int(r[2] or 0)}
         return list(data.values())
 
     def lay_chi_tiet_don_hang(self, order_id):
@@ -597,7 +608,7 @@ class DonHangDao:
             return None
         cursor = conn.cursor()
         try:
-            cursor.execute("SELECT * FROM Orders WHERE OrderId = ?", (int(order_id),))
+            cursor.execute("SELECT * FROM Orders WHERE OrderId = %s", (int(order_id),))
             row = cursor.fetchone()
             if not row:
                 return None
@@ -618,7 +629,7 @@ class DonHangDao:
 
     def _lay_items_theo_id(self, cursor, order_id):
         """Đọc items của đơn bằng cursor đang mở sẵn."""
-        cursor.execute("SELECT * FROM OrderItems WHERE OrderId = ?", (order_id,))
+        cursor.execute("SELECT * FROM OrderItems WHERE OrderId = %s", (order_id,))
         item_rows = cursor.fetchall()
         item_columns = [col[0] for col in cursor.description]
         return [dict(zip(item_columns, ir)) for ir in item_rows]
@@ -632,13 +643,13 @@ class DonHangDao:
             return {}
         cursor = conn.cursor()
         try:
-            placeholders = ",".join(["?"] * len(product_ids))
+            placeholders = ",".join(["%s"] * len(product_ids))
             # Tham số hóa được kiểm soát: placeholders chỉ sinh từ số lượng id
             cursor.execute(
                 f"SELECT ProductId, StoreId FROM Products WHERE ProductId IN ({placeholders})",
                 tuple(product_ids)
             )
-            return {row.ProductId: row.StoreId for row in cursor.fetchall()}
+            return {row[0]: row[1] for row in cursor.fetchall()}
         except Exception as e:
             logger.exception("Lỗi lay_store_ids_cua_san_pham: %s", e)
             return {}
@@ -655,12 +666,12 @@ class DonHangDao:
             return {}
         cursor = conn.cursor()
         try:
-            placeholders = ",".join(["?"] * len(store_ids))
+            placeholders = ",".join(["%s"] * len(store_ids))
             cursor.execute(
                 f"SELECT StoreId, StoreName FROM Stores WHERE StoreId IN ({placeholders})",
                 tuple(store_ids)
             )
-            return {row.StoreId: row.StoreName for row in cursor.fetchall()}
+            return {row[0]: row[1] for row in cursor.fetchall()}
         except Exception as e:
             logger.exception("Lỗi lay_ten_cua_cac_store: %s", e)
             return {}

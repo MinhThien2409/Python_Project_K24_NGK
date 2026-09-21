@@ -1375,40 +1375,50 @@ async function tuChoiSeller(request_id) {
   }
 }
 // Load danh mục từ API đổ vào tất cả dropdowns
+// Load danh mục từ API đổ vào dropdown + bộ lọc (value = TÊN danh mục,
+// vì applyUserFilters so sánh với p.category_name)
 async function loadCategories() {
   try {
     const res    = await fetch('/api/categories');
     const result = await res.json();
-    if (!result.status || !result.data.length) return;
+    if (!result.status || !Array.isArray(result.data)) return;
 
-    const options = result.data.map(c =>
-      `<option value="${c.name}">${c.name}</option>`
+    // API trả category_name; chấp nhận cả name nếu backend đổi sau này
+    const ds = result.data.map(c => ({ name: c.category_name ?? c.name ?? '' }))
+                         .filter(c => c.name);
+
+    const options = ds.map(c =>
+      `<option value="${escHtml(c.name)}">${escHtml(c.name)}</option>`
     ).join('');
 
-    // Đổ vào dropdown đăng ký gian hàng
+    // Dropdown đăng ký gian hàng
     const selCat = document.getElementById('selCat');
     if (selCat) selCat.innerHTML = options;
 
-    // Đổ vào dropdown thêm sản phẩm (admin)
-    const prodCat = document.getElementById('prodCategory');
-    if (prodCat) prodCat.innerHTML = options;
-
-    // Đổ vào thanh tìm kiếm header
+    // Dropdown tìm kiếm trên header (giữ lại lựa chọn hiện tại nếu còn)
     const searchCat = document.getElementById('searchCategorySelect');
     if (searchCat) {
+      const dangChon = searchCat.value;
       searchCat.innerHTML = `<option value="all">Tất cả danh mục</option>` + options;
+      if ([...searchCat.options].some(o => o.value === dangChon)) searchCat.value = dangChon;
     }
 
-    // Đổ vào sidebar filter
+    // Checkbox lọc ở sidebar (giữ lại các ô đang tick)
     const filterCatList = document.getElementById('filterCatList');
     if (filterCatList) {
-      filterCatList.innerHTML = result.data.map(c => `
+      const daTick = new Set(
+        [...filterCatList.querySelectorAll('input:checked')].map(cb => cb.value));
+      filterCatList.innerHTML = ds.map(c => `
         <label class="filter-option">
-          <input type="checkbox" value="${c.name}" onchange="applyUserFilters()"> ${c.name}
+          <input type="checkbox" value="${escHtml(c.name)}"
+                 ${daTick.has(c.name) ? 'checked' : ''}
+                 onchange="applyUserFilters()"> ${escHtml(c.name)}
         </label>
       `).join('');
     }
 
+    // KHÔNG đụng tới #prodCategory ở đây: modal sản phẩm cần value là ID,
+    // do loadCategoriesForProductModal() lo mỗi lần mở modal.
   } catch (e) {
     console.error('Lỗi load categories:', e);
   }
@@ -1678,22 +1688,8 @@ async function openEditProductModal(productId) {
   }
 }
 
-// ─── LOAD CATEGORIES VÀO DROPDOWN CỦA MODAL SẢN PHẨM ────────────────────────
-async function loadCategoriesForProductModal(selectedName = null) {
-  try {
-    const res    = await fetch('/api/categories');
-    const result = await res.json();
-    if (!result.status) return;
 
-    const select = document.getElementById('prodCategory');
-    select.innerHTML = result.data.map(c => `
-      <option value="${c.id}" ${selectedName === c.name ? 'selected' : ''}>${c.name}</option>
-    `).join('');
 
-  } catch (e) {
-    console.error('Lỗi load categories cho modal:', e);
-  }
-}
 
 // ─── LƯU SẢN PHẨM (THÊM MỚI HOẶC CẬP NHẬT) ─────────────────────────────────
 async function handleSaveProduct(e) {
@@ -1799,118 +1795,247 @@ function hienThiMessageDanhMuc(message, ok) {
   el.textContent = message;
   el.style.color = ok ? 'var(--green)' : 'var(--red)';
 }
-async function renderAdminCategories() {
-  const tbody = document.getElementById('tblCategoriesBody');
-  tbody.innerHTML = `<tr><td colspan="3" style="text-align:center; padding:20px; color:var(--text-muted);">Đang tải...</td></tr>`;
+// ─── DANH MỤC (QUẢN LÝ) ───
+let allAdminCategories = [];
 
+function escHtml(s) {
+  return String(s ?? '').replace(/[&<>"']/g, ch =>
+    ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
+}
+
+// Gọi API rồi vẽ bảng (switchAdminTab gọi hàm này)
+async function renderAdminCategories() {
+  const tbody = document.getElementById('tblAdminCategoriesBody');
+  if (!tbody) return;
+  tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; padding:20px;
+                     color:var(--text-muted);">Đang tải...</td></tr>`;
   try {
     const res    = await fetch('/api/categories');
     const result = await res.json();
-
-    if (!result.status || !result.data.length) {
-      tbody.innerHTML = `<tr><td colspan="3" style="text-align:center; color:var(--text-muted);">Chưa có danh mục nào</td></tr>`;
+    if (!result.status) {
+      tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; color:var(--red);">
+                         ❌ ${escHtml(result.message || 'Không tải được danh mục!')}</td></tr>`;
       return;
     }
-
-    // 013: bộ lọc tìm kiếm — loc client theo tên trước khi vẽ bảng
-    const keyword = (document.getElementById('catSearchFilter')?.value || '').trim().toLowerCase();
-    let listLoc = result.data;
-    if (keyword) listLoc = listLoc.filter(c => (c.name || '').toLowerCase().includes(keyword));
-
-    if (!listLoc.length) {
-      tbody.innerHTML = `<tr><td colspan="3" style="text-align:center; color:var(--text-muted);">Không tìm thấy kết quả</td></tr>`;
-      return;
-    }
-
-    tbody.innerHTML = listLoc.map(c => `
-      <tr>
-        <td style="font-weight:600;">${c.name}</td>
-        <td><code style="background:var(--bg); padding:2px 6px; border-radius:4px; font-size:12px;">${c.id}</code></td>
-        <td>
-          <button class="admin-action-btn btn-edit" onclick="editCategory(${c.id}, '${c.name.replace(/'/g, "\\'")}')">✏️ Sửa</button>
-        </td>
-      </tr>
-    `).join('');
-
+    allAdminCategories = result.data || [];
+    veBangDanhMuc();
   } catch (e) {
-    tbody.innerHTML = `<tr><td colspan="3" style="text-align:center; color:var(--red);">❌ Lỗi tải dữ liệu</td></tr>`;
+    console.error('Lỗi renderAdminCategories:', e);
+    tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; color:var(--red);">❌ Lỗi tải dữ liệu</td></tr>`;
   }
 }
+function veBangDanhMuc() {
+  const tbody = document.getElementById('tblAdminCategoriesBody');
+  if (!tbody) return;
+  const tuKhoa = (document.getElementById('catSearchFilter')?.value || '').trim().toLowerCase();
+  const ds = allAdminCategories.filter(c =>
+    !tuKhoa || (c.category_name || '').toLowerCase().includes(tuKhoa));
 
-// ─── THÊM DANH MỤC ───────────────────────────────────────────────────────────
-async function addCategory() {
-  const name = document.getElementById('newCatName').value.trim();
-  if (!name) { hienThiMessageDanhMuc('⚠️ Tên danh mục không được trống!', false); return; }
+  if (!ds.length) {
+    tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; color:var(--text-muted);">
+      ${allAdminCategories.length ? 'Không tìm thấy kết quả' : 'Chưa có danh mục nào'}</td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = ds.map(c => `
+    <tr>
+      <td style="font-weight:700; color:var(--text-muted);">#${c.category_id}</td>
+      <td style="font-weight:600;">${escHtml(c.category_name)}</td>
+      <td>
+        <span style="background:var(--primary-light); color:var(--primary);
+                     padding:3px 10px; border-radius:20px; font-weight:700; font-size:13px;">
+          ${Number(c.platform_fee_percent || 0)}%
+        </span>
+      </td>
+      <td style="color:var(--text-muted);">${c.so_san_pham || 0} sản phẩm</td>
+      <td>
+        <button class="admin-action-btn btn-edit" onclick="openEditCategoryModal(${c.category_id})">✏️ Sửa</button>
+        <button class="admin-action-btn btn-delete" onclick="deleteCategory(${c.category_id})">🗑️ Xóa</button>
+      </td>
+    </tr>
+  `).join('');
+}
+
+
+// Modal thêm/sửa danh mục
+function openAddCategoryModal() {
+  document.getElementById('catModalTitle').textContent  = '+ Thêm danh mục';
+  document.getElementById('catModalCatId').value  = '';
+  document.getElementById('catModalName').value   = '';
+  document.getElementById('catModalFee').value    = '0';
+  document.getElementById('categoryModal').classList.add('show');
+}
+
+function openEditCategoryModal(id) {
+  const c = allAdminCategories.find(x => x.category_id === id);
+  if (!c) { showToast('❌ Không tìm thấy danh mục!'); return; }
+  document.getElementById('catModalTitle').textContent = '✏️ Sửa danh mục';
+  document.getElementById('catModalCatId').value = c.category_id;
+  document.getElementById('catModalName').value  = c.category_name;
+  document.getElementById('catModalFee').value   = c.platform_fee_percent || 0;
+  document.getElementById('categoryModal').classList.add('show');
+}
+
+async function handleSaveCategory() {
+  const id   = document.getElementById('catModalCatId').value;
+  const name = document.getElementById('catModalName').value.trim();
+  const fee  = parseFloat(document.getElementById('catModalFee').value) || 0;
+
+  if (!name) { showToast('⚠️ Tên danh mục không được để trống!'); return; }
+  if (fee < 0 || fee > 50) { showToast('⚠️ Phí sàn phải từ 0% đến 50%!'); return; }
 
   try {
-    const res    = await fetch('/api/categories', {
-      method : 'POST',
+    // URL tương đối: cookie session mới được gửi kèm
+    const res = await fetch(id ? `/api/categories/${id}` : '/api/categories', {
+      method : id ? 'PUT' : 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body   : JSON.stringify({ name })
+      body   : JSON.stringify({ name, phi_san: fee })
     });
     const result = await res.json();
-
+    showToast((result.status ? '✅ ' : '❌ ') + result.message);
+    hienThiMessageDanhMuc(result.message, result.status);
     if (result.status) {
-      hienThiMessageDanhMuc(result.message, true);
-      document.getElementById('newCatName').value = '';
+      closeModal('categoryModal');
       renderAdminCategories();
-      loadCategories(); // Cập nhật dropdown khắp nơi
-    } else {
-      hienThiMessageDanhMuc(result.message, false);
+      loadCategories();   // cập nhật luôn dropdown/bộ lọc ngoài trang mua sắm
     }
-
   } catch (e) {
-    hienThiMessageDanhMuc('❌ Lỗi kết nối!', false);
+    showToast('❌ Lỗi kết nối!');
   }
 }
-
-// ─── SỬA DANH MỤC ────────────────────────────────────────────────────────────
-async function editCategory(categoryId, currentName) {
-  const newName = prompt(`Nhập tên mới cho danh mục:`, currentName);
-  if (!newName || newName.trim() === currentName) return;
-
+async function deleteCategory(id) {
+  const c = allAdminCategories.find(x => x.category_id === id);
+  if (!confirm(`Xóa danh mục "${c ? c.category_name : '#' + id}"?`)) return;
   try {
-    const res    = await fetch(`/api/categories/${categoryId}`, {
-      method : 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body   : JSON.stringify({ name: newName.trim() })
-    });
+    const res    = await fetch(`/api/categories/${id}`, { method: 'DELETE' });
     const result = await res.json();
-
-    if (result.status) {
-      hienThiMessageDanhMuc(result.message, true);
-      renderAdminCategories();
-      loadCategories();
-    } else {
-      hienThiMessageDanhMuc(result.message, false);
-    }
-
+    showToast((result.status ? '✅ ' : '❌ ') + result.message);
+    hienThiMessageDanhMuc(result.message, result.status);
+    if (result.status) { renderAdminCategories(); loadCategories(); }
   } catch (e) {
-    hienThiMessageDanhMuc('❌ Lỗi kết nối!', false);
+    showToast('❌ Lỗi kết nối!');
   }
 }
+// Biến lưu phí sàn của danh mục đang chọn
+// Phí sàn (%) của danh mục đang chọn trong modal sản phẩm
+let currentCategoryFee = 0;
 
-// ─── XÓA DANH MỤC ────────────────────────────────────────────────────────────
-async function deleteCategory(categoryId, categoryName) {
-  if (!confirm(`Xóa danh mục "${categoryName}"?`)) return;
-
+// Nạp danh mục vào <select id="prodCategory"> và gắn phí sàn vào data-fee
+async function loadCategoriesForProductModal(selectedName = null) {
   try {
-    const res = await fetch(`/api/categories/${categoryId}`, {
-      method: 'DELETE'
-    });
+    // Dùng URL tương đối (giống các API khác) — tránh lỗi CORS khi
+    // trang mở bằng 127.0.0.1 nhưng gọi localhost:5000
+    const res    = await fetch('/api/categories');
     const result = await res.json();
+    if (!result.status) return;
+    const mk = document.getElementById('prodDiscount');
+  if (mk) mk.value = '';
 
-    if (result.status) {
-      hienThiMessageDanhMuc(result.message, true);
-      renderAdminCategories();
-      loadCategories();
-    } else {
-      hienThiMessageDanhMuc(result.message, false);
-    }
+    const select = document.getElementById('prodCategory');
+    if (!select) return;
 
+    select.innerHTML = result.data.map(c => {
+      // Chấp nhận cả 2 kiểu tên field mà backend có thể trả về
+      const id   = c.id   ?? c.category_id;
+      const name = c.name ?? c.category_name;
+      const fee  = c.platform_fee_percent ?? c.phi_san ?? 0;
+      const sel  = (selectedName !== null && selectedName === name) ? 'selected' : '';
+      return `<option value="${id}" data-fee="${fee}" ${sel}>${name}</option>`;
+    }).join('');
+
+    // Tính phí ngay sau khi có danh mục (kể cả khi mở modal SỬA:
+    // giá được gán bằng .value nên sự kiện 'input' không tự bắn)
+    onCategoryChange();
   } catch (e) {
-    hienThiMessageDanhMuc('❌ Lỗi kết nối!', false);
+    console.error('Lỗi load categories cho modal:', e);
   }
+}
+// Khi đổi danh mục → cập nhật phí và tính lại
+// Khi đổi danh mục → cập nhật phí; nếu đang tăng giá theo % thì tính lại giá bán
+function onCategoryChange() {
+  const select = document.getElementById('prodCategory');
+  const option = select ? select.options[select.selectedIndex] : null;
+  currentCategoryFee = parseFloat(option?.dataset.fee || 0) || 0;
+  applyDiscount();
+}
+
+function tinhPhiSan() {
+  const fmt    = n => Math.round(n).toLocaleString('vi-VN') + 'đ';
+  const giaGoc = parseFloat(document.getElementById('prodOldPrice')?.value) || 0;
+  const giaBan = parseFloat(document.getElementById('prodPrice')?.value) || 0;
+  const tiLe   = currentCategoryFee / 100;
+
+  // ── Khối 1: thực nhận nếu bán đúng giá gốc ──
+  const boxGoc = document.getElementById('feeGocBox');
+  if (boxGoc) {
+    if (giaGoc > 0) {
+      const phiGoc = Math.round(giaGoc * tiLe);
+      document.getElementById('feeGocLabel').textContent  = `Phí sàn (${currentCategoryFee}%):`;
+      document.getElementById('feeGocValue').textContent  = fmt(giaGoc);
+      document.getElementById('feeGocPhi').textContent    = '- ' + fmt(phiGoc);
+      document.getElementById('feeGocSauPhi').textContent = fmt(giaGoc - phiGoc);
+      boxGoc.style.display = 'block';
+    } else {
+      boxGoc.style.display = 'none';
+    }
+  }
+
+  // ── Khối 2: giá bán → thực nhận ──
+  const box = document.getElementById('feeBreakdownBox');
+  if (!box) return;
+  if (giaBan <= 0) { box.style.display = 'none'; return; }
+
+  const phiSan   = Math.round(giaBan * tiLe);
+  const thucNhan = giaBan - phiSan;
+  document.getElementById('feeBreakLabel').textContent    = `Phí sàn (${currentCategoryFee}%):`;
+  document.getElementById('feeBreakGiaBan').textContent   = fmt(giaBan);
+  document.getElementById('feeBreakPhiSan').textContent   = '- ' + fmt(phiSan);
+  document.getElementById('feeBreakThucNhan').textContent = fmt(thucNhan);
+
+  // Khách có thấy giảm giá không?
+  const rowGiam = document.getElementById('feeBreakGiamRow');
+  const elGiam  = document.getElementById('feeBreakGiam');
+  if (giaGoc > 0) {
+    if (giaBan < giaGoc) {
+      const pct = (1 - giaBan / giaGoc) * 100;
+      elGiam.textContent = `Giảm ${pct.toFixed(pct % 1 ? 1 : 0)}% (giá gốc bị gạch)`;
+      elGiam.style.color = 'var(--green)';
+    } else {
+      elGiam.textContent = 'Giá bán ≥ giá gốc → không hiện giảm giá';
+      elGiam.style.color = 'var(--red)';
+    }
+    rowGiam.style.display = 'flex';
+  } else {
+    rowGiam.style.display = 'none';
+  }
+
+  box.style.display = 'block';
+}
+
+// Giảm % → tự điền Giá bán
+function applyDiscount() {
+  const giaGoc = parseFloat(document.getElementById('prodOldPrice')?.value) || 0;
+  const raw    = document.getElementById('prodDiscount')?.value ?? '';
+  const pct    = parseFloat(raw);
+
+  if (raw !== '' && !isNaN(pct) && pct >= 0 && pct < 100 && giaGoc > 0) {
+    document.getElementById('prodPrice').value = Math.round(giaGoc * (1 - pct / 100));
+  }
+  tinhPhiSan();
+}
+
+function setDiscount(pct) {
+  const giaGoc = parseFloat(document.getElementById('prodOldPrice').value) || 0;
+  if (giaGoc <= 0) { showToast('⚠️ Nhập giá gốc trước để giảm giá theo %!'); return; }
+  document.getElementById('prodDiscount').value = pct;
+  applyDiscount();
+}
+
+// Tự sửa giá bán bằng tay → bỏ chế độ %
+function onGiaBanInput() {
+  const d = document.getElementById('prodDiscount');
+  if (d) d.value = '';
+  tinhPhiSan();
 }
 function openAddSellerProductModal() {
     // Reset form (dùng lại adminProductModal hoặc tạo modal riêng)

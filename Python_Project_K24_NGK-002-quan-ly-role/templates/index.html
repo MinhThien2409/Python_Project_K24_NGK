@@ -193,25 +193,26 @@
 
     <main class="main">
       <div id="pane-categories" class="admin-pane" style="display:none;">
-        <div class="admin-card">
-          <h3>Quản lý danh mục sản phẩm</h3>
-          <div class="filter-bar" style="margin-top:12px;">
-            <div class="filter-item">
-              <label for="catSearchFilter">Tìm kiếm</label>
-              <input type="text" id="catSearchFilter" placeholder="Tìm tên danh mục..." oninput="renderAdminCategories()">
-            </div>
-          </div>
-          <div id="catMessage" style="margin-top:12px; font-size:13px; display:none;"></div>
-          <div class="form-group" style="flex-direction:row; margin-top:12px;">
-            <input type="text" id="newCatName" placeholder="Tên danh mục mới" style="flex:1;" />
-            <button class="btn-submit" style="padding:0 20px; white-space:nowrap;" onclick="addCategory()">Thêm danh mục</button>
-          </div>
-          <table style="margin-top:20px;">
-            <thead><tr><th>Tên danh mục</th><th>Mã danh mục</th><th>Hành động</th></tr></thead>
-            <tbody id="tblCategoriesBody"></tbody>
-          </table>
-        </div>
+  <div class="admin-card">
+    <div style="display:flex; justify-content:space-between; align-items:center;">
+      <h3>Quản lý danh mục sản phẩm</h3>
+      <button class="checkout-btn" style="padding:6px 12px;" onclick="openAddCategoryModal()">+ Thêm danh mục</button>
+    </div>
+    <div class="filter-bar" style="margin-top:12px;">
+      <div class="filter-item">
+        <label for="catSearchFilter">Tìm kiếm</label>
+        <input type="text" id="catSearchFilter" placeholder="Tìm tên danh mục..." oninput="veBangDanhMuc()">
       </div>
+    </div>
+    <div id="catMessage" style="margin-top:12px; font-size:13px; display:none;"></div>
+  </div>
+  <div class="admin-card">
+    <table>
+      <thead><tr><th>Mã</th><th>Tên danh mục</th><th>Phí sàn</th><th>Số sản phẩm</th><th>Hành động</th></tr></thead>
+      <tbody id="tblAdminCategoriesBody"></tbody>
+    </table>
+  </div>
+</div>
 
       <div id="pane-sellers" class="admin-pane" style="display:none;">
         <div class="admin-card">
@@ -669,10 +670,81 @@
       <input type="hidden" id="editProductId">
       <div class="form-group"><label>Tên sản phẩm</label><input type="text" id="prodName" required></div>
       <div class="form-group"><label>Danh mục</label><select id="prodCategory"></select></div>
-      <div style="display:flex; gap:10px;">
-        <div class="form-group" style="flex:1;"><label>Giá thành (đ)</label><input type="number" id="prodPrice" required></div>
-        <div class="form-group" style="flex:1;"><label>Giá gốc (đ)</label><input type="number" id="prodOldPrice"></div>
-      </div>
+ <!-- ===== GIÁ GỐC (giá niêm yết) ===== -->
+<div class="form-group">
+  <label>Giá gốc / giá niêm yết (đ)</label>
+  <input type="number" id="prodOldPrice" min="0" placeholder="Giá trước khi giảm" oninput="applyDiscount()">
+</div>
+
+<!-- Hiện khi nhập giá gốc -->
+<div id="feeGocBox" style="display:none; margin-bottom:12px; padding:12px;
+     background:var(--bg); border-radius:8px; border:1px solid var(--border);">
+  <div style="display:flex; flex-direction:column; gap:5px; font-size:13px;">
+    <div style="display:flex; justify-content:space-between;">
+      <span>Giá gốc:</span>
+      <span id="feeGocValue" style="font-weight:600;">—</span>
+    </div>
+    <div style="display:flex; justify-content:space-between; color:var(--red);">
+      <span id="feeGocLabel">Phí sàn:</span>
+      <span id="feeGocPhi">—</span>
+    </div>
+    <div style="display:flex; justify-content:space-between; border-top:1px solid var(--border);
+                padding-top:6px; font-weight:700; color:var(--primary);">
+      <span>Thực nhận nếu bán đúng giá gốc:</span>
+      <span id="feeGocSauPhi">—</span>
+    </div>
+  </div>
+</div>
+
+<!-- ===== GIẢM GIÁ THEO % ===== -->
+<div class="form-group">
+  <label>Giảm giá theo % của giá gốc</label>
+  <div style="display:flex; gap:6px; align-items:center; flex-wrap:wrap;">
+    <input type="number" id="prodDiscount" min="0" max="99" step="0.1" placeholder="VD: 10"
+           style="width:90px;" oninput="applyDiscount()">
+    <span>%</span>
+    <button type="button" onclick="setDiscount(5)"  style="padding:4px 10px; border:1px solid var(--border); border-radius:99px; background:var(--bg); cursor:pointer; font-family:inherit; font-size:12px;">-5%</button>
+    <button type="button" onclick="setDiscount(10)" style="padding:4px 10px; border:1px solid var(--border); border-radius:99px; background:var(--bg); cursor:pointer; font-family:inherit; font-size:12px;">-10%</button>
+    <button type="button" onclick="setDiscount(20)" style="padding:4px 10px; border:1px solid var(--border); border-radius:99px; background:var(--bg); cursor:pointer; font-family:inherit; font-size:12px;">-20%</button>
+    <button type="button" onclick="setDiscount(30)" style="padding:4px 10px; border:1px solid var(--border); border-radius:99px; background:var(--bg); cursor:pointer; font-family:inherit; font-size:12px;">-30%</button>
+  </div>
+  <div style="font-size:11px; color:var(--text-muted); margin-top:4px;">
+    Giá bán = giá gốc × (100% − %). Ô Giá bán bên dưới tự cập nhật.
+  </div>
+</div>
+
+<!-- ===== GIÁ BÁN ===== -->
+<div class="form-group">
+  <label>Giá bán (đ)</label>
+  <input type="number" id="prodPrice" required>
+</div>
+
+<div id="feeBreakdownBox" style="display:none; margin-top:8px; padding:12px;
+     background:var(--bg); border-radius:8px; border:1px solid var(--border);">
+  <div style="font-size:12px; color:var(--text-muted); margin-bottom:6px; font-weight:600;">
+    💡 Ước tính doanh thu
+  </div>
+  <div style="display:flex; flex-direction:column; gap:5px; font-size:13px;">
+    <div style="display:flex; justify-content:space-between;">
+      <span>Giá bán:</span>
+      <span id="feeBreakGiaBan" style="font-weight:600;">—</span>
+    </div>
+    <div style="display:flex; justify-content:space-between; color:var(--red);">
+      <span id="feeBreakLabel">Phí sàn (0%):</span>
+      <span id="feeBreakPhiSan">—</span>
+    </div>
+    <div style="display:flex; justify-content:space-between; border-top:1px solid var(--border);
+                padding-top:6px; font-weight:700; color:var(--primary);">
+      <span>Thực nhận:</span>
+      <span id="feeBreakThucNhan">—</span>
+    </div>
+    <div id="feeBreakGiamRow" style="display:none; justify-content:space-between; font-size:12px;">
+      <span>Hiển thị cho khách:</span>
+      <span id="feeBreakGiam" style="font-weight:700;">—</span>
+    </div>
+  </div>
+</div>
+
       <div style="display:flex; gap:10px;">
         <div class="form-group" style="flex:1;"><label>Tồn kho</label><input type="number" id="prodStock" required></div>
       </div>
@@ -778,6 +850,22 @@
 </div>
 
 <div class="toast" id="toast"></div>
+<div class="modal-overlay" id="categoryModal">
+  <div class="modal-box" style="width:400px;">
+    <button class="modal-close" onclick="closeModal('categoryModal')">✕</button>
+    <h3 id="catModalTitle" style="margin-bottom:14px;">+ Thêm danh mục</h3>
+    <input type="hidden" id="catModalCatId">
+    <div class="form-group">
+      <label>Tên danh mục</label>
+      <input type="text" id="catModalName" maxlength="100">
+    </div>
+    <div class="form-group">
+      <label>Phí sàn (%) — từ 0 đến 50</label>
+      <input type="number" id="catModalFee" min="0" max="50" step="0.1" value="0">
+    </div>
+    <button class="btn-submit" style="width:100%;" onclick="handleSaveCategory()">Lưu danh mục</button>
+  </div>
+</div>
 
 <script src="/static/js/main.js"></script>
 

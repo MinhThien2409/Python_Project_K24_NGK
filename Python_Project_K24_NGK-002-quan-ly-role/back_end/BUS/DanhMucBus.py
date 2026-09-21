@@ -15,8 +15,7 @@ class DanhMucBus:
         data = self.dao.lay_tat_ca()
         return {"status": True, "data": data}
 
-    def them_category(self, ten):
-        """Thêm danh mục mới sau khi kiểm tra trùng tên."""
+    def them_category(self, ten, phi_san=0):
         ten = (ten or "").strip()
         if not ten:
             return {"status": False, "message": "Tên danh mục không được để trống!"}
@@ -24,13 +23,20 @@ class DanhMucBus:
             return {"status": False, "message": "Tên danh mục quá dài (tối đa 100 ký tự)!"}
         if self.dao.kiem_tra_ten_ton_tai(ten):
             return {"status": False, "message": f"Danh mục '{ten}' đã tồn tại!"}
-        ok = self.dao.them(DanhMuc(CategoryName=ten))
+
+        try:
+            phi_san = float(phi_san)
+            if phi_san < 0 or phi_san > 50:
+                return {"status": False, "message": "Phí sàn phải từ 0% đến 50%!"}
+        except:
+            return {"status": False, "message": "Phí sàn không hợp lệ!"}
+
+        ok = self.dao.them(DanhMuc(CategoryName=ten, PlatformFeePercent=phi_san))
         if ok:
             return {"status": True, "message": f"Đã thêm danh mục '{ten}' thành công!"}
         return {"status": False, "message": "Lỗi khi thêm danh mục!"}
 
-    def sua_category(self, category_id, ten_moi):
-        """Cập nhật tên danh mục sau khi kiểm tra trùng tên."""
+    def sua_category(self, category_id, ten_moi, phi_san=0):
         ten_moi = (ten_moi or "").strip()
         if not ten_moi:
             return {"status": False, "message": "Tên danh mục không được để trống!"}
@@ -38,7 +44,16 @@ class DanhMucBus:
             return {"status": False, "message": "Tên danh mục quá dài (tối đa 100 ký tự)!"}
         if self.dao.kiem_tra_ten_ton_tai(ten_moi, tru_id=category_id):
             return {"status": False, "message": f"Danh mục '{ten_moi}' đã tồn tại!"}
-        ok = self.dao.sua(DanhMuc(CategoryId=category_id, CategoryName=ten_moi))
+
+        try:
+            phi_san = float(phi_san)
+            if phi_san < 0 or phi_san > 50:
+                return {"status": False, "message": "Phí sàn phải từ 0% đến 50%!"}
+        except:
+            return {"status": False, "message": "Phí sàn không hợp lệ!"}
+
+        ok = self.dao.sua(DanhMuc(CategoryId=category_id, CategoryName=ten_moi,
+                                  PlatformFeePercent=phi_san))
         if ok:
             return {"status": True, "message": "Đã cập nhật danh mục thành công!"}
         return {"status": False, "message": "Không tìm thấy danh mục!"}

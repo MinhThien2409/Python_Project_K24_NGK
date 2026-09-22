@@ -235,23 +235,20 @@ def get_categories():
 
 @app.route('/api/categories', methods=['POST'])
 def add_category():
-    """Thêm danh mục mới (quyền Quản lý)."""
     gate = user_bus.kiem_tra_quyen_quan_ly(session.get('user_id'))
     if not gate.get('status'):
         return jsonify(gate), 403
-    data = request.json
-    return jsonify(category_bus.them_category(data.get('name')))
+    data = request.json or {}
+    return jsonify(category_bus.them_category(data.get('name'), data.get('phi_san', 0)))
 
 
 @app.route('/api/categories/<int:category_id>', methods=['PUT'])
 def update_category(category_id):
-    """Sửa tên danh mục (quyền Quản lý)."""
     gate = user_bus.kiem_tra_quyen_quan_ly(session.get('user_id'))
     if not gate.get('status'):
         return jsonify(gate), 403
-    data = request.json
-    return jsonify(category_bus.sua_category(category_id, data.get('name')))
-
+    data = request.json or {}
+    return jsonify(category_bus.sua_category(category_id, data.get('name'), data.get('phi_san', 0)))
 
 @app.route('/api/categories/<int:category_id>', methods=['DELETE'])
 def delete_category(category_id):
@@ -580,14 +577,23 @@ def api_seller_an_hien(product_id):
 
 @app.route('/api/seller/san-pham/<int:product_id>/nhap-hang', methods=['POST'])
 def api_seller_nhap_hang(product_id):
-    """Seller nhập thêm tồn kho cho sản phẩm của mình."""
+    """Seller nhập thêm tồn kho cho sản phẩm của mình, kèm log giao dịch."""
     store, loi = _seller_store_hien_tai()
     if loi:
         return jsonify(loi[0]), loi[1]
     d = request.json or {}
     return jsonify(san_pham_bus.nhap_hang(
         session.get('user_id'), store.get('store_id'), product_id,
-        d.get('so_luong')))
+        d.get('so_luong'), d.get('gia_nhap'), d.get('ghi_chu'), d.get('supplier_id')))
+
+
+@app.route('/api/seller/lich-su-nhap-hang', methods=['GET'])
+def api_seller_lich_su_nhap_hang():
+    """Seller xem log các lần nhập hàng của gian hàng mình."""
+    store, loi = _seller_store_hien_tai()
+    if loi:
+        return jsonify(loi[0]), loi[1]
+    return jsonify(san_pham_bus.lay_lich_su_nhap_hang(store.get('store_id')))
 
 
 @app.route('/api/seller/san-pham/<int:product_id>/gia', methods=['PUT'])

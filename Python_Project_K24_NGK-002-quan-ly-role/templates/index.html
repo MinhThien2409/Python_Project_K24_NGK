@@ -317,35 +317,56 @@
           </table>
         </div>
       </div>
-      <div id="spane-nhaphang" class="admin-pane" style="display:none;">
-        <div class="admin-card">
-          <h3>📦 Quản lý nhập hàng</h3>
-          <p style="font-size:13px; color:var(--text-muted); margin-bottom:14px;">
-            Nhập số lượng hàng về kho cho từng sản phẩm (kể cả sản phẩm đang ẩn).
-          </p>
-          <div class="filter-bar">
-            <div class="filter-item">
-              <label for="nhSearchFilter">Tìm kiếm</label>
-              <input type="text" id="nhSearchFilter" placeholder="Tìm tên sản phẩm..." oninput="renderSellerNhapHang()">
-            </div>
-            <div class="filter-item">
-              <label for="nhFilterStock">Tồn kho</label>
-              <select id="nhFilterStock" onchange="renderSellerNhapHang()">
-                <option value="all">Tất cả</option>
-                <option value="in-stock">Còn hàng (&gt;5)</option>
-                <option value="low-stock">Sắp hết (1–5)</option>
-                <option value="out-of-stock">Hết hàng (0)</option>
-              </select>
-            </div>
-          </div>
-        </div>
-        <div class="admin-card">
-          <table>
-            <thead><tr><th>Tên sản phẩm</th><th>Tồn kho</th><th>Số lượng nhập</th><th>Trạng thái</th><th>Thao tác</th></tr></thead>
-            <tbody id="spNhapHangBody"></tbody>
-          </table>
-        </div>
+<div id="spane-nhaphang" class="admin-pane" style="display:none;">
+  <div class="admin-card">
+    <div class="filter-bar">
+      <div class="filter-item">
+        <label for="nhSearchFilter">Tìm kiếm</label>
+        <input type="text" id="nhSearchFilter" placeholder="Tìm tên sản phẩm..." oninput="renderSellerNhapHang()">
       </div>
+      <div class="filter-item">
+        <label for="nhFilterStock">Tồn kho</label>
+        <select id="nhFilterStock" onchange="renderSellerNhapHang()">
+          <option value="all">Tất cả</option>
+          <option value="in-stock">Còn hàng (&gt;5)</option>
+          <option value="low-stock">Sắp hết (1–5)</option>
+          <option value="out-of-stock">Hết hàng (0)</option>
+        </select>
+      </div>
+    </div>
+  </div>
+  <div class="admin-card">
+    <table>
+      <thead>
+        <tr>
+          <th>Sản phẩm</th>
+          <th style="text-align:center;">Tồn kho</th>
+          <th style="width:230px;">Nhập hàng</th>
+          <th style="text-align:center;">Trạng thái</th>
+          <th style="width:180px;">Thao tác</th>
+        </tr>
+      </thead>
+      <tbody id="spNhapHangBody"></tbody>
+    </table>
+  </div>
+  <div class="admin-card">
+    <h3 style="margin-bottom:14px;">📜 Lịch sử nhập hàng</h3>
+    <table>
+      <thead>
+        <tr>
+          <th>Mã phiếu</th>
+          <th>Sản phẩm</th>
+          <th style="text-align:center;">Số lượng</th>
+          <th>Giá nhập/đơn vị</th>
+          <th>Thành tiền</th>
+          <th>Thời gian / Ghi chú</th>
+        </tr>
+      </thead>
+      <tbody id="tblLichSuNhapHangBody"></tbody>
+    </table>
+  </div>
+</div>
+</div>
       <div id="spane-orders" class="admin-pane" style="display:none;">
         <div class="admin-card">
           <h3>📋 Đơn hàng cần xử lý</h3>
@@ -746,7 +767,7 @@
 </div>
 
       <div style="display:flex; gap:10px;">
-        <div class="form-group" style="flex:1;"><label>Tồn kho</label><input type="number" id="prodStock" required></div>
+        <div class="form-group" style="flex:1;"><label>Tồn kho</label><input type="number" id="prodStock" min ="0" required></div>
       </div>
       <!-- Thay thế form-group prodEmoji hiện tại -->
 <div class="form-group">

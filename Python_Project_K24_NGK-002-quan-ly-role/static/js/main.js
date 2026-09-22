@@ -165,6 +165,7 @@ async function switchSellerTab(tabName) {
     await renderSellerProducts();
   } else if (tabName === 'nhaphang') {
     await renderSellerNhapHang();
+    await renderLichSuNhapHang();
   } else if (tabName === 'orders') {
     await renderSellerOrders();
   } else if (tabName === 'shop') {
@@ -3522,24 +3523,42 @@ async function sellerAnHien(productId, isActive) {
 }
 
 // 015 FR-016/017: tab Quản lý nhập hàng — bảng + nút nhập theo từng dòng
+ // Cache: giá nhập gần nhất theo từng sản phẩm (lấy từ log nhập hàng)
+let giaNhapGanNhatMap = {};
+
+async function taiGiaNhapGanNhat() {
+  try {
+    const res = await fetch('/api/seller/lich-su-nhap-hang');
+    const result = await res.json();
+    giaNhapGanNhatMap = {};
+    if (result.status) {
+      // Log đã sắp xếp mới nhất trước → giữ giá trị đầu tiên gặp cho mỗi sản phẩm
+      result.data.forEach(r => {
+        if (!(r.product_id in giaNhapGanNhatMap) && r.unit_cost != null) {
+          giaNhapGanNhatMap[r.product_id] = r.unit_cost;
+        }
+      });
+    }
+  } catch (e) {
+    giaNhapGanNhatMap = {};
+  }
+}
+
 async function renderSellerNhapHang() {
   const tbody = document.getElementById('spNhapHangBody');
   if (!tbody) return;
   tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;">Đang tải...</td></tr>';
+
+  await taiGiaNhapGanNhat(); // nạp giá nhập gần nhất trước khi vẽ bảng
+
   try {
     const res = await fetch('/api/seller/san-pham');
     const result = await res.json();
     if (!result.status || !Array.isArray(result.data)) {
-      tbody.innerHTML = '';
-      const tr = document.createElement('tr');
-      const td = document.createElement('td');
-      td.colSpan = 5;
-      td.style.textAlign = 'center';
-      td.textContent = result.message || 'Không tải được sản phẩm!';
-      tr.appendChild(td);
-      tbody.appendChild(tr);
+      tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;">${result.message || 'Không tải được sản phẩm!'}</td></tr>`;
       return;
     }
+
     const locTuKhoa = (document.getElementById('nhSearchFilter')?.value || '').trim().toLowerCase();
     const locTon = document.getElementById('nhFilterStock')?.value || 'all';
     let listLoc = result.data;
@@ -3552,96 +3571,159 @@ async function renderSellerNhapHang() {
         return so > 5;
       });
     }
-    tbody.innerHTML = '';
+
     if (!listLoc.length) {
-      const tr = document.createElement('tr');
-      const td = document.createElement('td');
-      td.colSpan = 5;
-      td.style.textAlign = 'center';
-      td.textContent = 'Không tìm thấy kết quả';
-      tr.appendChild(td);
-      tbody.appendChild(tr);
+      tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;">Không tìm thấy kết quả</td></tr>';
       return;
     }
-    listLoc.forEach((p) => {
-      const tr = document.createElement('tr');
-      const tdTen = document.createElement('td');
-      const bTen = document.createElement('div');
-      bTen.style.fontWeight = '600';
-      bTen.textContent = (p.emoji || '📦') + ' ' + (p.name || '');
-      const dCat = document.createElement('div');
-      dCat.style.cssText = 'font-size:11px;color:var(--text-muted);';
-      dCat.textContent = p.category_name || '';
-      tdTen.appendChild(bTen);
-      tdTen.appendChild(dCat);
-      tr.appendChild(tdTen);
-      const tdTon = document.createElement('td');
-      tdTon.style.textAlign = 'center';
-      tdTon.style.fontWeight = '700';
-      tdTon.textContent = String(Number(p.quantity || 0).toLocaleString('vi-VN'));
-      tr.appendChild(tdTon);
-      const tdNhap = document.createElement('td');
-      const inp = document.createElement('input');
-      inp.type = 'number';
-      inp.id = 'nhQty' + p.id;
-      inp.min = '1';
-      inp.step = '1';
-      inp.value = '10';
-      inp.style.cssText = 'width:80px;padding:6px;border:1px solid var(--border);border-radius:6px;';
-      tdNhap.appendChild(inp);
-      tr.appendChild(tdNhap);
-      const tdTrang = document.createElement('td');
-      tdTrang.style.textAlign = 'center';
-      const pill = document.createElement('span');
-      if (!Number(p.is_active)) {
-        pill.className = 'badge-status status-hidden';
-        pill.textContent = 'Đang ẩn';
-      } else if (Number(p.quantity || 0) === 0) {
-        pill.className = 'badge-status status-cancelled';
-        pill.textContent = 'Hết hàng';
-      } else if (Number(p.quantity || 0) >= 1 && Number(p.quantity || 0) <= 5) {
-        pill.className = 'badge-status status-pending';
-        pill.textContent = 'Sắp hết';
-      } else {
-        pill.className = 'badge-status user-status-active';
-        pill.textContent = 'Đang bán';
-      }
-      tdTrang.appendChild(pill);
-      tr.appendChild(tdTrang);
-      const tdBt = document.createElement('td');
-      const btn = document.createElement('button');
-      btn.className = 'admin-action-btn btn-confirm';
-      btn.textContent = '📥 Nhập hàng';
-      btn.onclick = () => nhapHangSeller(p.id, 'nhQty' + p.id);
-      tdBt.appendChild(btn);
-      tr.appendChild(tdBt);
-      tbody.appendChild(tr);
-    });
+
+    tbody.innerHTML = listLoc.map(p => {
+      const giaGoiY = giaNhapGanNhatMap[p.id] ?? '';
+      let pillCls = 'user-status-active', pillText = 'Đang bán';
+      if (!Number(p.is_active)) { pillCls = 'status-hidden'; pillText = 'Đang ẩn'; }
+      else if (Number(p.quantity || 0) === 0) { pillCls = 'status-cancelled'; pillText = 'Hết hàng'; }
+      else if (Number(p.quantity || 0) <= 5) { pillCls = 'status-pending'; pillText = 'Sắp hết'; }
+
+      return `
+        <tr>
+          <td>
+            <div style="font-weight:600;">${p.emoji || '📦'} ${p.name}</div>
+            <div style="font-size:11px; color:var(--text-muted);">${p.category_name || ''}</div>
+            <div style="font-size:11px; color:var(--text-muted);">Giá bán hiện tại: <b>${Number(p.price || 0).toLocaleString('vi-VN')}đ</b></div>
+          </td>
+
+          <td style="text-align:center; font-weight:700; font-size:15px;">
+            ${Number(p.quantity || 0).toLocaleString('vi-VN')}
+          </td>
+
+          <td>
+            <div style="display:flex; flex-direction:column; gap:6px;">
+              <div style="display:flex; align-items:center; gap:6px;">
+                <span style="font-size:16px; width:20px;">💰</span>
+                <input type="number" id="nhGia${p.id}" min="0" placeholder="Giá nhập/đơn vị"
+                  value="${giaGoiY}" data-sellprice="${p.price || 0}"
+                  oninput="capNhatThanhTien(${p.id})"
+                  style="flex:1; padding:6px 8px; border:1px solid var(--border); border-radius:6px; font-size:13px;">
+              </div>
+              <div style="display:flex; align-items:center; gap:6px;">
+                <span style="font-size:16px; width:20px;">📦</span>
+                <input type="number" id="nhQty${p.id}" min="1" step="1" value="10"
+                  oninput="capNhatThanhTien(${p.id})"
+                  style="flex:1; padding:6px 8px; border:1px solid var(--border); border-radius:6px; font-size:13px;">
+              </div>
+              <div id="nhTomTat${p.id}" style="font-size:11px; color:var(--text-muted); padding-left:26px; line-height:1.5;">
+                ${tinhTomTatNhapHang(giaGoiY, 10, p.price || 0)}
+              </div>
+            </div>
+          </td>
+
+          <td style="text-align:center;">
+            <span class="badge-status ${pillCls}">${pillText}</span>
+            <div style="font-size:10px; color:var(--text-muted); margin-top:4px;">Đã bán: ${p.sold || 0}</div>
+          </td>
+
+          <td>
+            <input type="text" id="nhNote${p.id}" placeholder="Ghi chú (VD: NCC ABC)"
+              style="width:100%; padding:5px 8px; border:1px solid var(--border); border-radius:6px; font-size:12px; margin-bottom:6px;">
+            <button class="admin-action-btn btn-confirm" style="width:100%;"
+              onclick="nhapHangSeller(${p.id})">📥 Xác nhận nhập</button>
+          </td>
+        </tr>`;
+    }).join('');
+
   } catch (e) {
-    showToast('❌ Lỗi kết nối!');
+    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; color:var(--red);">❌ Lỗi kết nối</td></tr>';
   }
 }
 
-// 015 FR-018/019: gửi số lượng nhập — kiểm tra định dạng trước khi gọi API
-async function nhapHangSeller(productId, inputId) {
-  const raw = (document.getElementById(inputId)?.value || '').trim();
-  if (!/^\d+$/.test(raw) || Number(raw) <= 0) {
+// Tính "Thành tiền" + lợi nhuận dự kiến, cập nhật live khi gõ
+function tinhTomTatNhapHang(gia, sl, giaBan) {
+  const g = Number(gia) || 0;
+  const s = Number(sl) || 0;
+  if (g <= 0 || s <= 0) return 'Nhập giá & số lượng để xem thành tiền';
+
+  const thanhTien = g * s;
+  let dong2 = '';
+  if (giaBan > 0) {
+    const loiNhuan = giaBan - g;
+    const mauSac = loiNhuan >= 0 ? 'var(--green)' : 'var(--red)';
+    const pct = ((loiNhuan / giaBan) * 100).toFixed(0);
+    dong2 = `<br>Lợi nhuận/sp: <b style="color:${mauSac};">${loiNhuan.toLocaleString('vi-VN')}đ (${pct}%)</b>`;
+  }
+  return `Thành tiền: <b>${thanhTien.toLocaleString('vi-VN')}đ</b>${dong2}`;
+}
+
+function capNhatThanhTien(productId) {
+  const giaInput = document.getElementById('nhGia' + productId);
+  const slInput  = document.getElementById('nhQty' + productId);
+  const tomTat   = document.getElementById('nhTomTat' + productId);
+  if (!giaInput || !slInput || !tomTat) return;
+  const giaBan = Number(giaInput.dataset.sellprice || 0);
+  tomTat.innerHTML = tinhTomTatNhapHang(giaInput.value, slInput.value, giaBan);
+}
+
+// Xác nhận nhập — bỏ prompt(), dùng ô ghi chú inline sẵn có
+async function nhapHangSeller(productId) {
+  const slRaw  = (document.getElementById('nhQty' + productId)?.value || '').trim();
+  const giaRaw = (document.getElementById('nhGia' + productId)?.value || '').trim();
+  const ghiChu = (document.getElementById('nhNote' + productId)?.value || '').trim();
+
+  if (!/^\d+$/.test(slRaw) || Number(slRaw) <= 0) {
     showToast('⚠️ Số lượng nhập phải là số nguyên lớn hơn 0!');
     return;
   }
+  if (giaRaw && Number(giaRaw) < 0) {
+    showToast('⚠️ Giá nhập không được âm!');
+    return;
+  }
+
   try {
     const res = await fetch(`/api/seller/san-pham/${productId}/nhap-hang`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ so_luong: Number(raw) })
+      body: JSON.stringify({
+        so_luong: Number(slRaw),
+        gia_nhap: giaRaw ? Number(giaRaw) : null,
+        ghi_chu : ghiChu
+      })
     });
     const result = await res.json();
     showToast((result.status ? '✅ ' : '❌ ') + (result.message || ''));
-    if (result.status) renderSellerNhapHang();
+    if (result.status) {
+      await renderSellerNhapHang();
+      await renderLichSuNhapHang();
+    }
   } catch (e) {
     showToast('❌ Lỗi kết nối!');
   }
 }
+async function renderLichSuNhapHang() {
+  const tbody = document.getElementById('tblLichSuNhapHangBody');
+  if (!tbody) return;
+  tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;">Đang tải...</td></tr>';
+  try {
+    const res = await fetch('/api/seller/lich-su-nhap-hang');
+    const result = await res.json();
+    if (!result.status || !result.data.length) {
+      tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--text-muted);">Chưa có lịch sử nhập hàng</td></tr>';
+      return;
+    }
+    tbody.innerHTML = result.data.map(r => `
+      <tr>
+        <td style="font-weight:700;color:var(--text-muted);">#${r.receipt_id}</td>
+        <td>${r.emoji} ${r.product_name}</td>
+        <td style="text-align:center;">${r.quantity}</td>
+        <td>${r.unit_cost != null ? Number(r.unit_cost).toLocaleString('vi-VN') + 'đ' : '—'}</td>
+        <td style="font-weight:700;color:var(--red);">${Number(r.total_cost).toLocaleString('vi-VN')}đ</td>
+        <td style="font-size:12px;color:var(--text-muted);">${r.created_at || '—'}<br>${r.note || ''}</td>
+      </tr>
+    `).join('');
+  } catch (e) {
+    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--red);">❌ Lỗi tải dữ liệu</td></tr>';
+  }
+}
+
+
 
 // Ghi de luu/xoa seller dung endpoint co gate (004)
 const _handleSaveProductGoc = handleSaveProduct;
@@ -3998,6 +4080,24 @@ renderSellerOverview = async function () {
       + String(d.hoan_thanh || 0) + ' hoàn thành · ' + String(d.da_huy || 0) + ' đã hủy';
     cardDoanhThu.appendChild(dDon);
     container.appendChild(cardDoanhThu);
+        // 💵 Thu nhập ròng (lợi nhuận thực tế)
+    const ketQuaThuNhap = await tinhThuNhapRongSeller(dsSanPham);
+    const cardThuNhap = document.createElement('div');
+    cardThuNhap.className = 'admin-card';
+    const hThuNhap = document.createElement('h3');
+    hThuNhap.textContent = '💵 Thu nhập thực tế (Lợi nhuận)';
+    cardThuNhap.appendChild(hThuNhap);
+    const dThuNhap = document.createElement('div');
+    dThuNhap.className = 'stat-val';
+    dThuNhap.style.color = ketQuaThuNhap.thuNhap >= 0 ? 'var(--green)' : 'var(--red)';
+    dThuNhap.textContent = Number(ketQuaThuNhap.thuNhap || 0).toLocaleString('vi-VN') + 'đ';
+    cardThuNhap.appendChild(dThuNhap);
+    const pGhiChu = document.createElement('p');
+    pGhiChu.style.cssText = 'font-size:12px;color:var(--text-muted);margin:4px 0 0;';
+    pGhiChu.textContent = ''
+      + (ketQuaThuNhap.thieuGiaVon ? ' ' : '');
+    cardThuNhap.appendChild(pGhiChu);
+    container.appendChild(cardThuNhap);
     const cardTopSp = document.createElement('div');
     cardTopSp.className = 'admin-card';
     if ((d.top_san_pham || []).length) {
@@ -4028,6 +4128,87 @@ renderSellerOverview = async function () {
     container.appendChild(loi);
   }
 };
+// Tính giá vốn trung bình theo product_id từ lịch sử nhập hàng (bình quân gia quyền)
+function tinhGiaVonTrungBinhMap(logs) {
+  const tong = {};
+  (logs || []).forEach(r => {
+    const pid = r.product_id ?? r.ProductId;
+    const sl  = Number(r.quantity ?? r.Quantity) || 0;
+    const gia = r.unit_cost ?? r.UnitCost;
+    if (!pid || !sl || gia == null || isNaN(Number(gia))) return;
+    if (!tong[pid]) tong[pid] = { tongTien: 0, tongSoLuong: 0 };
+    tong[pid].tongTien += Number(gia) * sl;
+    tong[pid].tongSoLuong += sl;
+  });
+  const map = {};
+  Object.keys(tong).forEach(pid => {
+    map[pid] = tong[pid].tongSoLuong > 0 ? tong[pid].tongTien / tong[pid].tongSoLuong : 0;
+  });
+  return map;
+}
+
+// Tính thu nhập ròng (lợi nhuận thực tế) từ các đơn đã hoàn thành
+async function tinhThuNhapRongSeller(dsSanPham) {
+  try {
+    const [rDon, rLog, rCat] = await Promise.all([
+      fetch('/api/seller/don-hang'),
+      fetch('/api/seller/lich-su-nhap-hang'),
+      fetch('/api/categories')
+    ]);
+    const donRes = await rDon.json();
+    const logRes = await rLog.json();
+    const catRes = await rCat.json();
+
+    if (!donRes.status) return { thuNhap: 0, coDuLieu: false, thieuGiaVon: false };
+
+    // Map category_name -> phí sàn %
+    const phiSanMap = {};
+    if (catRes.status) {
+      (catRes.data || []).forEach(c => {
+        const ten = c.category_name ?? c.name;
+        phiSanMap[ten] = Number(c.platform_fee_percent ?? c.phi_san ?? 0);
+      });
+    }
+
+    // Map tra cứu sản phẩm theo id / theo tên (fallback nếu Item không có ProductId)
+    const spById   = {};
+    const spByName = {};
+    (dsSanPham || []).forEach(p => {
+      spById[p.id] = p;
+      spByName[(p.name || '').toLowerCase()] = p;
+    });
+
+    const giaVonMap = tinhGiaVonTrungBinhMap(logRes.status ? logRes.data : []);
+
+    let tongThuNhap = 0;
+    let thieuGiaVon = false;
+
+    const donHoanThanh = (donRes.data || []).filter(o => o.Status === 'Completed');
+
+    donHoanThanh.forEach(o => {
+      (o.Items || []).forEach(it => {
+        const pid     = it.ProductId ?? it.product_id ?? null;
+        const sanPham = (pid != null ? spById[pid] : null) || spByName[(it.ProductName || '').toLowerCase()];
+        const idThuc  = sanPham ? sanPham.id : pid;
+
+        const soLuong   = Number(it.Quantity) || 0;
+        const giaBan    = Number(it.UnitPrice) || 0;
+        const phiSanPct = sanPham ? (phiSanMap[sanPham.category_name] || 0) : 0;
+        const giaVon    = (idThuc != null && giaVonMap[idThuc] != null) ? giaVonMap[idThuc] : 0;
+
+        if (giaVon === 0) thieuGiaVon = true;
+
+        const thucNhan   = giaBan * (1 - phiSanPct / 100);
+        tongThuNhap += (thucNhan - giaVon) * soLuong;
+      });
+    });
+
+    return { thuNhap: tongThuNhap, coDuLieu: true, thieuGiaVon };
+  } catch (e) {
+    console.error('Lỗi tính thu nhập ròng:', e);
+    return { thuNhap: 0, coDuLieu: false, thieuGiaVon: false };
+  }
+}
 
 // 010 US2 — TRANG SHOP (tách khỏi Tổng quan): đọc shop về điền vào form spane-shop
 async function renderTrangShop() {

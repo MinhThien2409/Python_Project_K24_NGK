@@ -765,9 +765,14 @@
   </div>
 </div>
 
-      <div style="display:flex; gap:10px;">
-        <div class="form-group" style="flex:1;"><label>Tồn kho</label><input type="number" id="prodStock" min ="0" required></div>
-      </div>
+<div class="form-group" style="flex:1;">
+  <label>Tồn kho hiện tại</label>
+  <input type="number" id="prodStock" min="0" value="0" readonly
+         style="background:var(--bg); cursor:not-allowed;">
+  <div style="font-size:11px; color:var(--text-muted); margin-top:4px;">
+
+  </div>
+</div>
       <!-- Thay thế form-group prodEmoji hiện tại -->
 <div class="form-group">
   <label>Biểu tượng sản phẩm (Emoji đại diện)</label>

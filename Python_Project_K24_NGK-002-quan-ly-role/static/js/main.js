@@ -546,13 +546,14 @@ async function openEditSellerProduct(productId) {
 
     document.getElementById('adminProductModalTitle').textContent = '✏️ Chỉnh sửa sản phẩm';
     document.getElementById('editProductId').value               = p.id;
-    document.getElementById('editProductId').dataset.sellerMode  = 'true'; // ← đánh dấu Seller mode
+    document.getElementById('editProductId').dataset.sellerMode  = 'true';
     document.getElementById('prodName').value                    = p.name;
     document.getElementById('prodPrice').value                   = p.price;
     document.getElementById('prodOldPrice').value                = p.old_price || '';
     document.getElementById('prodStock').value                   = p.quantity;
     document.getElementById('prodEmoji').value                   = p.emoji || '';
     document.getElementById('prodDesc').value                    = p.description || '';
+    document.getElementById('prodShop').value = p.shop || (currentUser?.store?.store_name || '');
 
     await loadCategoriesForProductModal(p.category_name);
 
@@ -1746,6 +1747,7 @@ async function handleSaveProduct(e) {
         old_price   : document.getElementById('prodOldPrice').value || null,
         quantity    : document.getElementById('prodStock').value,
         emoji       : emoji,
+        shop        : document.getElementById('prodShop').value.trim(),
         description : document.getElementById('prodDesc').value.trim(),
         category_id : categoryId,
         store_id    : storeId
@@ -3737,7 +3739,7 @@ handleSaveProduct = async function (e) {
     name: document.getElementById('prodName').value.trim(),
     price: document.getElementById('prodPrice').value,
     old_price: document.getElementById('prodOldPrice').value || null,
-    quantity: document.getElementById('prodStock').value,
+
     emoji: document.getElementById('prodEmoji').value.trim(),
     description: document.getElementById('prodDesc').value.trim(),
     category_id: document.getElementById('prodCategory').value

@@ -627,6 +627,52 @@ async function handleLogin(e) {
     showToast('❌ Lỗi kết nối máy chủ!');
   }
 }
+
+function capNhatNutHienMatKhau() {
+  const input = document.getElementById('loginPass');
+  const toggle = document.getElementById('toggleLoginPassword');
+
+  if (!input || !toggle) return;
+
+  const coKyTu = input.value.length > 0;
+  toggle.style.display = coKyTu ? 'flex' : 'none';
+
+  if (!coKyTu) {
+    input.type = 'password';
+    toggle.setAttribute('aria-label', 'Hiện mật khẩu');
+    toggle.setAttribute('title', 'Hiện mật khẩu');
+  }
+}
+
+function khoiTaoNutHienMatKhau() {
+  const input = document.getElementById('loginPass');
+  const toggle = document.getElementById('toggleLoginPassword');
+
+  if (!input || !toggle) return;
+
+  input.addEventListener('input', capNhatNutHienMatKhau);
+
+  toggle.addEventListener('click', () => {
+    const dangHien = input.type === 'text';
+
+    input.type = dangHien ? 'password' : 'text';
+    toggle.setAttribute(
+      'aria-label',
+      dangHien ? 'Hiện mật khẩu' : 'Ẩn mật khẩu'
+    );
+    toggle.setAttribute(
+      'title',
+      dangHien ? 'Hiện mật khẩu' : 'Ẩn mật khẩu'
+    );
+
+    capNhatNutHienMatKhau();
+  });
+
+  capNhatNutHienMatKhau();
+}
+
+khoiTaoNutHienMatKhau();
+
 async function loadSellerStore() {
   try {
     const res    = await fetch(`/api/stores/by-user/${currentUser.ma_user}`);

@@ -339,26 +339,29 @@ class SanPhamDao:
                 SET ProductName = ?, Description = ?,
                     Price       = ?, OldPrice    = ?,
                     Quantity    = ?,
-                    Emoji       = ?, ImageUrl = ?, CategoryId  = ?,
-                    IsActive    = ?
+                    Emoji       = ?,
+                    ImageUrl    = COALESCE(?, ImageUrl),   -- không gửi ảnh thì giữ ảnh cũ
+                    CategoryId  = ?
                 WHERE ProductId = ? AND StoreId = ?
             """
             cursor.execute(sql, (
                 sp.ProductName, sp.Description,
-                sp.Price,       sp.OldPrice,
+                sp.Price, sp.OldPrice,
                 sp.Quantity,
-                sp.Emoji,  sp.ImageUrl,     sp.CategoryId,
-                sp.IsActive,
+                sp.Emoji, sp.ImageUrl,
+                sp.CategoryId,
                 sp.ProductId, int(store_id)
             ))
             conn.commit()
-            return cursor.rowcount > 0
+            # BUS đã kiểm tra quyền sở hữu bằng lay_store_id() → không dựa vào rowcount
+            return True
         except Exception as e:
             logger.exception("Lỗi sua_theo_store SanPham: %s", e)
             conn.rollback()
             return False
         finally:
-            cursor.close(); conn.close()
+            cursor.close();
+            conn.close()
 
     def an_hien_theo_store(self, product_id, store_id, is_active):
         """An/hien san pham voi ownership WHERE ProductId AND StoreId."""
@@ -379,30 +382,90 @@ class SanPhamDao:
         finally:
             cursor.close(); conn.close()
 
-    def nhap_hang(self, product_id, store_id, so_luong):
-        """Nhap them ton kho cong don atomic Quantity+?."""
+    def nhap_hang(self, product_id, store_id, so_luong, nguoi_id,
+                  unit_cost=None, note=None, supplier_id=None):
+        """Nhập kho + ghi log đầy đủ vào StockReceipts/StockReceiptItems."""
         conn = DBconnection.get_connection()
         if conn is None: return None
         cursor = conn.cursor()
         try:
+            # 1. Cộng dồn tồn kho
             cursor.execute(
                 "UPDATE Products SET Quantity = Quantity + ? WHERE ProductId = ? AND StoreId = ?",
-                (int(so_luong), int(product_id), int(store_id))
-            )
+                (so_luong, product_id, store_id))
             if cursor.rowcount == 0:
                 conn.rollback()
                 return None
+
+            gia_nhap = float(unit_cost) if unit_cost not in (None, "") else 0
+            tong_tien = gia_nhap * so_luong
+
+            # 2. Ghi phiếu nhập (log giao dịch)
             cursor.execute(
-                "SELECT Quantity FROM Products WHERE ProductId = ?", (int(product_id),))
-            row = cursor.fetchone()
+                """INSERT INTO StockReceipts
+                       (StoreId, SupplierId, SupplierNote, CreatedBy, TotalCost, Note)
+                   VALUES (?, ?, ?, ?, ?, ?)""",
+                (store_id, supplier_id, None, nguoi_id, tong_tien, note))
+            receipt_id = cursor.lastrowid
+
+            # 3. Ghi chi tiết dòng hàng nhập
+            cursor.execute(
+                "INSERT INTO StockReceiptItems (ReceiptId, ProductId, Quantity, UnitCost) VALUES (?, ?, ?, ?)",
+                (receipt_id, product_id, so_luong, gia_nhap))
+
             conn.commit()
-            return row[0] if row else None
+            cursor.execute("SELECT Quantity FROM Products WHERE ProductId = ?", (product_id,))
+            row = cursor.fetchone()
+            return {"quantity": row[0] if row else None, "receipt_id": receipt_id}
         except Exception as e:
             logger.exception("Lỗi nhap_hang SanPham: %s", e)
             conn.rollback()
             return None
         finally:
-            cursor.close(); conn.close()
+            cursor.close();
+            conn.close()
+
+    def lay_lich_su_nhap_hang(self, store_id, top=50):
+        """Lấy log các lần nhập hàng của 1 gian hàng, kèm tên sản phẩm."""
+        conn = DBconnection.get_connection()
+        if conn is None: return []
+        cursor = conn.cursor()
+        try:
+            sql = """
+                SELECT
+                    r.ReceiptId, r.CreatedAt, r.CreatedBy, r.TotalCost, r.Note,
+                    i.ProductId, p.ProductName, p.Emoji,
+                    i.Quantity, i.UnitCost
+                FROM StockReceipts r
+                JOIN StockReceiptItems i ON i.ReceiptId = r.ReceiptId
+                JOIN Products p           ON p.ProductId = i.ProductId
+                WHERE r.StoreId = ?
+                ORDER BY r.CreatedAt DESC, r.ReceiptId DESC
+                LIMIT ?
+            """
+            cursor.execute(sql, (int(store_id), int(top)))
+            rows = cursor.fetchall()
+            ket_qua = []
+            for row in rows:
+                ket_qua.append({
+                    "receipt_id": row.ReceiptId,
+                    "created_at": row.CreatedAt.strftime('%d/%m/%Y %H:%M') if row.CreatedAt else None,
+                    "created_by": row.CreatedBy,
+                    "total_cost": float(row.TotalCost or 0),
+                    "note": row.Note or "",
+                    "product_id": row.ProductId,
+                    "product_name": row.ProductName,
+                    "emoji": row.Emoji or "📦",
+                    "quantity": row.Quantity,
+                    "unit_cost": float(row.UnitCost) if row.UnitCost is not None else None,
+                })
+            return ket_qua
+        except Exception as e:
+            logger.exception("Lỗi lay_lich_su_nhap_hang: %s", e)
+            return []
+        finally:
+            cursor.close();
+            conn.close()
 
     def doi_gia(self, product_id, store_id, gia_moi):
         """Doi gia ban, giu OldPrice khi giam gia."""

@@ -201,6 +201,12 @@ class SanPhamBus:
         if not product_id:
             return {"status": False, "message": "Thiếu ID sản phẩm!"}
         chu = self.dao.lay_store_id(product_id)
+        if so_luong is not None:
+            try:
+                if int(so_luong) < 0:
+                    return {"status": False, "message": "Số lượng không được âm!"}
+            except (TypeError, ValueError):
+                return {"status": False, "message": "Số lượng không hợp lệ!"}
         if chu is None or int(chu) != int(store_id):
             return {"status": False, "message": "Không có quyền thao tác trên sản phẩm này!"}
         if not ten or not str(ten).strip():
@@ -238,22 +244,43 @@ class SanPhamBus:
 
     # ─── SELLER: NHAP HANG + GIA BAN (004 US3) ───────────────────────────────
 
-    def nhap_hang(self, nguoi_id, store_id, product_id, so_luong_nhap):
-        """Seller nhập thêm tồn kho, cộng dồn số lượng."""
+    def nhap_hang(self, nguoi_id, store_id, product_id, so_luong_nhap,
+                  gia_nhap=None, ghi_chu=None, supplier_id=None):
+        """Seller nhập thêm tồn kho, ghi log đầy đủ vào phiếu nhập."""
         try:
             sl = int(so_luong_nhap) if so_luong_nhap not in (None, "") else 0
         except (TypeError, ValueError):
             return {"status": False, "message": "Số lượng nhập phải lớn hơn 0!"}
         if sl <= 0:
             return {"status": False, "message": "Số lượng nhập phải lớn hơn 0!"}
+
+        gia_nhap_f = None
+        if gia_nhap not in (None, ""):
+            try:
+                gia_nhap_f = float(gia_nhap)
+                if gia_nhap_f < 0:
+                    return {"status": False, "message": "Giá nhập không được âm!"}
+            except (TypeError, ValueError):
+                return {"status": False, "message": "Giá nhập không hợp lệ!"}
+
         chu = self.dao.lay_store_id(product_id)
         if chu is None or int(chu) != int(store_id):
             return {"status": False, "message": "Không có quyền thao tác trên sản phẩm này!"}
-        ton_moi = self.dao.nhap_hang(product_id, store_id, sl)
-        if ton_moi is None:
+
+        ket_qua = self.dao.nhap_hang(
+            product_id, store_id, sl, nguoi_id,
+            unit_cost=gia_nhap_f, note=ghi_chu, supplier_id=supplier_id)
+        if ket_qua is None:
             return {"status": False, "message": "Lỗi khi nhập hàng, vui lòng thử lại!"}
+
         return {"status": True,
-                "message": f"Đã nhập thêm {sl} sản phẩm! Tồn kho hiện tại: {ton_moi}."}
+                "message": f"Đã nhập thêm {sl} sản phẩm! Tồn kho hiện tại: {ket_qua['quantity']}.",
+                "data": ket_qua}
+
+    def lay_lich_su_nhap_hang(self, store_id, top=50):
+        if not store_id:
+            return {"status": False, "message": "Thiếu ID gian hàng!", "data": []}
+        return {"status": True, "data": self.dao.lay_lich_su_nhap_hang(store_id, top)}
 
     def doi_gia_ban(self, nguoi_id, store_id, product_id, gia_moi):
         """Seller doi gia ban, giu OldPrice khi giam gia."""

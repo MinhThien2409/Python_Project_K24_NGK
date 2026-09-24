@@ -53,7 +53,7 @@ CREATE TABLE `accounts` (
 
 LOCK TABLES `accounts` WRITE;
 /*!40000 ALTER TABLE `accounts` DISABLE KEYS */;
-INSERT INTO `accounts` VALUES (1,1,'admin','123456',1,'active'),(2,2,'quanly1','123456',2,'active'),(3,3,'seller1','123456',3,'active'),(4,4,'seller2','123456',3,'active'),(5,5,'seller3','123456',3,'active'),(6,6,'khach1','123456',4,'active'),(7,7,'khach2','123456',4,'active'),(8,8,'khach3','123456',4,'active'),(9,9,'khach4','123456',4,'active'),(10,10,'khach5','123456',4,'banned');
+INSERT INTO `accounts` VALUES (1,1,'admin','123456',1,'active'),(2,2,'quanly1','123456',2,'active'),(3,3,'seller1','123456',3,'active'),(4,4,'seller2','123456',3,'active'),(5,5,'seller3','123456',3,'active'),(6,6,'khach1','123456',4,'active'),(7,7,'khach2','123456',4,'active'),(8,8,'khach3','123456',4,'active'),(9,9,'khach4','123456',6,'active'),(10,10,'khach5','123456',4,'banned');
 /*!40000 ALTER TABLE `accounts` ENABLE KEYS */;
 UNLOCK TABLES;
 

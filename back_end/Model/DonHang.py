@@ -2,7 +2,8 @@ class DonHang:
     def __init__(self, OrderId=None, Status='Pending', ShippingFee=0, CartId=None,
                  UserId=None, ReceiverName=None, ReceiverPhone=None, ShippingAddress=None,
                  PaymentMethod='COD', VoucherCode=None, SubTotal=0, DiscountAmount=0,
-                 TotalAmount=0, Note=None, CreatedAt=None, UpdatedAt=None,Discount=None):
+                  TotalAmount=0, Note=None, CreatedAt=None, UpdatedAt=None,Discount=None):
+        """Khởi tạo đơn hàng với trạng thái, thanh toán và danh sách mặt hàng."""
         self.OrderId = OrderId
         self.Status = Status
         self.ShippingFee = ShippingFee

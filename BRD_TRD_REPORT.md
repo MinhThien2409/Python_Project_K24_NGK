@@ -71,24 +71,23 @@ Xây dựng nền tảng **Pobby** với 3 giao diện chính:
 
 ### 1.3.1 Trong phạm vi (In-Scope) - Phase 1 (MVP - 10 tuần)
 
-#### A. Customer Frontend (9 Modules)
+#### A. Customer Frontend (8 Modules)
 | Module | Mô tả | Priority |
 |--------|-------|----------|
 | **BR01 - Home & Discovery** | Trang chủ, banner, flash sale, sản phẩm nổi bật, danh mục | Must Have |
-| **BR02 - Product Listing** | Danh sách sản phẩm, filter (giá, danh mục, rating, seller), search, pagination | Must Have |
-| **BR03 - Product Detail** | Chi tiết SP: gallery, specs, reviews, related products, thêm vào giỏ | Must Have |
+| **BR02 - Product Listing** | Danh sách sản phẩm, filter (giá, danh mục, seller), search, pagination | Must Have |
+| **BR03 - Product Detail** | Chi tiết SP: gallery, specs, related products, thêm vào giỏ | Must Have |
 | **BR04 - Shopping Cart** | Slide-out cart, cập nhật SL, voucher, shipping estimate, checkout CTA | Must Have |
 | **BR05 - Checkout & Payment** | Địa chỉ giao hàng, phương thức thanh toán (COD, Bank, Momo, VNPay), xác nhận | Must Have |
 | **BR06 - Order Tracking** | Lịch sử đơn hàng, chi tiết, trạng thái real-time, hủy đơn, mua lại | Must Have |
 | **BR07 - Authentication** | Đăng ký/đăng nhập (email, phone, social), quên mật khẩu, OTP, JWT | Must Have |
-| **BR08 - User Profile** | Thông tin cá nhân, địa chỉ, avatar, đổi mật khẩu, preferences | Must Have |
-| **BR09 - Wishlist & Reviews** | Yêu thích, đánh giá sản phẩm, upload ảnh review | Should Have |
+| **BR08 - User Profile & Wishlist** | Thông tin cá nhân, địa chỉ, avatar, đổi mật khẩu, preferences, yêu thích sản phẩm | Must Have |
 
 #### B. Seller Portal (5 Modules)
 | Module | Mô tả | Priority |
 |--------|-------|----------|
 | **BR10 - Store Setup** | Đăng ký gian hàng, hồ sơ doanh nghiệp, xác thực (KYC), cấu hình shop | Must Have |
-| **BR11 - Product Management** | CRUD sản phẩm, variant (size/color), inventory, bulk import/export, SEO | Must Have |
+| **BR10P - Product Management** | CRUD sản phẩm, variant (size/color), inventory, bulk import/export, SEO | Must Have |
 | **BR12 - Order Management** | Xem đơn, xác nhận, đóng gói, in đơn vận đơn, cập nhật trạng thái, hoàn trả | Must Have |
 | **BR13 - Revenue & Payout** | Dashboard doanh thu, chi tiết giao dịch, yêu cầu rút tiền, lịch sử payout | Must Have |
 | **BR14 - Analytics** | Báo cáo bán hàng, khách hàng, sản phẩm bán chậm, conversion funnel | Should Have |
@@ -548,9 +547,8 @@ erDiagram
 | **BR06** | Đăng ký tài khoản | Customer | Form: tên đăng nhập, email, mật khẩu, xác nhận mật khẩu. Validation: email hợp lệ, mật khẩu ≥ 6 ký tự, tên đăng nhập duy nhất. | Must |
 | **BR07** | Đăng nhập | Customer | Form đăng nhập với tên đăng nhập & mật khẩu. Lưu trạng thái đăng nhập. Hiển thị lỗi nếu sai thông tin. | Must |
 | **BR08** | Quản lý hồ sơ | Customer | Cập nhật: tên, email, SĐT, địa chỉ, ảnh đại diện. Form đổi mật khẩu với xác nhận mật khẩu cũ. | Must |
-| **BR09** | Sổ địa chỉ | Customer | Quản lý nhiều địa chỉ giao hàng, chọn địa chỉ mặc định, thêm/sửa/xóa địa chỉ. | Should |
+| **BR08S** | Sổ địa chỉ | Customer | Quản lý nhiều địa chỉ giao hàng, chọn địa chỉ mặc định, thêm/sửa/xóa địa chỉ. | Should |
 | **BR10** | Yêu thích (Wishlist) | Customer | Lưu sản phẩm yêu thích, xem danh sách, thêm nhanh vào giỏ. | Should |
-| **BR11** | Đánh giá sản phẩm | Customer | Viết review, chấm điểm 1-5 sao, upload ảnh, chỉ đánh giá khi đã mua. | Should |
 | **BR12** | Thông báo | Customer | Thông báo trạng thái đơn, khuyến mãi, tin nhắn từ seller. | Could |
 
 ### 2.2.1 Chi tiết luồng nghiệp vụ - BR01: Duyệt sản phẩm
@@ -624,7 +622,7 @@ erDiagram
 |-----|------------|---------|-------------------------------|----------|
 | **BR13** | Đăng ký gian hàng | Seller | Form đăng ký: tên shop, SĐT kinh doanh, ngành hàng, mô tả, CMND/CCCD. Gửi yêu cầu → Admin duyệt/từ chối. | Must |
 | **BR14** | Quản lý gian hàng | Seller | Cập nhật logo, banner, mô tả, chính sách shop, thông tin liên hệ. Xem thống kê shop. | Must |
-| **BR15** | Quản lý sản phẩm | Seller | CRUD sản phẩm: tên, mô tả, giá, giá gốc, số lượng, rating, emoji, ảnh, category. Ẩn/hiện sản phẩm. | Must |
+| **BR15** | Quản lý sản phẩm | Seller | CRUD sản phẩm: tên, mô tả, giá, giá gốc, số lượng, emoji, ảnh, category. Ẩn/hiện sản phẩm. | Must |
 | **BR16** | Quản lý tồn kho | Seller | Xem số lượng tồn, cập nhật SL, cảnh báo tồn kho thấp, import/export danh sách. | Must |
 | **BR17** | Quản lý đơn hàng | Seller | Xem đơn của shop, xác nhận đơn, cập nhật trạng thái (xử lý → giao → hoàn thành), xem chi tiết. | Must |
 | **BR18** | Doanh thu & Rút tiền | Seller | Dashboard doanh thu, chi tiết giao dịch, commission, yêu cầu rút tiền, lịch sử payout. | Must |
@@ -661,7 +659,7 @@ erDiagram
 **Luồng chính:**
 1. Seller vào "Quản lý sản phẩm"
 2. Hệ thống hiển thị danh sách SP của shop (phân trang 10 SP/trang)
-3. Seller chọn "Thêm sản phẩm" → form: name, description, price, old_price, quantity, rating, emoji, image_url, category_id
+3. Seller chọn "Thêm sản phẩm" → form: name, description, price, old_price, quantity, emoji, image_url, category_id
 4. Seller submit → hệ thống tạo SP với StoreId = shop của seller
 5. Seller có thể sửa thông tin, ẩn/hiện SP (soft delete)
 6. Seller có thể xóa SP (chỉ khi chưa có đơn hàng)
@@ -787,9 +785,8 @@ erDiagram
 | **FR-10** | Đăng nhập | Hệ thống cho phép khách hàng đăng nhập, lưu trạng thái, hiển thị lỗi nếu sai thông tin | BR07 | Must |
 | **FR-11** | Cập nhật hồ sơ | Hệ thống cho phép cập nhật: tên, email, SĐT, địa chỉ, ảnh đại diện | BR08 | Must |
 | **FR-12** | Đổi mật khẩu | Hệ thống cho phép đổi mật khẩu với xác nhận mật khẩu cũ | BR08 | Must |
-| **FR-13** | Quản lý sổ địa chỉ | Hệ thống cho phép thêm/sửa/xóa nhiều địa chỉ, chọn địa chỉ mặc định | BR09 | Should |
+| **FR-13** | Quản lý sổ địa chỉ | Hệ thống cho phép thêm/sửa/xóa nhiều địa chỉ, chọn địa chỉ mặc định | BR08S | Should |
 | **FR-14** | Yêu thích sản phẩm | Hệ thống cho phép lưu SP yêu thích, xem danh sách, thêm nhanh vào giỏ | BR10 | Should |
-| **FR-15** | Đánh giá sản phẩm | Hệ thống cho phép khách hàng đã mua viết review, chấm điểm, upload ảnh | BR11 | Should |
 
 ### 2.3.2 Yêu cầu chức năng - Seller (Người bán)
 

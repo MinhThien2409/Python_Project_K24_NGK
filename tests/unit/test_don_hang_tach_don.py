@@ -70,10 +70,10 @@ def test_moi_don_dung_shop_va_tong_dung():
     assert kq["status"] is True
     orders = {o["order_id"]: o for o in kq["data"]["orders"]}
     assert orders[101]["store_id"] == 10
-    assert orders[101]["total"] == 2 * 100000 + 25000
+    # ShippingFee được chia đều cho từng đơn theo số shop.
+    assert orders[101]["total"] == 2 * 100000 + 12500
     assert orders[102]["store_id"] == 20
-    # SHIPPING_FEE tính 1 lần cho mỗi đơn (không chia nhỏ)
-    assert orders[102]["total"] == 3 * 70000 + 25000
+    assert orders[102]["total"] == 3 * 70000 + 12500
 
 
 def test_all_or_nothing_1_shop_het_hang():

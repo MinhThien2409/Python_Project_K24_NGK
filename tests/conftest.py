@@ -90,6 +90,8 @@ class MockUserDao:
 
     def lay_thong_tin_user(self, ma_user):
         if self.thong_tin is not None:
+            if isinstance(self.thong_tin, dict) and any(isinstance(k, int) for k in self.thong_tin):
+                return self.thong_tin.get(ma_user)
             return self.thong_tin
         if self.user:
             role = self.user.ma_nhom_quyen
@@ -541,9 +543,12 @@ class MockSanPhamDao:
     def an_hien_theo_store(self, product_id, store_id, is_active):
         return self.ket_qua_ghi
 
-    def nhap_hang(self, product_id, store_id, so_luong):
+    def nhap_hang(self, product_id, store_id, so_luong, nguoi_id=None,
+                  unit_cost=None, note=None, supplier_id=None):
         self.goi_nhap_hang.append((product_id, store_id, so_luong))
-        return self.ton_kho_moi if self.ket_qua_ghi else None
+        if not self.ket_qua_ghi:
+            return None
+        return {"quantity": self.ton_kho_moi, "receipt_id": 1}
 
     def doi_gia(self, product_id, store_id, gia_moi):
         self.goi_doi_gia.append((product_id, store_id, gia_moi))
@@ -644,12 +649,13 @@ class FakeSanPhamStore:
         cur["is_active"] = bool(is_active)
         return True
 
-    def nhap_hang(self, product_id, store_id, so_luong):
+    def nhap_hang(self, product_id, store_id, so_luong, nguoi_id=None,
+                  unit_cost=None, note=None, supplier_id=None):
         cur = self.san_pham.get(int(product_id))
         if not cur or cur.get("store_id") != store_id:
             return None
         cur["quantity"] = int(cur.get("quantity") or 0) + int(so_luong)
-        return cur["quantity"]
+        return {"quantity": cur["quantity"], "receipt_id": 1}
 
     def doi_gia(self, product_id, store_id, gia_moi):
         cur = self.san_pham.get(int(product_id))

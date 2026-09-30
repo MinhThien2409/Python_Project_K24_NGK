@@ -47,12 +47,15 @@ CREATE TABLE Stores (
     Description VARCHAR(500) NULL,
     IsActive    TINYINT(1)   NOT NULL DEFAULT 1,
     CreatedAt   DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT FK_Stores_UserId FOREIGN KEY (UserId) REFERENCES Users (UserId)
+    ThamNien    INT          NULL,
+    CONSTRAINT FK_Stores_UserId FOREIGN KEY (UserId) REFERENCES Users (UserId),
+    CONSTRAINT CK_Stores_ThamNien_0_100 CHECK (ThamNien IS NULL OR (ThamNien >= 0 AND ThamNien <= 100))
 );
 
 CREATE TABLE Categories (
     CategoryId   INT AUTO_INCREMENT PRIMARY KEY,
-    CategoryName VARCHAR(100) NOT NULL
+    CategoryName VARCHAR(100) NOT NULL,
+    PlatformFeePercent DECIMAL(5,2) DEFAULT 0.00
 );
 
 CREATE TABLE Products (
@@ -138,4 +141,14 @@ CREATE TABLE OrderItems (
     TotalPrice  DECIMAL(18, 2) NOT NULL DEFAULT 0,
     CONSTRAINT FK_OrderItems_Order   FOREIGN KEY (OrderId)   REFERENCES Orders   (OrderId),
     CONSTRAINT FK_OrderItems_Product FOREIGN KEY (ProductId) REFERENCES Products (ProductId)
+);
+-- NHAP KHO
+CREATE TABLE StockReceipts (
+    ReceiptId INT AUTO_INCREMENT PRIMARY KEY, StoreId INT NOT NULL, SupplierId INT NULL, SupplierNote VARCHAR(255) NULL, CreatedBy INT NOT NULL, CreatedAt DATETIME DEFAULT CURRENT_TIMESTAMP, TotalCost DECIMAL(18,2) DEFAULT 0.00, Note VARCHAR(500) NULL
+);
+CREATE TABLE StockReceiptItems (
+    ItemId INT AUTO_INCREMENT PRIMARY KEY, ReceiptId INT NOT NULL, ProductId INT NOT NULL, Quantity INT NOT NULL, UnitCost DECIMAL(18,2) NULL, KEY ReceiptId (ReceiptId), KEY ProductId (ProductId), CONSTRAINT stockreceiptitems_ibfk_1 FOREIGN KEY (ReceiptId) REFERENCES StockReceipts (ReceiptId), CONSTRAINT stockreceiptitems_ibfk_2 FOREIGN KEY (ProductId) REFERENCES Products (ProductId)
+);
+CREATE TABLE Suppliers (
+    SupplierId INT AUTO_INCREMENT PRIMARY KEY, StoreId INT NOT NULL, Name VARCHAR(200) NOT NULL, Phone VARCHAR(20) NULL, Address VARCHAR(255) NULL
 );

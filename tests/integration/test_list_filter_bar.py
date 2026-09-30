@@ -26,10 +26,10 @@ HTML = (REPO / "templates" / "index.html").read_text(encoding="utf-8")
 CSS = (REPO / "static" / "css" / "style.css").read_text(encoding="utf-8")
 JS = (REPO / "static" / "js" / "main.js").read_text(encoding="utf-8")
 
-# Tap bo loc cua tung pane theo contracts/filter-bar.md (ap dung cho pane con ton tai)
+# Tap bo loc cua tung pane theo cấu hình UI hiện tại (ap dung cho pane con ton tai)
 CAU_HINH_BO_LOC = {
     "pane-categories": [
-        {"id": "catSearchFilter",       "loai": "input",  "han_dong": "renderAdminCategories()"},
+        {"id": "catSearchFilter",       "loai": "input",  "han_dong": "veBangDanhMuc()"},
     ],
     "pane-sellers": [
         {"id": "sellerReqFilterStatus", "loai": "select", "han_dong": "renderAdminSellers()"},
@@ -162,11 +162,11 @@ def test_css_filter_item_co_loai_doc_label():
 
 # ── FR-003: logic loc client trong ham render, khong goi API them ──
 def test_render_admin_categories_loc_client():
-    seg = _doan_ham("renderAdminCategories")
+    seg = _doan_ham("veBangDanhMuc")
     assert "getElementById('catSearchFilter')" in seg
     assert ".filter(" in seg
     assert "Không tìm thấy kết quả" in seg
-    assert seg.count("fetch(") == 1  # chi 1 lan tai ban dau
+    assert "fetch(" not in seg
 
 
 def test_render_admin_sellers_loc_client():

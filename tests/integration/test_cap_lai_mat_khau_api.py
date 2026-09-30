@@ -135,7 +135,7 @@ def test_cap_lai_mat_khau_admin_bi_tu_choi(client, app_voi_dao):
     body = resp.get_json()
     assert resp.status_code == 200
     assert body["status"] is False
-    assert body["message"] == "Không thể cấp lại mật khẩu cho tài khoản Admin!"
+    assert body["message"] == "Quản lý chỉ được cấp lại mật khẩu cho Seller hoặc Khách hàng!"
 
 
 def test_reset_user_banned_van_giu_banned(client, app_voi_dao):

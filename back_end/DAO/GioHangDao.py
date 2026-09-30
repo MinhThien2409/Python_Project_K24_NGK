@@ -1,8 +1,6 @@
 import logging
 
 from back_end.DBconnection import DBconnection
-from back_end.Model.GioHang import GioHang
-from back_end.Model.CartItem import CartItem
 
 logger = logging.getLogger(__name__)
 

@@ -1,12 +1,10 @@
 # app.py
 
 import os
-import secrets
-
+from datetime import datetime
 from flask import Flask, request, jsonify, render_template, session
 from flask_cors import CORS
 from back_end.BUS.UserBus import UserBus
-from back_end.Model.GianHang import GianHang
 from back_end.Model.YeuCau import YeuCau
 from back_end.BUS.GianHangBus import GianHangBus
 from back_end.BUS.DanhMucBus import DanhMucBus
@@ -650,7 +648,7 @@ def api_seller_doanh_thu_theo_thang():
     store, loi = _seller_store_hien_tai()
     if loi:
         return jsonify(loi[0]), loi[1]
-    year = request.args.get('year', 2026, type=int)
+    year = request.args.get('year', datetime.now().year, type=int)
     return jsonify(don_hang_bus.lay_doanh_thu_seller_theo_thang(
         store.get('store_id'), year))
 

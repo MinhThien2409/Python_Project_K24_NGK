@@ -1,5 +1,6 @@
 from back_end.DAO.DonHangDao import DonHangDao
 from back_end.Model.DonHang import DonHang
+from datetime import datetime
 import re
 
 # Ma tran luong trang thai seller (004 US2) — terminal khong doi duoc
@@ -200,9 +201,9 @@ class DonHangBus:
         if not store_id:
             return {"status": False, "message": "Thiếu store_id!", "data": []}
         try:
-            nam = int(year or 2026)
+            nam = int(year or datetime.now().year)
         except (TypeError, ValueError):
-            nam = 2026
+            nam = datetime.now().year
         data = self.dao.lay_doanh_thu_seller_theo_thang(store_id, nam)
         if not data:
             data = [{"thang": i, "doanh_thu": 0, "so_don": 0} for i in range(1, 13)]

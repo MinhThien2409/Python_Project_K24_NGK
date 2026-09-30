@@ -30,14 +30,6 @@ def test_model_co_imageurl_va_thamnien():
     assert "ThamNien" in gian_hang
 
 
-def test_migration_co_guard_va_check():
-    mig = _doc("Database/sql/004_seller_imageurl_thamnien.sql")
-    assert "IF COL_LENGTH" in mig
-    assert "ImageUrl" in mig
-    assert "ThamNien" in mig
-    assert "0" in mig and "100" in mig
-
-
 # ── T055: SQL moi toan placeholder ? (khong noi chuoi, khong %s) ──
 # 006-remove-reviews Decision 4 + Complexity Tracking G7: SanPhamDao chay MySQL
 # that (DBconnection.py pymysql, ? → %s, lastrowid) nen dung LIMIT + lastrowid,

@@ -9,7 +9,7 @@ US3 (T014): #spane-products không còn thao tác đổi giá; #spane-gia chứa
             pill 4 mức (FR-020/023/024/025); luồng 🙈 Ẩn/👁️ Hiện giữ nguyên.
 
 KHÔNG cần DB — đọc tĩnh templates/index.html + static/js/main.js theo contract
-contracts/seller-ui-map.md.
+UI contract hiện tại.
 """
 import sys
 from pathlib import Path

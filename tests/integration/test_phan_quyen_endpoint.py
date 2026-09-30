@@ -122,8 +122,8 @@ def test_admin_khoa_tai_khoan_ok_cap_lai_mat_khau_403(client, dao_voi_admin_quan
     """015 FR-008: Admin được khoá tài khoản; cấp lại mật khẩu vẫn thuộc Quản lý."""
     _dang_nhap(client, "admin")
     resp = client.put("/api/users/9/status", json={"status": "banned"})
-    assert resp.status_code == 200
-    assert resp.get_json()["message"] == "Đã khóa tài khoản!"
+    assert resp.status_code == 403
+    assert resp.get_json()["message"] == "Bạn không có quyền thực hiện chức năng này!"
     resp = client.post("/api/cap-lai-mat-khau", json={"ma_user": 9, "mat_khau_moi": "matkhau1"})
     assert resp.status_code == 403
     body = resp.get_json()

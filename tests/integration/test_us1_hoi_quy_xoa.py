@@ -15,8 +15,7 @@ sys.path.insert(0, str(REPO))
 
 import app as app_module
 
-# Inventory rút gọn từ contracts/cleanup-contract.md mục 2 —
-# các route KHÔNG cần DB để smoke-test.
+# Inventory route hiện tại dùng cho smoke-test các route không cần DB.
 ROUTE_KHONG_DB = ["/", "/api/categories", "/api/products"]
 
 

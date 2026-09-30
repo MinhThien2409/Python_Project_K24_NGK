@@ -1,9 +1,5 @@
 import logging
-import uuid
-
 from back_end.DBconnection import DBconnection
-from back_end.Model.DonHang import DonHang
-from back_end.Model.OrderItem import OrderItem
 
 logger = logging.getLogger(__name__)
 

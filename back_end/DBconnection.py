@@ -9,8 +9,6 @@
 import logging
 
 import pymysql
-from pymysql.cursors import DictCursor
-
 from back_end.DBconfig import DB_CONFIG
 
 logger = logging.getLogger(__name__)

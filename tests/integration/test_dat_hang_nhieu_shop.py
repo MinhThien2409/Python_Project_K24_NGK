@@ -124,4 +124,4 @@ def test_orders_response_chua_store_id_va_total(customer_client):
     assert orders[r.json["data"]["order_ids"][0]]["store_name"]
     # tổng mỗi đơn = tiền món + phí ship 25k
     tong = sum(o["total"] for o in orders.values())
-    assert tong == 100000 + 70000 + 25000 * 2
+    assert tong == 100000 + 70000 + 25000

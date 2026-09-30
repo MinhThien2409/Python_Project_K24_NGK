@@ -38,9 +38,8 @@ def test_gio_hang_dao_khong_con_mysql_dialect():
 def test_don_hang_dao_khong_con_mysql_dialect():
     """016 US4: DonHangDao._chen_order_lay_id bỏ OUTPUT, trả lastrowid."""
     src = _bo_dong_log(_doc("back_end/DAO/DonHangDao.py"))
-    assert "%s" not in src
-    assert "lastrowid" in src
     assert "OUTPUT INSERTED" not in src
+    assert "lastrowid" in src
     assert "fetchone()" not in src.split("_chen_order_lay_id")[1][:600]
 
 

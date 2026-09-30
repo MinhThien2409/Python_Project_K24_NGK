@@ -1219,10 +1219,10 @@ function applyUserFilters() {
   }
 
   // Lọc theo search text
-  const searchText = document.getElementById('userSearchInput')?.value.toLowerCase() || '';
-  if (searchText) {
-    filtered = filtered.filter(p => p.name.toLowerCase().includes(searchText));
-  }
+ const searchText = (document.getElementById('userSearchInput')?.value || '').trim().toLowerCase();
+if (searchText) {
+  filtered = filtered.filter(p => p.name.toLowerCase().includes(searchText));
+}
 
   // Lọc theo giá
   // Thay đoạn lọc theo giá cũ bằng đoạn này
@@ -2160,7 +2160,7 @@ async function renderAdminUsers() {
     const laAdmin  = maQuyen === 1 || currentUser?.role === 'Admin';
 
     const roleFilter   = document.getElementById('userRoleFilter').value;
-    const searchFilter = document.getElementById('userSearchFilter').value.toLowerCase();
+    const searchFilter = document.getElementById('userSearchFilter').value.trim().toLowerCase();
     let data = result.data;
 
     if (searchFilter) {

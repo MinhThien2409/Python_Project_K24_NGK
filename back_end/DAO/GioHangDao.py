@@ -183,3 +183,8 @@ class GioHangDao:
         finally:
             cursor.close();
             conn.close()
+
+    def lay_gio_hang_id(self, user_id):
+        """Chỉ tra cứu CartId, KHÔNG tạo mới. Trả None nếu chưa có."""
+        # SELECT CartId FROM Carts WHERE UserId = %s LIMIT 1
+

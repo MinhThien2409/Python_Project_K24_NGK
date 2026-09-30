@@ -218,13 +218,13 @@ class SanPhamDao:
         cursor = conn.cursor()
         try:
             cursor.execute(
-                "SELECT Quantity, IsActive, Price FROM Products WHERE ProductId = ?",
+                "SELECT Quantity, IsActive, Price, ProductName, Emoji FROM Products WHERE ProductId = %s",
                 (int(product_id),))
             row = cursor.fetchone()
             if not row:
                 return None
             return {"quantity": row[0] or 0, "is_active": bool(row[1]),
-                    "price": float(row[2] or 0)}
+                    "price": float(row[2] or 0), "name": row[3], "emoji": row[4]}
         except Exception as e:
             logger.exception("Lỗi lay_thong_tin_kho SanPham: %s", e)
             return None
@@ -338,7 +338,6 @@ class SanPhamDao:
                 UPDATE Products
                 SET ProductName = ?, Description = ?,
                     Price       = ?, OldPrice    = ?,
-                    Quantity    = ?,
                     Emoji       = ?,
                     ImageUrl    = COALESCE(?, ImageUrl),   -- không gửi ảnh thì giữ ảnh cũ
                     CategoryId  = ?
@@ -347,7 +346,6 @@ class SanPhamDao:
             cursor.execute(sql, (
                 sp.ProductName, sp.Description,
                 sp.Price, sp.OldPrice,
-                sp.Quantity,
                 sp.Emoji, sp.ImageUrl,
                 sp.CategoryId,
                 sp.ProductId, int(store_id)

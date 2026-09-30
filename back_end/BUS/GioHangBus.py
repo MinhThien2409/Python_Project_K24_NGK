@@ -16,11 +16,19 @@ class GioHangBus:
             return None
 
     def _ep_so_luong(self, quantity):
-        """Ép số lượng về int, None/rỗng/chữ → 0 (không hợp lệ)."""
+        """Ép về int; None/rỗng/chữ/float lẻ → None (không hợp lệ)."""
+        if quantity is None or isinstance(quantity, bool):
+            return None
         try:
-            return int(quantity) if quantity not in (None, "") else 0
+            if isinstance(quantity, float) and not quantity.is_integer():
+                return None
+            if isinstance(quantity, str):
+                quantity = quantity.strip()
+                if quantity == "":
+                    return None
+            return int(quantity)
         except (TypeError, ValueError):
-            return 0
+            return None
 
     def _kiem_kho(self, product_id, so_luong):
         """Check SP ẩn + vượt kho, trả (kho, lỗi)."""
@@ -33,9 +41,8 @@ class GioHangBus:
         return kho, None
 
     def xu_ly_them_vao_gio(self, user_id, product_id, quantity, unit_price, force=False):
-        """Thêm vào giỏ: check kho + giá DB — giỏ mở cho nhiều shop (011 US1)."""
         so_luong = self._ep_so_luong(quantity)
-        if not user_id or not product_id or so_luong <= 0:
+        if not user_id or not product_id or so_luong is None or so_luong <= 0:
             return {"status": False, "message": "Thông tin sản phẩm không hợp lệ!"}
         kho, loi = self._kiem_kho(product_id, so_luong)
         if loi:
@@ -50,43 +57,49 @@ class GioHangBus:
         return {"status": True, "message": "Đã thêm vào giỏ hàng!"}
 
     def lay_thong_tin_gio_hang(self, user_id):
-        """Lấy chi tiết giỏ hàng của user (tự tạo giỏ nếu chưa có)."""
-        cart_id = self.dao.lay_hoac_tao_gio_hang(user_id)
+        cart_id = self.dao.lay_gio_hang_id(user_id)  # chỉ tra cứu, giả định trả None nếu chưa có
         if not cart_id:
-            return {"status": False, "message": "Không tìm thấy giỏ hàng", "data": []}
-
+            return {"status": True, "message": "Giỏ hàng trống", "data": []}
         items = self.dao.lay_chi_tiet_gio_hang(cart_id)
         return {"status": True, "message": "Thành công", "data": items}
 
     def xoa_khoi_gio(self, user_id, product_id):
-        """Xóa một sản phẩm khỏi giỏ hàng của user."""
-        cart_id = self.dao.lay_hoac_tao_gio_hang(user_id)
+        cart_id = self.dao.lay_gio_hang_id(user_id)
         if not cart_id:
             return {"status": False, "message": "Không tìm thấy giỏ hàng!"}
-        ok = self.dao.xoa_khoi_gio(cart_id, product_id)
-        if ok:
+        items = self.dao.lay_chi_tiet_gio_hang(cart_id) or []
+        if not self._co_trong_gio(items, product_id):
+            return {"status": False, "message": "Không tìm thấy sản phẩm trong giỏ!"}
+        if self.dao.xoa_khoi_gio(cart_id, product_id):
             return {"status": True, "message": "Đã xóa sản phẩm khỏi giỏ hàng!"}
         return {"status": False, "message": "Lỗi khi xóa sản phẩm!"}
 
     def cap_nhat_so_luong(self, user_id, product_id, quantity):
-        """Đổi số lượng: check kho, SL<=0 thì xóa món."""
         so_luong = self._ep_so_luong(quantity)
-        if so_luong <= 0:
-            return self.xoa_khoi_gio(user_id, product_id)
+        if so_luong is None or so_luong < 0:
+            return {"status": False, "message": "Số lượng không hợp lệ!"}
+        if so_luong == 0:
+            return self.xoa_khoi_gio(user_id, product_id)  # giữ hành vi "0 = xóa"
         _, loi = self._kiem_kho(product_id, so_luong)
         if loi:
             return loi
-        cart_id = self.dao.lay_hoac_tao_gio_hang(user_id)
+        cart_id = self.dao.lay_gio_hang_id(user_id)
         if not cart_id:
             return {"status": False, "message": "Không tìm thấy giỏ hàng!"}
-        ok = self.dao.cap_nhat_so_luong(cart_id, product_id, so_luong)
-        if ok:
+        if self.dao.cap_nhat_so_luong(cart_id, product_id, so_luong):
             return {"status": True, "message": "Đã cập nhật số lượng!"}
         return {"status": False, "message": "Lỗi cập nhật!"}
 
+    def _co_trong_gio(self, items, product_id):
+        """Tên khóa 'ProductId' là giả định, chỉnh theo dict DAO thật trả về."""
+        try:
+            pid = int(product_id)
+        except (TypeError, ValueError):
+            return False
+        return any(int(i.get("ProductId", i.get("product_id", -1))) == pid for i in items)
+
     def xoa_toan_bo_gio(self, user_id):
-        """Xóa toàn bộ sản phẩm trong giỏ hàng của user."""
-        cart_id = self.dao.lay_hoac_tao_gio_hang(user_id)  # ✅ Sửa: thêm "_hang"
+        cart_id = self.dao.lay_gio_hang_id(user_id)
         if not cart_id:
             return {"status": False, "message": "Không tìm thấy giỏ hàng!"}
         ok = self.dao.xoa_toan_bo_gio(cart_id)

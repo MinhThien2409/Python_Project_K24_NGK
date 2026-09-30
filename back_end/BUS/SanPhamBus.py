@@ -200,15 +200,17 @@ class SanPhamBus:
         """Seller sửa sản phẩm của shop mình, chặn shop khác."""
         if not product_id:
             return {"status": False, "message": "Thiếu ID sản phẩm!"}
-        chu = self.dao.lay_store_id(product_id)
+        loi = self._kiem_quyen_san_pham(product_id, store_id)
+        if loi:
+            return loi
         if so_luong is not None:
             try:
                 if int(so_luong) < 0:
                     return {"status": False, "message": "Số lượng không được âm!"}
             except (TypeError, ValueError):
                 return {"status": False, "message": "Số lượng không hợp lệ!"}
-        if chu is None or int(chu) != int(store_id):
-            return {"status": False, "message": "Không có quyền thao tác trên sản phẩm này!"}
+
+
         if not ten or not str(ten).strip():
             return {"status": False, "message": "Tên sản phẩm không được để trống!"}
         try:
@@ -220,7 +222,6 @@ class SanPhamBus:
         sp = SanPham(
             ProductId=int(product_id), ProductName=str(ten).strip(), Description=mo_ta,
             Price=gia_f, OldPrice=float(gia_goc) if gia_goc else None,
-            Quantity=int(so_luong) if so_luong is not None else 0,
             Emoji=emoji or EMOJI_MAC_DINH, ImageUrl=image_url or None,
             CategoryId=int(category_id) if category_id else CATEGORY_MAC_DINH,
             StoreId=int(store_id), IsActive=1)
@@ -233,9 +234,10 @@ class SanPhamBus:
         """Seller ẩn hoặc hiện sản phẩm của shop mình."""
         if not product_id:
             return {"status": False, "message": "Thiếu ID sản phẩm!"}
-        chu = self.dao.lay_store_id(product_id)
-        if chu is None or int(chu) != int(store_id):
-            return {"status": False, "message": "Không có quyền thao tác trên sản phẩm này!"}
+        loi = self._kiem_quyen_san_pham(product_id, store_id)
+        if loi:
+            return loi
+
         ok = self.dao.an_hien_theo_store(product_id, store_id, is_active)
         if ok:
             ten = "hiện" if int(is_active) else "ẩn"
@@ -262,10 +264,11 @@ class SanPhamBus:
                     return {"status": False, "message": "Giá nhập không được âm!"}
             except (TypeError, ValueError):
                 return {"status": False, "message": "Giá nhập không hợp lệ!"}
+        loi = self._kiem_quyen_san_pham(product_id, store_id)
+        if loi:
+            return loi
 
-        chu = self.dao.lay_store_id(product_id)
-        if chu is None or int(chu) != int(store_id):
-            return {"status": False, "message": "Không có quyền thao tác trên sản phẩm này!"}
+
 
         ket_qua = self.dao.nhap_hang(
             product_id, store_id, sl, nguoi_id,
@@ -290,11 +293,27 @@ class SanPhamBus:
             return {"status": False, "message": "Giá bán phải lớn hơn 0!"}
         if g <= 0:
             return {"status": False, "message": "Giá bán phải lớn hơn 0!"}
-        chu = self.dao.lay_store_id(product_id)
-        if chu is None or int(chu) != int(store_id):
-            return {"status": False, "message": "Không có quyền thao tác trên sản phẩm này!"}
+
+        loi = self._kiem_quyen_san_pham(product_id, store_id)
+        if loi:
+            return loi
+
         ok = self.dao.doi_gia(product_id, store_id, g)
         if ok:
             return {"status": True, "message": "Đã cập nhật giá bán!",
                     "data": {"price": g}}
         return {"status": False, "message": "Lỗi khi cập nhật giá, vui lòng thử lại!"}
+
+    def _kiem_quyen_san_pham(self, product_id, store_id):
+        """Trả None nếu hợp lệ, ngược lại trả dict lỗi.
+        Tách 2 nhánh: không tồn tại vs. không phải chủ shop."""
+        chu = self.dao.lay_store_id(product_id)
+        if chu is None:
+            return {"status": False, "message": "Không tìm thấy sản phẩm!"}
+        try:
+            la_chu = int(chu) == int(store_id)
+        except (TypeError, ValueError):
+            la_chu = False
+        if not la_chu:
+            return {"status": False, "message": "Không có quyền thao tác trên sản phẩm này!"}
+        return None

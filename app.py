@@ -346,27 +346,17 @@ def api_dat_hang():
     data = request.json
 
     don_hang_moi = DonHang(
-        UserId        = session.get('user_id'),
-        ReceiverName  = str(data.get('ReceiverName', '')),
-        ReceiverPhone = str(data.get('ReceiverPhone', '')),
-        ShippingAddress = str(data.get('ShippingAddress', '')),
-        PaymentMethod = str(data.get('PaymentMethod', 'COD')),
-        SubTotal      = float(data.get('SubTotal', 0)),
-        ShippingFee   = float(data.get('ShippingFee', 25000)),
-        DiscountAmount= float(data.get('Discount', 0)),
-        TotalAmount   = float(data.get('TotalAmount', 0))
+        UserId=session.get('user_id'),
+        ReceiverName=str(data.get('ReceiverName', '')),
+        ReceiverPhone=str(data.get('ReceiverPhone', '')),
+        ShippingAddress=str(data.get('ShippingAddress', '')),
+        PaymentMethod=str(data.get('PaymentMethod', 'COD')),
+        Note=data.get('Note'),
     )
-
     for item in data.get('Items', []):
-        qty   = int(item.get('Quantity')  or 0)
-        price = float(item.get('UnitPrice') or 0)
         don_hang_moi.Items.append(OrderItem(
-            ProductId   = int(item.get('ProductId')    or 0),
-            ProductName = str(item.get('ProductName')  or f"Sản phẩm #{item.get('ProductId')}"),
-            Emoji       = str(item.get('Emoji')        or '📦'),
-            Quantity    = qty,
-            UnitPrice   = price,
-            TotalPrice  = qty * price
+            ProductId=item.get('ProductId'),
+            Quantity=item.get('Quantity'),
         ))
 
     result = don_hang_bus.tao_don_hang(don_hang_moi)

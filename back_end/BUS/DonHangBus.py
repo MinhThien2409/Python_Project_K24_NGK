@@ -1,6 +1,12 @@
 from back_end.DAO.DonHangDao import DonHangDao
 from back_end.Model.DonHang import DonHang
 import re
+from back_end.DAO.SanPhamDao import SanPhamDao
+from back_end.Model.OrderItem import OrderItem
+
+PHI_SHIP_MAC_DINH = 25000
+SO_LUONG_TOI_DA = 999
+
 
 # Ma tran luong trang thai seller (004 US2) — terminal khong doi duoc
 LUONG_TRANG_THAI = {
@@ -73,8 +79,9 @@ class DonHangBus:
         if not dh.Items or len(dh.Items) == 0:
             return {"status": False, "message": "Giỏ hàng trống, vui lòng thêm sản phẩm!"}
 
-        if dh.TotalAmount <= 0:
-            return {"status": False, "message": "Tổng tiền đơn hàng không hợp lệ!"}
+        loi = self._chuan_hoa_items_tu_db(dh)
+        if loi:
+            return loi
         if float(dh.ShippingFee or 0) < 0:
             return {"status": False, "message": "Phí vận chuyển không hợp lệ!"}
 
@@ -226,3 +233,43 @@ class DonHangBus:
         if ok:
             return {"status": True, "message": f"Đã chuyển đơn hàng sang: {trang_thai_moi}"}
         return {"status": False, "message": "Không tìm thấy đơn hàng hoặc có lỗi xảy ra!"}
+
+    PHI_SHIP_MAC_DINH = 25000
+    SO_LUONG_TOI_DA = 999
+
+    def _chuan_hoa_items_tu_db(self, dh: DonHang):
+        """Gộp trùng, kiểm số lượng/kho/ẩn, ghi đè giá-tên từ DB, tính lại tổng.
+        Trả None nếu ổn, dict lỗi nếu sai."""
+        gop = {}
+        for it in dh.Items:
+            try:
+                pid, qty = int(it.ProductId), int(it.Quantity)
+            except (TypeError, ValueError):
+                return {"status": False, "message": "Thông tin sản phẩm không hợp lệ!"}
+            if pid <= 0 or qty <= 0:
+                return {"status": False, "message": "Thông tin sản phẩm không hợp lệ!"}
+            gop[pid] = gop.get(pid, 0) + qty
+
+        items, sub_total = [], 0.0
+        for pid, qty in gop.items():
+            if qty > SO_LUONG_TOI_DA:
+                return {"status": False, "message": "Số lượng vượt giới hạn cho phép!"}
+            kho = self.san_pham_dao.lay_thong_tin_kho(pid)  # cần trả thêm name, emoji
+            if not kho or not kho.get("is_active", True):
+                return {"status": False, "message": f"Sản phẩm #{pid} không còn kinh doanh!"}
+            if qty > int(kho.get("quantity", 0)):
+                return {"status": False, "message":
+                    f"Sản phẩm '{kho.get('name')}' chỉ còn {kho.get('quantity', 0)} trong kho!"}
+            gia = float(kho["price"])
+            thanh_tien = gia * qty
+            items.append(OrderItem(
+                ProductId=pid, ProductName=kho.get("name"), Emoji=kho.get("emoji") or "📦",
+                Quantity=qty, UnitPrice=gia, TotalPrice=thanh_tien))
+            sub_total += thanh_tien
+
+        dh.Items = items
+        dh.SubTotal = sub_total
+        dh.ShippingFee = PHI_SHIP_MAC_DINH  # hoặc tính theo rule server
+        dh.DiscountAmount = 0  # chưa có voucher server-side
+        dh.TotalAmount = sub_total + dh.ShippingFee
+        return None

@@ -499,6 +499,216 @@ class SanPhamDao:
         finally:
             cursor.close(); conn.close()
 
+    # ─── PHASE 4: TIM KIEM THEO STORE / TRUNG TEN / NHAP BULK / GIA ────────
+
+    def tim_kiem_theo_store(self, store_id, tu_khoa, limit=10):
+        """Phase 4: autocomplete san pham trong store (khong phan biet hoa/thuong)."""
+        conn = DBconnection.get_connection()
+        if conn is None: return []
+        cursor = conn.cursor()
+        try:
+            try:
+                limit = int(limit or 10)
+            except (TypeError, ValueError):
+                limit = 10
+            limit = max(1, min(limit, 20))
+            kw = f"%{(tu_khoa or '').strip().lower()}%"
+            sql = """
+                SELECT
+                    p.ProductId, p.ProductName, p.Description,
+                    p.Price, p.OldPrice, p.Quantity,
+                    p.SoldCount, p.Emoji, p.ImageUrl,
+                    p.CategoryId, p.StoreId, p.IsActive,
+                    c.CategoryName,
+                    s.StoreName
+                FROM Products p
+                LEFT JOIN Categories c ON p.CategoryId = c.CategoryId
+                LEFT JOIN Stores     s ON p.StoreId    = s.StoreId
+                WHERE p.StoreId = ? AND LOWER(p.ProductName) LIKE ?
+                ORDER BY p.ProductId DESC
+                LIMIT ?
+            """
+            cursor.execute(sql, (int(store_id), kw, limit))
+            rows = cursor.fetchall()
+            return [self._to_dict(r) for r in rows]
+        except Exception as e:
+            logger.exception("Lỗi tim_kiem_theo_store SanPham: %s", e)
+            return []
+        finally:
+            cursor.close(); conn.close()
+
+    def kiem_tra_trung_ten(self, store_id, ten, tru_product_id=None):
+        """Phase 4: kiem tra trung ten (case-insensitive) trong cung store."""
+        if not ten or not str(ten).strip():
+            return False
+        conn = DBconnection.get_connection()
+        if conn is None: return False
+        cursor = conn.cursor()
+        try:
+            sql = ("SELECT ProductId FROM Products "
+                   "WHERE StoreId = ? AND LOWER(ProductName) = LOWER(?)")
+            params = [int(store_id), str(ten).strip()]
+            if tru_product_id not in (None, ""):
+                sql += " AND ProductId <> ?"
+                params.append(int(tru_product_id))
+            cursor.execute(sql, tuple(params))
+            return cursor.fetchone() is not None
+        except Exception as e:
+            logger.exception("Lỗi kiem_tra_trung_ten SanPham: %s", e)
+            return False
+        finally:
+            cursor.close(); conn.close()
+
+    def tim_theo_ten_trong_store(self, store_id, ten):
+        """Phase 4: tim 1 SP theo ten chinh xac (case-insensitive) trong store."""
+        conn = DBconnection.get_connection()
+        if conn is None: return None
+        cursor = conn.cursor()
+        try:
+            sql = """
+                SELECT
+                    p.ProductId, p.ProductName, p.Description,
+                    p.Price, p.OldPrice, p.Quantity,
+                    p.SoldCount, p.Emoji, p.ImageUrl,
+                    p.CategoryId, p.StoreId, p.IsActive,
+                    c.CategoryName,
+                    s.StoreName
+                FROM Products p
+                LEFT JOIN Categories c ON p.CategoryId = c.CategoryId
+                LEFT JOIN Stores     s ON p.StoreId    = s.StoreId
+                WHERE p.StoreId = ? AND LOWER(p.ProductName) = LOWER(?)
+            """
+            cursor.execute(sql, (int(store_id), str(ten).strip()))
+            row = cursor.fetchone()
+            return self._to_dict(row) if row else None
+        except Exception as e:
+            logger.exception("Lỗi tim_theo_ten_trong_store SanPham: %s", e)
+            return None
+        finally:
+            cursor.close(); conn.close()
+
+    def nhap_hang_bulk(self, store_id, nguoi_id, items, ghi_chu_chung=None):
+        """Phase 4: nhap nhieu dong trong 1 phieu (all-or-nothing).
+
+        items: list dict {product_id, quantity, unit_cost} — da validate o BUS.
+        Tra {'receipt_id', 'items': [{product_id, quantity, stock_moi}]}.
+        """
+        conn = DBconnection.get_connection()
+        if conn is None: return None
+        cursor = conn.cursor()
+        try:
+            tong_tien = 0.0
+            for it in items:
+                gia = float(it.get("unit_cost") or 0)
+                tong_tien += gia * int(it["quantity"])
+            cursor.execute(
+                """INSERT INTO StockReceipts
+                       (StoreId, SupplierId, SupplierNote, CreatedBy, TotalCost, Note)
+                   VALUES (?, ?, ?, ?, ?, ?)""",
+                (int(store_id), None, None, nguoi_id, tong_tien, ghi_chu_chung))
+            receipt_id = cursor.lastrowid
+            ket_qua_items = []
+            for it in items:
+                pid = int(it["product_id"])
+                sl = int(it["quantity"])
+                gia = float(it.get("unit_cost") or 0)
+                cursor.execute(
+                    "UPDATE Products SET Quantity = Quantity + ? "
+                    "WHERE ProductId = ? AND StoreId = ?",
+                    (sl, pid, int(store_id)))
+                if cursor.rowcount == 0:
+                    conn.rollback()
+                    return None
+                cursor.execute(
+                    "INSERT INTO StockReceiptItems "
+                    "(ReceiptId, ProductId, Quantity, UnitCost) VALUES (?, ?, ?, ?)",
+                    (receipt_id, pid, sl, gia))
+                cursor.execute(
+                    "SELECT Quantity FROM Products WHERE ProductId = ?", (pid,))
+                row = cursor.fetchone()
+                ket_qua_items.append({
+                    "product_id": pid, "quantity": sl,
+                    "stock_moi": row[0] if row else None})
+            conn.commit()
+            return {"receipt_id": receipt_id, "items": ket_qua_items}
+        except Exception as e:
+            logger.exception("Lỗi nhap_hang_bulk SanPham: %s", e)
+            conn.rollback()
+            return None
+        finally:
+            cursor.close();
+            conn.close()
+
+    def tao_va_nhap(self, store_id, nguoi_id, ten, so_luong,
+                    gia_ban=0, mo_ta=None, category_id=1,
+                    emoji=None, image_url=None, gia_nhap=None, ghi_chu=None):
+        """Phase 4: tao SP moi tu phieu nhap + nhap kho, 1 giao dich."""
+        conn = DBconnection.get_connection()
+        if conn is None: return None
+        cursor = conn.cursor()
+        try:
+            cursor.execute(
+                """INSERT INTO Products
+                    (ProductName, Description, Price, OldPrice,
+                     Quantity, SoldCount, Emoji, ImageUrl,
+                     CategoryId, StoreId, IsActive)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (str(ten).strip(), mo_ta,
+                 float(gia_ban or 0), None,
+                 0, 0, emoji or EMOJI_MAC_DINH, image_url or None,
+                 int(category_id or 1), int(store_id), 1))
+            new_id = cursor.lastrowid
+            gia_nhap_f = float(gia_nhap) if gia_nhap not in (None, "") else 0
+            tong_tien = gia_nhap_f * int(so_luong)
+            cursor.execute(
+                """INSERT INTO StockReceipts
+                       (StoreId, SupplierId, SupplierNote, CreatedBy, TotalCost, Note)
+                   VALUES (?, ?, ?, ?, ?, ?)""",
+                (int(store_id), None, None, nguoi_id, tong_tien, ghi_chu))
+            receipt_id = cursor.lastrowid
+            cursor.execute(
+                "INSERT INTO StockReceiptItems "
+                "(ReceiptId, ProductId, Quantity, UnitCost) VALUES (?, ?, ?, ?)",
+                (receipt_id, new_id, int(so_luong), gia_nhap_f))
+            cursor.execute(
+                "UPDATE Products SET Quantity = Quantity + ? "
+                "WHERE ProductId = ? AND StoreId = ?",
+                (int(so_luong), new_id, int(store_id)))
+            conn.commit()
+            return {"product_id": new_id, "quantity": int(so_luong),
+                    "receipt_id": receipt_id}
+        except Exception as e:
+            logger.exception("Lỗi tao_va_nhap SanPham: %s", e)
+            conn.rollback()
+            return None
+        finally:
+            cursor.close();
+            conn.close()
+
+    def cap_nhat_gia(self, product_id, store_id, gia_ban, gia_goc=None):
+        """Phase 4: dat truc tiep (Price, OldPrice) voi ownership.
+
+        gia_goc=None → tat giam gia (xoa OldPrice).
+        """
+        conn = DBconnection.get_connection()
+        if conn is None: return False
+        cursor = conn.cursor()
+        try:
+            cursor.execute(
+                "UPDATE Products SET Price = ?, OldPrice = ? "
+                "WHERE ProductId = ? AND StoreId = ?",
+                (float(gia_ban),
+                 float(gia_goc) if gia_goc is not None else None,
+                 int(product_id), int(store_id)))
+            conn.commit()
+            return cursor.rowcount > 0
+        except Exception as e:
+            logger.exception("Lỗi cap_nhat_gia SanPham: %s", e)
+            conn.rollback()
+            return False
+        finally:
+            cursor.close(); conn.close()
+
     # ─── HELPER ─────────────────────────────────────────────────────────────
 
     def _to_dict(self, row) -> dict:

@@ -42,6 +42,11 @@
           <span class="icon">📋</span>
           <span class="label">Lịch sử đơn</span>
         </button>
+        <button class="hdr-btn" id="hdrNotifBtn" onclick="moThongBao()" style="display:none; position:relative;">
+          <span class="icon">🔔</span>
+          <span class="label">Thông báo</span>
+          <span class="badge" id="notifBadge" style="display:none;">0</span>
+        </button>
 
 
 
@@ -319,6 +324,23 @@
       </div>
 <div id="spane-nhaphang" class="admin-pane" style="display:none;">
   <div class="admin-card">
+    <h3>📥 Phiếu nhập hàng (nhiều sản phẩm)</h3>
+    <p style="font-size:13px; color:var(--text-muted); margin-bottom:14px;">
+      Gõ tên để tìm sản phẩm có sẵn (gợi ý tự động), bấm “＋ Thêm dòng” để nhập nhiều
+      sản phẩm trong một phiếu. Tên chưa tồn tại → bấm “✨ Tạo mới” để tạo sản phẩm
+      rồi nhập kho. Dòng trùng sẽ được gộp số lượng. Tồn kho mới = tồn cũ + số nhập.
+    </p>
+    <div id="phieuNhapRows"></div>
+    <div style="display:flex; gap:8px; flex-wrap:wrap; margin:10px 0;">
+      <button type="button" class="admin-action-btn btn-edit" onclick="themDongNhap()">＋ Thêm dòng</button>
+      <input type="text" id="phieuNhapGhiChu" placeholder="Ghi chú chung cho phiếu (không bắt buộc)"
+             style="flex:1; min-width:220px; padding:8px 10px; border:1px solid var(--border); border-radius:8px;">
+      <button type="button" class="admin-action-btn btn-edit" onclick="submitPhieuNhap()">✅ Xác nhận nhập hàng</button>
+    </div>
+    <div id="phieuNhapMsg" style="font-size:13px; color:var(--text-muted);"></div>
+  </div>
+  <div class="admin-card">
+    <h3>⚡ Nhập nhanh từng sản phẩm</h3>
     <div class="filter-bar">
       <div class="filter-item">
         <label for="nhSearchFilter">Tìm kiếm</label>
@@ -416,12 +438,14 @@
         <div class="admin-card">
           <h3>💰 Quản lý giá bán</h3>
           <p style="font-size:13px; color:var(--text-muted); margin-bottom:14px;">
-            Nhập giá bán mới cho từng sản phẩm rồi bấm “Lưu giá” để cập nhật.
+            Nhập <b>giá gốc</b> và <b>giá khuyến mãi</b> cho từng sản phẩm, tick <b>Giảm giá</b>
+            để kích hoạt khuyến mãi (giá KM phải nhỏ hơn giá gốc), rồi bấm “Lưu giá”.
+            Bỏ tick = bán đúng giá gốc, không áp dụng khuyến mãi.
           </p>
         </div>
         <div class="admin-card">
           <table>
-            <thead><tr><th>Tên sản phẩm</th><th>Giá hiện tại</th><th>Giá bán mới</th><th>Tồn kho</th><th>Thao tác</th></tr></thead>
+            <thead><tr><th>Sản phẩm</th><th>Giá gốc</th><th>Giá khuyến mãi</th><th>Giảm giá</th><th>Thao tác</th></tr></thead>
             <tbody id="tblSellerGiaBody"></tbody>
           </table>
         </div>
@@ -611,10 +635,10 @@
 
 <div class="modal-overlay" id="orderHistoryModal">  <div class="modal-box" style="width:740px; max-height:85vh; overflow-y:auto;">
     <button class="modal-close" onclick="closeModal('orderHistoryModal')">✕</button>
-    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+    <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-bottom:16px; padding-right:28px;">
       <h3 style="margin:0;">📋 Lịch sử đơn hàng</h3>
       <select id="historyFilterStatus" onchange="filterOrderHistory()"
-        style="padding:6px 10px; border-radius:6px; border:1px solid var(--border); font-family:inherit; font-size:13px;">
+        style="padding:6px 10px; border-radius:6px; border:1px solid var(--border); font-family:inherit; font-size:13px; max-width:100%;">
         <option value="all">Tất cả</option>
         <option value="Pending">Chờ duyệt</option>
         <option value="Confirmed">Đã xác nhận</option>
@@ -624,6 +648,24 @@
       </select>
     </div>
     <div id="orderHistoryContent"></div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="confirmCancelModal">
+  <div class="modal-box" style="width:420px;">
+    <button class="modal-close" onclick="closeModal('confirmCancelModal')">✕</button>
+    <h3 style="margin-bottom:12px;">⚠️ Xác nhận hủy đơn</h3>
+    <div id="confirmCancelContent" style="font-size:14px; margin-bottom:16px;"></div>
+    <div style="display:flex; gap:10px; justify-content:flex-end;">
+      <button onclick="closeModal('confirmCancelModal')"
+        style="padding:8px 16px; border-radius:6px; border:1px solid var(--border); background:#fff; cursor:pointer; font-family:inherit;">
+        Giữ lại đơn
+      </button>
+      <button id="confirmCancelBtn" onclick="xacNhanHuyDon()"
+        style="padding:8px 16px; border-radius:6px; border:1px solid var(--red); background:#fff; color:var(--red); cursor:pointer; font-weight:600; font-family:inherit;">
+        Xác nhận hủy
+      </button>
+    </div>
   </div>
 </div>
 
@@ -696,6 +738,11 @@
   <div class="modal-box" style="width:460px;">
     <button class="modal-close" onclick="closeModal('adminProductModal')">✕</button>
     <h3 id="adminProductModalTitle" style="margin-bottom:14px;">Thêm sản phẩm</h3>
+    <div id="sellerPriceNote" style="display:none; margin-bottom:12px; padding:10px 12px;
+         background:var(--bg); border:1px dashed var(--border); border-radius:8px;
+         font-size:12px; color:var(--text-muted);">
+      🔒 Giá &amp; tồn kho không sửa ở đây — chỉnh ở tab <b>📥 Nhập hàng</b> / <b>💰 Giá bán</b>.
+    </div>
     <form onsubmit="handleSaveProduct(event)">
       <input type="hidden" id="editProductId">
       <div class="form-group"><label>Tên sản phẩm</label><input type="text" id="prodName" required></div>

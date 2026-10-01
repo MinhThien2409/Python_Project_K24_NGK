@@ -512,10 +512,10 @@ class DonHangDao:
             conn.close()
 
     def _thong_ke_chinh_cua_store(self, cursor, store_id):
-        """Tổng doanh thu và đếm đơn theo trạng thái của 1 store."""
+        """Doanh thu Completed theo items cua store, nhat quan voi bao cao thang."""
         cursor.execute("""
             SELECT
-                COALESCE(SUM(CASE WHEN o.Status <> 'Cancelled'
+                COALESCE(SUM(CASE WHEN o.Status = 'Completed'
                     THEN oi.Quantity * oi.UnitPrice ELSE 0 END), 0) AS doanh_thu,
                 COUNT(DISTINCT o.OrderId) AS tong_don,
                 SUM(CASE WHEN o.Status = 'Pending' THEN 1 ELSE 0 END) AS cho_duyet,
@@ -702,6 +702,103 @@ class DonHangDao:
         except Exception as e:
             logger.exception("Lỗi lay_thong_tin_san_pham: %s", e)
             return {}
+        finally:
+            cursor.close()
+            conn.close()
+
+    # ─── THÔNG BÁO (Phase 3: persist sau hủy đơn) ───
+    def _dam_bao_bang_thong_bao(self, cursor):
+        """Tạo bảng Notifications nếu chưa có để lưu thông báo."""
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS Notifications (
+                ThongBaoId INT AUTO_INCREMENT PRIMARY KEY,
+                UserId INT NOT NULL,
+                NoiDung VARCHAR(500) NOT NULL DEFAULT '',
+                OrderId INT NULL,
+                DaDoc TINYINT(1) NOT NULL DEFAULT 0,
+                CreatedAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+
+    def tao_thong_bao(self, user_id, noi_dung, order_id=None):
+        """Lưu một thông báo cho user, trả id mới hoặc None khi lỗi."""
+        conn = DBconnection().get_connection()
+        if not conn:
+            return None
+        cursor = conn.cursor()
+        try:
+            self._dam_bao_bang_thong_bao(cursor)
+            cursor.execute(
+                "INSERT INTO Notifications (UserId, NoiDung, OrderId) "
+                "VALUES (%s, %s, %s)",
+                (int(user_id), str(noi_dung or "")[:500],
+                 int(order_id) if order_id is not None else None)
+            )
+            conn.commit()
+            return cursor.lastrowid
+        except Exception as e:
+            conn.rollback()
+            logger.exception("Lỗi tao_thong_bao: %s", e)
+            return None
+        finally:
+            cursor.close()
+            conn.close()
+
+    def lay_thong_bao_cua_user(self, user_id, gioi_han=20):
+        """Lấy thông báo đã lưu của user, mới nhất trước."""
+        conn = DBconnection().get_connection()
+        if not conn:
+            return []
+        cursor = conn.cursor()
+        try:
+            self._dam_bao_bang_thong_bao(cursor)
+            cursor.execute(
+                "SELECT ThongBaoId, UserId, NoiDung, OrderId, DaDoc, CreatedAt "
+                "FROM Notifications WHERE UserId = %s "
+                "ORDER BY CreatedAt DESC LIMIT %s",
+                (int(user_id), int(gioi_han))
+            )
+            rows = cursor.fetchall()
+            columns = [col[0] for col in cursor.description]
+            ket_qua = []
+            for row in rows:
+                muc = dict(zip(columns, row))
+                if muc.get("CreatedAt"):
+                    muc["CreatedAt"] = str(muc["CreatedAt"])
+                ket_qua.append(muc)
+            return ket_qua
+        except Exception as e:
+            logger.exception("Lỗi lay_thong_bao_cua_user: %s", e)
+            return []
+        finally:
+            cursor.close()
+            conn.close()
+
+    def danh_dau_thong_bao_da_doc(self, user_id, thong_bao_id=None):
+        """Đánh dấu một hoặc toàn bộ thông báo của user là đã đọc."""
+        conn = DBconnection().get_connection()
+        if not conn:
+            return False
+        cursor = conn.cursor()
+        try:
+            self._dam_bao_bang_thong_bao(cursor)
+            if thong_bao_id is None:
+                cursor.execute(
+                    "UPDATE Notifications SET DaDoc = 1 WHERE UserId = %s",
+                    (int(user_id),)
+                )
+            else:
+                cursor.execute(
+                    "UPDATE Notifications SET DaDoc = 1 "
+                    "WHERE UserId = %s AND ThongBaoId = %s",
+                    (int(user_id), int(thong_bao_id))
+                )
+            conn.commit()
+            return cursor.rowcount > 0
+        except Exception as e:
+            conn.rollback()
+            logger.exception("Lỗi danh_dau_thong_bao_da_doc: %s", e)
+            return False
         finally:
             cursor.close()
             conn.close()

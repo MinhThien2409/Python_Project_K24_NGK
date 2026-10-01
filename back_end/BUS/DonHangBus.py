@@ -216,6 +216,96 @@ class DonHangBus:
             return {"status": False, "message": "Bạn không có quyền xem hóa đơn này!"}
         return {"status": True, "data": {**don, "Items": chi_tiet.get("items", [])}}
 
+    def huy_don_hang_cua_customer(self, user_id, order_id):
+        """Khach tu huy don cua minh, chi Pending moi duoc huy."""
+        if not user_id:
+            return {"status": False, "message": "Lỗi xác thực người dùng"}
+        try:
+            ma_don = int(order_id)
+        except (TypeError, ValueError):
+            return {"status": False, "message": "Không tìm thấy đơn hàng!"}
+        chi_tiet = self.dao.lay_chi_tiet_don_hang(ma_don)
+        if not chi_tiet or not chi_tiet.get("don"):
+            return {"status": False, "message": "Không tìm thấy đơn hàng!"}
+        don = chi_tiet["don"]
+        try:
+            chu_don = int(don.get("UserId", 0))
+        except (TypeError, ValueError):
+            chu_don = 0
+        if chu_don != int(user_id):
+            return {"status": False,
+                    "message": "Bạn không có quyền hủy đơn hàng này!"}
+        hien_tai = don.get("Status")
+        if hien_tai != "Pending":
+            return {"status": False,
+                    "message": self._loi_huy_theo_trang_thai(hien_tai)}
+        ok = self.dao.cap_nhat_trang_thai(ma_don, "Cancelled")
+        if not ok:
+            return {"status": False,
+                    "message": "Không thể hủy đơn hàng, vui lòng thử lại sau!"}
+        self._bao_huy_don(user_id, ma_don)
+        return {"status": True,
+                "message": f"Đã hủy đơn hàng #{ma_don} thành công!"}
+
+    def _loi_huy_theo_trang_thai(self, hien_tai):
+        """Tra loi tu choi huy don theo trang thai hien tai."""
+        if hien_tai == "Confirmed":
+            return "Đơn hàng đã được xác nhận, không thể hủy!"
+        if hien_tai == "Shipping":
+            return "Đơn hàng đang được giao, không thể hủy!"
+        if hien_tai == "Completed":
+            return "Đơn hàng đã hoàn thành, không thể hủy!"
+        if hien_tai == "Cancelled":
+            return "Đơn hàng đã được hủy trước đó!"
+        return "Chỉ được hủy đơn ở trạng thái Chờ duyệt!"
+
+    def _bao_huy_don(self, user_id, order_id):
+        """Luu thong bao huy don, loi thong bao khong lam hong huy don."""
+        tao = getattr(self.dao, "tao_thong_bao", None)
+        if not callable(tao):
+            return
+        try:
+            tao(user_id, f"Bạn đã hủy đơn hàng #{order_id} thành công!",
+                order_id)
+        except Exception:
+            return
+
+    def lay_thong_bao_cua_user(self, user_id):
+        """Lay thong bao da luu cua khach, chua co kho thi tra rong."""
+        if not user_id:
+            return {"status": False, "message": "Lỗi xác thực người dùng",
+                    "data": []}
+        lay = getattr(self.dao, "lay_thong_bao_cua_user", None)
+        if not callable(lay):
+            return {"status": True, "data": []}
+        try:
+            danh_sach = lay(user_id) or []
+        except Exception:
+            danh_sach = []
+        return {"status": True, "data": danh_sach}
+
+    def danh_dau_thong_bao_da_doc(self, user_id, thong_bao_id=None):
+        """Danh dau mot hoac toan bo thong bao cua khach la da doc."""
+        if not user_id:
+            return {"status": False, "message": "Lỗi xác thực người dùng"}
+        danh_dau = getattr(self.dao, "danh_dau_thong_bao_da_doc", None)
+        if not callable(danh_dau):
+            return {"status": True,
+                    "message": "Đã đánh dấu tất cả thông báo là đã đọc!"}
+        try:
+            ma_tb = int(thong_bao_id) if thong_bao_id not in (None, "") else None
+        except (TypeError, ValueError):
+            return {"status": False, "message": "Thông báo không hợp lệ!"}
+        try:
+            ok = danh_dau(user_id, ma_tb)
+        except Exception:
+            return {"status": False,
+                    "message": "Không thể cập nhật thông báo, vui lòng thử lại sau!"}
+        if ok:
+            return {"status": True,
+                    "message": "Đã đánh dấu thông báo là đã đọc!"}
+        return {"status": False, "message": "Không tìm thấy thông báo!"}
+
     def thay_doi_trang_thai(self, order_id, new_status):
         """Chuyển trạng thái đơn theo luồng, sai luồng thì từ chối."""
         trang_thai_hop_le = ["Pending", "Confirmed", "Shipping", "Completed", "Cancelled"]
@@ -298,6 +388,9 @@ class DonHangBus:
             return {"status": False, "message": "Không tìm thấy đơn hàng hoặc có lỗi xảy ra!"}
         if hien_tai in ("Completed", "Cancelled"):
             return {"status": False, "message": "Trạng thái cuối không thể thay đổi!"}
+        # Phase 3: seller chi duoc huy don dang cho duyet; da Confirmed thi khong duoc huy.
+        if trang_thai_moi == "Cancelled" and hien_tai != "Pending":
+            return {"status": False, "message": "Seller chỉ được hủy đơn đang ở trạng thái Chờ duyệt!"}
         if trang_thai_moi not in LUONG_TRANG_THAI.get(hien_tai, ()):
             return {"status": False, "message": "Chỉ được chuyển theo luồng trạng thái hợp lệ!"}
         if not self.dao.don_thuoc_store(order_id, store_id):

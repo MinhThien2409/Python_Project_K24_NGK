@@ -496,6 +496,40 @@ def api_lay_don_hang_cua_toi(user_id):
                         "message": "Không thể thao tác trên tài khoản khác!",
                         "data": None}), 403
     return jsonify(don_hang_bus.lay_don_hang_cua_toi(user_id))
+
+@app.route('/api/don-hang/<int:order_id>/huy', methods=['PUT'])
+def api_customer_huy_don(order_id):
+    """Khách tự hủy đơn của mình, backend kiểm tra trạng thái."""
+    gate = user_bus.kiem_tra_nguoi_dung_hoat_dong(session.get('user_id'))
+    if not gate.get('status'):
+        return jsonify(gate), 403
+    ket_qua = don_hang_bus.huy_don_hang_cua_customer(
+        session.get('user_id'), order_id)
+    if not ket_qua.get('status') and "không có quyền" in ket_qua.get('message', ''):
+        return jsonify(ket_qua), 403
+    return jsonify(ket_qua)
+
+@app.route('/api/thong-bao/cua-toi', methods=['GET'])
+def api_lay_thong_bao_cua_toi():
+    """Lấy thông báo đã lưu của chính mình sau đăng nhập lại."""
+    gate = user_bus.kiem_tra_nguoi_dung_hoat_dong(session.get('user_id'))
+    if not gate.get('status'):
+        return jsonify(gate), 403
+    return jsonify(don_hang_bus.lay_thong_bao_cua_user(session.get('user_id')))
+
+@app.route('/api/thong-bao/danh-dau-da-doc', methods=['POST'])
+def api_danh_dau_thong_bao_da_doc():
+    """Đánh dấu một hoặc toàn bộ thông báo là đã đọc."""
+    gate = user_bus.kiem_tra_nguoi_dung_hoat_dong(session.get('user_id'))
+    if not gate.get('status'):
+        return jsonify(gate), 403
+    data = _json_body()
+    if data is None:
+        return jsonify({"status": False,
+                        "message": "Dữ liệu gửi lên không hợp lệ!",
+                        "data": None}), 400
+    return jsonify(don_hang_bus.danh_dau_thong_bao_da_doc(
+        session.get('user_id'), data.get('thong_bao_id')))
 @app.route('/api/gio-hang/xoa', methods=['POST'])
 def api_xoa_khoi_gio():
     """Xóa một sản phẩm khỏi giỏ hàng."""
@@ -626,6 +660,42 @@ def _seller_store_hien_tai():
     return store_kq['data'], None
 
 
+@app.route('/api/seller/san-pham/tim-kiem', methods=['GET'])
+def api_seller_tim_kiem_san_pham():
+    """Phase 4: autocomplete san pham trong store cua seller (typeahead)."""
+    store, loi = _seller_store_hien_tai()
+    if loi:
+        return jsonify(loi[0]), loi[1]
+    tu_khoa = request.args.get('q', '', type=str)
+    limit = request.args.get('limit', 10, type=int)
+    return jsonify(san_pham_bus.tim_kiem_cua_seller(
+        store.get('store_id'), tu_khoa, limit))
+
+@app.route('/api/seller/nhap-hang', methods=['POST'])
+def api_seller_nhap_hang_nhieu():
+    """Phase 4: nhap nhieu dong 1 phieu (gop duplicate, stock backend tinh)."""
+    store, loi = _seller_store_hien_tai()
+    if loi:
+        return jsonify(loi[0]), loi[1]
+    d = request.json or {}
+    return jsonify(san_pham_bus.nhap_hang_nhieu(
+        session.get('user_id'), store.get('store_id'),
+        d.get('items'), d.get('ghi_chu')))
+
+@app.route('/api/seller/san-pham/tao-va-nhap', methods=['POST'])
+def api_seller_tao_va_nhap():
+    """Phase 4: tao SP moi tu phieu nhap neu chua ton tai + nhap kho."""
+    store, loi = _seller_store_hien_tai()
+    if loi:
+        return jsonify(loi[0]), loi[1]
+    d = request.json or {}
+    return jsonify(san_pham_bus.tao_va_nhap(
+        session.get('user_id'), store.get('store_id'),
+        d.get('name'), d.get('quantity'), d.get('price'),
+        d.get('description'), d.get('category_id'),
+        d.get('emoji'), d.get('image_url'),
+        d.get('gia_nhap'), d.get('ghi_chu')))
+
 @app.route('/api/seller/san-pham', methods=['GET'])
 def api_seller_lay_san_pham():
     """Seller lấy sản phẩm thuộc shop của mình."""
@@ -699,14 +769,15 @@ def api_seller_lich_su_nhap_hang():
 
 @app.route('/api/seller/san-pham/<int:product_id>/gia', methods=['PUT'])
 def api_seller_doi_gia(product_id):
-    """Seller đổi giá bán sản phẩm của mình."""
+    """Seller đổi giá bán: legacy {gia_moi} + Phase 4 {gia_goc, gia_khuyen_mai, giam_gia}."""
     store, loi = _seller_store_hien_tai()
     if loi:
         return jsonify(loi[0]), loi[1]
     d = request.json or {}
     return jsonify(san_pham_bus.doi_gia_ban(
         session.get('user_id'), store.get('store_id'), product_id,
-        d.get('gia_moi')))
+        d.get('gia_moi'), d.get('gia_goc'),
+        d.get('gia_khuyen_mai'), d.get('giam_gia')))
 
 
 # ==========================================

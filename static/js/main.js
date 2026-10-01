@@ -70,6 +70,7 @@ async function khoiPhucDangNhap() {
 
     updateHeaderForUser();
     await loadCartFromServer();
+    await taiThongBao(); // Phase 3: nap thong bao da luu sau dang nhap lai
 
     if ((currentUser.ma_nhom_quyen || currentUser.Role_id) === 3) {
       await loadSellerStore();
@@ -172,6 +173,8 @@ async function switchSellerTab(tabName) {
   } else if (tabName === 'nhaphang') {
     await renderSellerNhapHang();
     await renderLichSuNhapHang();
+    // Phase 4: mo tab Nhap hang luon co san it nhat 1 dong phieu nhap.
+    if (!document.querySelector('.phieu-nhap-row')) themDongNhap();
   } else if (tabName === 'orders') {
     await renderSellerOrders();
   } else if (tabName === 'shop') {
@@ -291,7 +294,7 @@ async function sellerCapNhatDon(orderId, newStatus) {
   if (!confirm(`${label} cho đơn #${orderId}?`)) return;
 
   try {
-    const res    = await fetch(`/api/don-hang/${orderId}/trang-thai`, {
+    const res    = await fetch(`/api/seller/don-hang/${orderId}/trang-thai`, {
       method : 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body   : JSON.stringify({ status: newStatus })
@@ -540,38 +543,26 @@ async function renderSellerProducts() {
     `).join('');
 }
 
-// Mở modal sửa sản phẩm từ Seller Dashboard
-async function openEditSellerProduct(productId) {
-  try {
-    const res    = await fetch(`/api/products/${productId}`);
-    const result = await res.json();
-
-    if (!result.status) { showToast('❌ Không tìm thấy sản phẩm!'); return; }
-
-    const p = result.data;
-
-    document.getElementById('adminProductModalTitle').textContent = '✏️ Chỉnh sửa sản phẩm';
-    document.getElementById('editProductId').value               = p.id;
-    document.getElementById('editProductId').dataset.sellerMode  = 'true';
-    document.getElementById('prodName').value                    = p.name;
-    document.getElementById('prodPrice').value                   = p.price;
-    document.getElementById('prodOldPrice').value                = p.old_price || '';
-    document.getElementById('prodStock').value                   = p.quantity;
-    document.getElementById('prodEmoji').value                   = p.emoji || '';
-    document.getElementById('prodDesc').value                    = p.description || '';
-    document.getElementById('prodShop').value = p.shop || (currentUser?.store?.store_name || '');
-
-    await loadCategoriesForProductModal(p.category_name);
-
-    document.getElementById('adminProductModal').classList.add('show');
-
-  } catch (e) {
-    showToast('❌ Lỗi kết nối!');
+// ============================================================
+// PHASE 4 — khoa Gia/Ton kho khi Seller SUA san pham (My Products chi
+// sua Ten/Danh muc/Emoji/Thuong hieu/Mo ta; Gia o tab Gia, Ton o tab Nhap)
+// ============================================================
+function khoaGiaTonKhoSellerMode(bat) {
+  ['prodOldPrice', 'prodDiscount', 'prodPrice', 'prodStock'].forEach((id) => {
+    const el = document.getElementById(id);
+    if (el) { el.disabled = !!bat; el.style.opacity = bat ? '0.55' : ''; }
+  });
+  if (bat) {
+    ['feeGocBox', 'feeBreakdownBox'].forEach((id) => {
+      const el = document.getElementById(id);
+      if (el) el.style.display = 'none';
+    });
   }
+  const note = document.getElementById('sellerPriceNote');
+  if (note) note.style.display = bat ? 'block' : 'none';
 }
 
-// ==========================================
-// 2. API: ĐĂNG NHẬP, ĐĂNG KÝ & QUẢN LÝ TÀI KHOẢN
+// ==========================================\n// 2. API: ĐĂNG NHẬP, ĐĂNG KÝ & QUẢN LÝ TÀI KHOẢN
 // ==========================================
 function switchAuthForm(form) {
   document.getElementById('tabLogin').classList.toggle('active', form === 'login');
@@ -1042,6 +1033,7 @@ function updateHeaderForUser() {
 
   // Hiện các nút chức năng mặc định — profile cũ đã gỡ (017 US4)
   document.getElementById('hdrHistoryBtn').style.display = 'flex';
+  document.getElementById('hdrNotifBtn').style.display = 'flex';
 
 
   // --- PHÂN BIỆT HIỂN THỊ THEO VAI TRÒ CHUẨN (1=Admin, 2=Quản lý, 3=Seller, 4=Customer) ---
@@ -1745,6 +1737,8 @@ async function openAddProductModal() {
   document.getElementById('prodEmoji').value     = '';
   document.getElementById('prodShop').value      = '';
   document.getElementById('prodDesc').value      = '';
+  delete document.getElementById('editProductId').dataset.sellerMode;
+  khoaGiaTonKhoSellerMode(false);
 
   // Load categories vào dropdown
   await loadCategoriesForProductModal();
@@ -1771,6 +1765,8 @@ async function openEditProductModal(productId) {
     document.getElementById('prodEmoji').value     = p.emoji || '';
     document.getElementById('prodShop').value      = p.shop || '';
     document.getElementById('prodDesc').value      = p.description || '';
+    delete document.getElementById('editProductId').dataset.sellerMode;
+    khoaGiaTonKhoSellerMode(false);
 
     // Load categories và chọn đúng danh mục hiện tại
     await loadCategoriesForProductModal(p.category_name);
@@ -2841,132 +2837,7 @@ function openCheckoutModal() {
 
   document.getElementById('checkoutModal').classList.add('show');
 }
-// ==========================================
-// ADMIN - QUẢN LÝ ĐƠN HÀNG
-// ==========================================
-
-const ORDER_STATUS_MAP = {
-  'Pending'  : { label: 'Chờ duyệt',    cls: 'status-pending'   },
-  'Confirmed': { label: 'Đã xác nhận',  cls: 'status-confirmed' },
-  'Shipping' : { label: 'Đang giao',    cls: 'status-shipping'  },
-  'Completed': { label: 'Hoàn thành',   cls: 'status-done'      },
-  'Cancelled': { label: 'Đã hủy',       cls: 'status-cancelled' },
-};
-
-// Lưu toàn bộ đơn hàng để filter không cần gọi lại API
-let allAdminOrders = [];
-
-async function renderAdminOrders() {
-  const tbody    = document.getElementById('tblAdminOrdersBody');
-  const filterStatus = document.getElementById('orderFilterStatus').value;
-
-  // Chỉ gọi API lần đầu hoặc khi chưa có data
-  if (allAdminOrders.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;
-                       padding:20px; color:var(--text-muted);">Đang tải...</td></tr>`;
-    try {
-      const res    = await fetch('/api/don-hang/tat-ca');
-      const result = await res.json();
-      allAdminOrders = result.status ? result.data : [];
-    } catch (e) {
-      tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;
-                         color:var(--red);">❌ Lỗi tải dữ liệu</td></tr>`;
-      return;
-    }
-  }
-
-  // Lọc theo status
-  const filtered = filterStatus === 'all'
-    ? allAdminOrders
-    : allAdminOrders.filter(o => o.Status?.toLowerCase() === filterStatus);
-
-  if (!filtered.length) {
-    tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;
-                       color:var(--text-muted);">Không có đơn hàng nào</td></tr>`;
-    return;
-  }
-
-  tbody.innerHTML = filtered.map(o => {
-    const statusInfo = ORDER_STATUS_MAP[o.Status] || { label: o.Status, cls: '' };
-    const itemSummary = (o.Items || [])
-      .map(i => `${i.Emoji || '📦'} ${i.ProductName} x${i.Quantity}`)
-      .join('<br>');
-    const createdAt = o.CreatedAt
-      ? new Date(o.CreatedAt).toLocaleDateString('vi-VN', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' })
-      : '—';
-
-    return `
-      <tr>
-        <td style="font-weight:700; color:var(--text-muted);">#${o.OrderId}</td>
-        <td>
-          <div style="font-weight:600;">${o.ReceiverName}</div>
-          <div style="font-size:11px; color:var(--text-muted);">📞 ${o.ReceiverPhone}</div>
-          <div style="font-size:11px; color:var(--text-muted);">👤 ${o.CustomerName || '—'}</div>
-        </td>
-        <td style="font-size:12px; max-width:180px;">${itemSummary || '—'}</td>
-        <td style="font-weight:700; color:var(--red);">
-          ${Number(o.TotalAmount).toLocaleString('vi-VN')}đ
-          <div style="font-size:11px; color:var(--text-muted); font-weight:400;">
-            Ship: ${Number(o.ShippingFee || 0).toLocaleString('vi-VN')}đ
-          </div>
-        </td>
-        <td><span class="badge-status ${statusInfo.cls}">${statusInfo.label}</span></td>
-        <td style="font-size:12px;">${createdAt}</td>
-        <td>
-          ${o.Status === 'Pending' ? `
-            <button class="admin-action-btn btn-confirm"
-              onclick="capNhatTrangThaiDon(${o.OrderId}, 'Confirmed')">✅ Duyệt</button>
-            <button class="admin-action-btn btn-cancel"
-              onclick="capNhatTrangThaiDon(${o.OrderId}, 'Cancelled')">❌ Hủy</button>
-          ` : ''}
-          ${o.Status === 'Confirmed' ? `
-            <button class="admin-action-btn btn-confirm"
-              onclick="capNhatTrangThaiDon(${o.OrderId}, 'Shipping')">🚚 Giao hàng</button>
-          ` : ''}
-          ${o.Status === 'Shipping' ? `
-            <button class="admin-action-btn btn-confirm"
-              onclick="capNhatTrangThaiDon(${o.OrderId}, 'Completed')">🏁 Hoàn thành</button>
-          ` : ''}
-          ${o.Status === 'Completed' || o.Status === 'Cancelled' ? `
-            <span style="font-size:12px; color:var(--text-muted);">—</span>
-          ` : ''}
-        </td>
-      </tr>
-    `;
-  }).join('');
-}
-
-async function capNhatTrangThaiDon(orderId, newStatus) {
-  const statusLabel = ORDER_STATUS_MAP[newStatus]?.label || newStatus;
-  if (!confirm(`Xác nhận chuyển đơn #${orderId} sang: "${statusLabel}"?`)) return;
-
-  try {
-    const res    = await fetch(`/api/don-hang/${orderId}/trang-thai`, {
-      method : 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body   : JSON.stringify({ status: newStatus })
-    });
-    const result = await res.json();
-
-    if (result.status) {
-      showToast(`✅ ${result.message}`);
-      const idx = allAdminOrders.findIndex(o => o.OrderId === orderId);
-      if (idx !== -1) allAdminOrders[idx].Status = newStatus;
-      renderAdminOrders();
-
-      // ← Thêm dòng này: cập nhật ngay số liệu doanh thu/đơn hàng trên Dashboard
-      initAdminDashboard();
-
-    } else {
-      showToast('❌ ' + result.message);
-    }
-  } catch (e) {
-    showToast('❌ Lỗi kết nối!');
-  }
-}
-// ==========================================
-// LỊCH SỬ ĐƠN HÀNG
-// ==========================================
+// ==========================================\r\n// LỊCH SỬ ĐƠN HÀNG\r\n// ==========================================
 
 let allUserOrders = []; // Cache đơn hàng của user
 
@@ -2976,6 +2847,12 @@ const ORDER_STATUS_CONFIG = {
   'Shipping' : { label: 'Đang giao',   cls: 'status-shipping',  icon: '🚚' },
   'Completed': { label: 'Hoàn thành',  cls: 'status-done',      icon: '🏁' },
   'Cancelled': { label: 'Đã hủy',      cls: 'status-cancelled', icon: '❌' },
+};
+
+// Phase 3: nhãn phương thức thanh toán hiển thị trong lịch sử đơn
+const PAYMENT_LABEL = {
+  COD : 'Thanh toán khi nhận hàng (COD)',
+  BANK: 'Chuyển khoản ngân hàng',
 };
 
 // Mở modal lịch sử đơn hàng
@@ -3050,12 +2927,13 @@ function renderOrderHistoryList(orders) {
       : '—';
 
     const itemList = (o.Items || []).map(i => `
-      <div style="display:flex; justify-content:space-between; align-items:center;
-                  padding:6px 0; border-bottom:1px solid var(--border); font-size:13px;">
-        <span>${i.Emoji || '📦'} ${i.ProductName || 'Sản phẩm'} 
-          <span style="color:var(--text-muted);">x${i.Quantity}</span>
+      <div style="display:flex; justify-content:space-between; align-items:center; gap:8px;
+                  padding:6px 0; border-bottom:1px solid var(--border); font-size:13px; flex-wrap:wrap;">
+        <span style="flex:1 1 180px;">${i.Emoji || '📦'} ${i.ProductName || 'Sản phẩm'}</span>
+        <span style="color:var(--text-muted); white-space:nowrap;">
+          ${Number(i.UnitPrice || 0).toLocaleString('vi-VN')}đ x${i.Quantity}
         </span>
-        <span style="font-weight:600;">
+        <span style="font-weight:600; white-space:nowrap;">
           ${Number(i.TotalPrice || 0).toLocaleString('vi-VN')}đ
         </span>
       </div>
@@ -3082,22 +2960,21 @@ function renderOrderHistoryList(orders) {
           ${itemList || '<div style="color:var(--text-muted); font-size:13px;">Không có sản phẩm</div>'}
         </div>
 
-        <!-- Footer: địa chỉ + tổng tiền -->
+        <!-- Footer: người nhận + chi tiết tiền -->
         <div style="padding:10px 14px; border-top:1px solid var(--border);
                     display:flex; justify-content:space-between; align-items:flex-end; flex-wrap:wrap; gap:8px;">
           <div style="font-size:12px; color:var(--text-muted); max-width:380px;">
+            <div>👤 ${o.ReceiverName || '—'} · 📞 ${o.ReceiverPhone || '—'}</div>
             <div>📍 ${o.ShippingAddress || '—'}</div>
-            <div>💳 ${o.PaymentMethod || '—'}</div>
-            ${Number(o.ShippingFee || 0) > 0
-              ? `<div>🚚 Phí ship: ${Number(o.ShippingFee).toLocaleString('vi-VN')}đ</div>`
-              : ''}
-            ${Number(o.DiscountAmount || 0) > 0
-              ? `<div style="color:var(--green);">🎟️ Giảm: -${Number(o.DiscountAmount).toLocaleString('vi-VN')}đ</div>`
-              : ''}
+            <div>💳 ${PAYMENT_LABEL[o.PaymentMethod] || o.PaymentMethod || '—'}</div>
           </div>
-          <div style="text-align:right;">
-            <div style="font-size:12px; color:var(--text-muted);">Tổng thanh toán</div>
-            <div style="font-size:18px; font-weight:800; color:var(--red);">
+          <div style="text-align:right; font-size:12px; color:var(--text-muted);">
+            <div>Tạm tính: <b>${Number(o.SubTotal || 0).toLocaleString('vi-VN')}đ</b></div>
+            <div>🚚 Phí ship: <b>${Number(o.ShippingFee || 0).toLocaleString('vi-VN')}đ</b></div>
+            ${Number(o.DiscountAmount || 0) > 0
+              ? `<div style="color:var(--green);">🎟️ Giảm: <b>-${Number(o.DiscountAmount).toLocaleString('vi-VN')}đ</b></div>`
+              : ''}
+            <div style="font-size:18px; font-weight:800; color:var(--red); margin-top:4px;">
               ${Number(o.TotalAmount || 0).toLocaleString('vi-VN')}đ
             </div>
           </div>
@@ -3112,11 +2989,13 @@ function renderOrderHistoryList(orders) {
                      font-family:inherit; font-size:13px;">
               🧾 Xem hóa đơn
             </button>
-            <button onclick="huyDonHangCuaToi(${o.OrderId})"
-              style="background:none; border:1px solid var(--red); color:var(--red);
+            <button onclick="moXacNhanHuyDon(${o.OrderId})"
+              style="background:none; border:1px solid var(--border); color:var(--text-muted);
                      border-radius:6px; padding:5px 14px; cursor:pointer;
-                     font-family:inherit; font-size:13px;">
-              ❌ Hủy đơn hàng
+                     font-family:inherit; font-size:13px;"
+              onmouseover="this.style.color='var(--red)'; this.style.borderColor='var(--red)';"
+              onmouseout="this.style.color=''; this.style.borderColor='';">
+              Hủy đơn hàng
             </button>
           </div>
         ` : `
@@ -3134,25 +3013,97 @@ function renderOrderHistoryList(orders) {
   }).join('');
 }
 
-// Hủy đơn từ phía khách hàng (chỉ khi Pending)
+// Phase 3: hủy đơn qua modal xác nhận riêng + endpoint /huy (backend kiểm tra)
+let donChoHuy = null;
+
+function moXacNhanHuyDon(orderId) {
+  donChoHuy = orderId;
+  document.getElementById('confirmCancelContent').innerHTML =
+    `Bạn có chắc muốn hủy <b>đơn #${orderId}</b> không?<br>` +
+    `<span style="font-size:12px; color:var(--text-muted);">` +
+    `Chỉ hủy được đơn đang Chờ duyệt. Tồn kho sẽ được hoàn lại và bạn nhận thông báo xác nhận.` +
+    `</span>`;
+  document.getElementById('confirmCancelModal').classList.add('show');
+}
+
+async function xacNhanHuyDon() {
+  if (donChoHuy == null) return;
+  await huyDonHangCuaToi(donChoHuy);
+}
+
+// Hủy đơn từ phía khách hàng (chỉ khi Pending — backend kiểm tra trạng thái)
 async function huyDonHangCuaToi(orderId) {
-  if (!confirm(`Xác nhận hủy đơn hàng #${orderId}?`)) return;
   try {
-    const res    = await fetch(`/api/don-hang/${orderId}/trang-thai`, {
-      method : 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body   : JSON.stringify({ status: 'Cancelled' })
-    });
+    const res    = await fetch(`/api/don-hang/${orderId}/huy`, { method: 'PUT' });
     const result = await res.json();
+    closeModal('confirmCancelModal');
+    donChoHuy = null;
     if (result.status) {
-      showToast('✅ Đã hủy đơn hàng!');
+      showToast('✅ ' + result.message);
       await loadUserOrders(); // Reload lại
+      await taiThongBao();    // Làm mới chuông thông báo
     } else {
       showToast('❌ ' + result.message);
+      await loadUserOrders(); // Đồng bộ trạng thái mới nhất từ server
     }
   } catch (e) {
     showToast('❌ Lỗi kết nối!');
   }
+}
+
+// Phase 3: chuông thông báo persistent sau hủy đơn
+async function taiThongBao() {
+  const badge = document.getElementById('notifBadge');
+  const box   = document.getElementById('notifContent');
+  if (!currentUser) {
+    if (badge) badge.style.display = 'none';
+    return;
+  }
+  try {
+    const res    = await fetch('/api/thong-bao/cua-toi');
+    const result = await res.json();
+    const list   = result.status ? (result.data || []) : [];
+    const chuaDoc = list.filter(n => !n.DaDoc).length;
+    if (badge) {
+      badge.textContent   = chuaDoc > 99 ? '99+' : chuaDoc;
+      badge.style.display = chuaDoc > 0 ? '' : 'none';
+    }
+    if (box) {
+      box.innerHTML = list.length ? list.map(n => `
+        <div style="padding:8px 10px; border-bottom:1px solid var(--border); font-size:13px;
+                    ${n.DaDoc ? 'opacity:0.65;' : 'font-weight:600;'}">
+          <div>${n.NoiDung || ''}</div>
+          <div style="font-size:11px; color:var(--text-muted); font-weight:400;">
+            ${n.CreatedAt ? new Date(n.CreatedAt).toLocaleString('vi-VN') : ''}
+          </div>
+        </div>
+      `).join('') : `<div style="text-align:center; color:var(--text-muted); font-size:13px; padding:16px;">Chưa có thông báo nào</div>`;
+    }
+  } catch (e) {
+    console.error('Lỗi tải thông báo:', e);
+  }
+}
+
+async function moThongBao() {
+  document.getElementById('notifModal').classList.add('show');
+  await taiThongBao();
+}
+
+async function danhDauThongBaoDaDoc() {
+  try {
+    await fetch('/api/thong-bao/danh-dau-da-doc', {
+      method : 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body   : JSON.stringify({})
+    });
+    await taiThongBao();
+  } catch (e) {
+    showToast('❌ Lỗi kết nối!');
+  }
+}
+
+function markAllRead() {
+  return danhDauThongBaoDaDoc();
 }
 
 // Render preview 2 đơn gần nhất ngoài trang chủ
@@ -3743,6 +3694,7 @@ async function openEditSellerProduct(productId) {
     document.getElementById('prodStock').value = p.quantity || 0;
     document.getElementById('prodEmoji').value = p.emoji || '';
     document.getElementById('prodDesc').value = p.description || '';
+    khoaGiaTonKhoSellerMode(true); // Phase 4: Seller sua khong cham Gia/Ton kho
     await loadCategoriesForProductModal(p.category_name);
     document.getElementById('adminProductModal').classList.add('show');
   } catch (e) {
@@ -3976,15 +3928,20 @@ handleSaveProduct = async function (e) {
   if (!isSellerMode) return _handleSaveProductGoc(e);
   const productId = document.getElementById('editProductId').value;
   const isEdit = !!productId;
+  // Phase 4: Seller SUA chi gui field duoc phep (Ten/Danh muc/Emoji/Mo ta).
+  // Gia ban o tab Gia, Ton kho o tab Nhap — khong gui kem de tranh tamper.
+  // Them moi van gui price/quantity vi backend yeu cau dinh gia ban dau.
   const payload = {
     name: document.getElementById('prodName').value.trim(),
-    price: document.getElementById('prodPrice').value,
-    old_price: document.getElementById('prodOldPrice').value || null,
-
     emoji: document.getElementById('prodEmoji').value.trim(),
     description: document.getElementById('prodDesc').value.trim(),
     category_id: document.getElementById('prodCategory').value
   };
+  if (!isEdit) {
+    payload.price = document.getElementById('prodPrice').value;
+    payload.old_price = document.getElementById('prodOldPrice').value || null;
+    payload.quantity = document.getElementById('prodStock').value || 0;
+  }
   if (!payload.name) { showToast('⚠️ Tên sản phẩm không được trống!'); return; }
   try {
     const url = isEdit
@@ -4006,6 +3963,205 @@ handleSaveProduct = async function (e) {
     showToast('❌ Lỗi kết nối!');
   }
 };
+
+// ============================================================
+// PHASE 4 — PHIEU NHAP NHIEU DONG: autocomplete + xoa dong + doi ten =
+// selection moi + tao SP moi neu chua ton tai + gop dong trung (backend)
+// ============================================================
+let _phieuNhapSeq = 0;
+
+function themDongNhap() {
+  const wrap = document.getElementById('phieuNhapRows');
+  if (!wrap) return;
+  _phieuNhapSeq += 1;
+  const rowId = 'dongNhap-' + _phieuNhapSeq;
+  const div = document.createElement('div');
+  div.className = 'phieu-nhap-row';
+  div.id = rowId;
+  div.dataset.productId = '';
+  div.style.cssText = 'padding:10px; border:1px solid var(--border);'
+    + ' border-radius:8px; margin-bottom:8px; position:relative; background:var(--white);';
+  div.innerHTML =
+    '<div style="display:flex; gap:8px; flex-wrap:wrap; align-items:flex-end;">' +
+    '<div style="flex:2; min-width:200px; position:relative;">' +
+    '<label style="font-size:12px; color:var(--text-muted);">Sản phẩm (gõ để tìm)</label>' +
+    '<input type="text" class="pn-ten" placeholder="Gõ tên sản phẩm..." autocomplete="off"' +
+    ' style="width:100%; padding:8px 10px; border:1px solid var(--border); border-radius:8px;"' +
+    ' oninput="goiYSanPham(\'' + rowId + '\')">' +
+    '<div class="pn-goiy" style="display:none; position:absolute; z-index:50; left:0; right:0; top:100%;' +
+    ' background:var(--white); border:1px solid var(--border); border-radius:8px;' +
+    ' max-height:180px; overflow:auto; box-shadow:0 6px 18px rgba(0,0,0,0.12);"></div>' +
+    '</div>' +
+    '<div style="flex:0 0 110px;"><label style="font-size:12px; color:var(--text-muted);">Số lượng *</label>' +
+    '<input type="text" inputmode="numeric" class="pn-qty" placeholder="VD: 10"' +
+    ' style="width:100%; padding:8px 10px; border:1px solid var(--border); border-radius:8px;"></div>' +
+    '<div style="flex:0 0 140px;"><label style="font-size:12px; color:var(--text-muted);">Giá nhập/đơn vị</label>' +
+    '<input type="number" min="0" class="pn-cost" placeholder="VD: 50000"' +
+    ' style="width:100%; padding:8px 10px; border:1px solid var(--border); border-radius:8px;"></div>' +
+    '<div class="pn-ton" style="flex:0 0 130px; font-size:12px; color:var(--text-muted);">Tồn: —</div>' +
+    '<div style="display:flex; gap:6px;">' +
+    '<button type="button" class="admin-action-btn btn-edit pn-taomoi" style="display:none;"' +
+    ' onclick="taoSanPhamVaNhap(\'' + rowId + '\')">✨ Tạo mới</button>' +
+    '<button type="button" class="admin-action-btn btn-delete"' +
+    ' onclick="xoaDongNhap(\'' + rowId + '\')">🗑 Xóa</button>' +
+    '</div></div>';
+  wrap.appendChild(div);
+  div.querySelector('.pn-ten').focus();
+}
+
+function xoaDongNhap(rowId) {
+  const row = document.getElementById(rowId);
+  if (row) row.remove();
+}
+
+// Phase 4: doi ten sau khi da chon = selection moi → xoa product_id cu.
+async function goiYSanPham(rowId) {
+  const row = document.getElementById(rowId);
+  if (!row) return;
+  const inpTen = row.querySelector('.pn-ten');
+  const hop = row.querySelector('.pn-goiy');
+  row.dataset.productId = '';
+  row.querySelector('.pn-ton').textContent = 'Tồn: —';
+  capNhatNutTaoMoi(rowId);
+  const kw = inpTen.value.trim();
+  if (!kw) { hop.style.display = 'none'; hop.innerHTML = ''; return; }
+  clearTimeout(row._goiYTimer);
+  row._goiYTimer = setTimeout(async () => {
+    try {
+      const res = await fetch('/api/seller/san-pham/tim-kiem?q='
+        + encodeURIComponent(kw) + '&limit=8');
+      const rs = await res.json();
+      const ds = (rs.status && rs.data) ? rs.data : [];
+      if (!ds.length) {
+        hop.innerHTML = '<div style="padding:8px 10px; font-size:13px; color:var(--text-muted);">'
+          + 'Chưa có sản phẩm này — bấm “✨ Tạo mới” để tạo rồi nhập kho.</div>';
+      } else {
+        hop.innerHTML = '';
+        ds.forEach((sp) => {
+          const item = document.createElement('div');
+          item.style.cssText = 'padding:8px 10px; font-size:13px; cursor:pointer;'
+            + ' border-bottom:1px solid var(--border);';
+          item.textContent = (sp.emoji ? sp.emoji + ' ' : '') + sp.name
+            + ' (Tồn: ' + (sp.quantity || 0) + ')';
+          item.onmouseenter = () => { item.style.background = 'var(--bg)'; };
+          item.onmouseleave = () => { item.style.background = ''; };
+          item.onclick = () => chonSanPhamNhap(rowId, sp);
+          hop.appendChild(item);
+        });
+      }
+      hop.style.display = 'block';
+    } catch (e) { /* giu dropdown an khi mat mang */ }
+  }, 250);
+}
+
+function chonSanPhamNhap(rowId, sp) {
+  const row = document.getElementById(rowId);
+  if (!row || !sp) return;
+  row.dataset.productId = sp.id;
+  row.querySelector('.pn-ten').value = sp.name;
+  row.querySelector('.pn-ton').textContent = 'Tồn: ' + (sp.quantity || 0)
+    + ' → mới: +' + '(nhập)';
+  row.querySelector('.pn-goiy').style.display = 'none';
+  capNhatNutTaoMoi(rowId);
+}
+
+function capNhatNutTaoMoi(rowId) {
+  const row = document.getElementById(rowId);
+  if (!row) return;
+  const daChon = !!row.dataset.productId;
+  const coTen = row.querySelector('.pn-ten').value.trim().length > 0;
+  row.querySelector('.pn-taomoi').style.display = (!daChon && coTen) ? '' : 'none';
+}
+
+// Phase 4: tao SP moi tu phieu nhap (ten chua ton tai, chong trung backend).
+async function taoSanPhamVaNhap(rowId) {
+  const row = document.getElementById(rowId);
+  if (!row) return;
+  const ten = row.querySelector('.pn-ten').value.trim();
+  const slText = row.querySelector('.pn-qty').value.trim();
+  const giaNhap = row.querySelector('.pn-cost').value;
+  if (!ten) { showToast('⚠️ Nhập tên sản phẩm mới!'); return; }
+  if (!/^\d+$/.test(slText) || Number(slText) <= 0) {
+    showToast('⚠️ Số lượng phải là số nguyên lớn hơn 0!');
+    return;
+  }
+  try {
+    const res = await fetch('/api/seller/san-pham/tao-va-nhap', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: ten, quantity: Number(slText), gia_nhap: giaNhap || 0 })
+    });
+    const rs = await res.json();
+    showToast((rs.status ? '✅ ' : '❌ ') + (rs.message || ''));
+    if (rs.status) {
+      row.remove();
+      themDongNhap();
+      await renderSellerNhapHang();
+      await renderLichSuNhapHang();
+      if (typeof renderSellerProducts === 'function') renderSellerProducts();
+    }
+  } catch (e) {
+    showToast('❌ Lỗi kết nối!');
+  }
+}
+
+// Phase 4: submit phieu nhieu dong — backend gop trung + tu tinh ton moi.
+async function submitPhieuNhap() {
+  const msg = document.getElementById('phieuNhapMsg');
+  const rows = Array.from(document.querySelectorAll('.phieu-nhap-row'));
+  const items = [];
+  for (const row of rows) {
+    const ten = row.querySelector('.pn-ten').value.trim();
+    const slText = row.querySelector('.pn-qty').value.trim();
+    if (!ten && !slText) continue; // bo qua dong trang
+    if (!/^\d+$/.test(slText) || Number(slText) <= 0) {
+      if (msg) msg.textContent = '⚠️ Dòng "' + (ten || '?') + '": số lượng phải là số nguyên lớn hơn 0!';
+      showToast('⚠️ Số lượng phải là số nguyên lớn hơn 0!');
+      return;
+    }
+    const dong = { quantity: Number(slText) };
+    if (row.dataset.productId) dong.product_id = Number(row.dataset.productId);
+    else if (ten) dong.product_name = ten;
+    else {
+      if (msg) msg.textContent = '⚠️ Mỗi dòng phải có sản phẩm (mã hoặc tên)!';
+      return;
+    }
+    const cost = row.querySelector('.pn-cost').value;
+    if (String(cost).trim() !== '') dong.unit_cost = Number(cost);
+    items.push(dong);
+  }
+  if (!items.length) {
+    if (msg) msg.textContent = '⚠️ Phiếu nhập phải có ít nhất một sản phẩm!';
+    showToast('⚠️ Phiếu nhập phải có ít nhất một sản phẩm!');
+    return;
+  }
+  try {
+    if (msg) msg.textContent = '⏳ Đang nhập hàng...';
+    const res = await fetch('/api/seller/nhap-hang', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        items,
+        ghi_chu: document.getElementById('phieuNhapGhiChu').value.trim() || null
+      })
+    });
+    const rs = await res.json();
+    if (msg) msg.textContent = (rs.status ? '✅ ' : '❌ ') + (rs.message || '');
+    showToast((rs.status ? '✅ ' : '❌ ') + (rs.message || ''));
+    if (rs.status) {
+      document.getElementById('phieuNhapRows').innerHTML = '';
+      document.getElementById('phieuNhapGhiChu').value = '';
+      themDongNhap();
+      await renderSellerNhapHang();
+      await renderLichSuNhapHang();
+      if (typeof renderSellerProducts === 'function') renderSellerProducts();
+      if (typeof renderGiaBan === 'function') renderGiaBan();
+    }
+  } catch (e) {
+    if (msg) msg.textContent = '❌ Lỗi kết nối!';
+    showToast('❌ Lỗi kết nối!');
+  }
+}
 
 // ============================================================
 // 015 FR-026/027/028 — DON HANG SELLER dung /api/seller/don-hang (co gate)
@@ -4125,7 +4281,8 @@ renderSellerOrders = async function () {
         btn.onclick = () => sellerCapNhatDon(o.OrderId, tiep);
         tdCn.appendChild(btn);
       }
-      if (o.Status === 'Pending' || o.Status === 'Confirmed' || o.Status === 'Shipping') {
+      // Phase 3: seller chỉ được hủy đơn đang Chờ duyệt (backend từ chối còn lại)
+      if (o.Status === 'Pending') {
         const btnHuy = document.createElement('button');
         btnHuy.textContent = '✖ Hủy';
         btnHuy.onclick = () => sellerCapNhatDon(o.OrderId, 'Cancelled');
@@ -4527,35 +4684,59 @@ async function renderGiaBan() {
       tbody.appendChild(tr);
       return;
     }
+    // Phase 4: mo hinh gia goc + gia KM + checkbox giam gia.
+    // Tat checkbox = ban dung gia goc (khong active KM).
     result.data.forEach((p) => {
+      const dangGiam = p.old_price != null && Number(p.old_price) > Number(p.price || 0);
+      const giaGocHT = dangGiam ? Number(p.old_price) : Number(p.price || 0);
       const tr = document.createElement('tr');
       const tdTen = document.createElement('td');
       const bTen = document.createElement('div');
       bTen.style.fontWeight = '600';
-      bTen.textContent = p.name || '';
+      bTen.textContent = (p.emoji ? p.emoji + ' ' : '') + (p.name || '');
       const dCat = document.createElement('div');
       dCat.style.cssText = 'font-size:11px;color:var(--text-muted);';
-      dCat.textContent = p.category_name || '';
+      let moTaGia = 'Bán: ' + Number(p.price || 0).toLocaleString('vi-VN') + 'đ';
+      if (dangGiam) {
+        const pct = Math.round((1 - Number(p.price) / Number(p.old_price)) * 100);
+        moTaGia = 'KM: ' + Number(p.price).toLocaleString('vi-VN') + 'đ'
+          + ' (gốc ' + Number(p.old_price).toLocaleString('vi-VN') + 'đ, -' + pct + '%)';
+      }
+      dCat.textContent = (p.category_name || '') + ' • ' + moTaGia
+        + ' • Tồn: ' + (p.quantity || 0);
       tdTen.appendChild(bTen);
       tdTen.appendChild(dCat);
       tr.appendChild(tdTen);
-      const tdGiaCu = document.createElement('td');
-      tdGiaCu.style.cssText = 'color:var(--red);font-weight:700;';
-      tdGiaCu.textContent = Number(p.price || 0).toLocaleString('vi-VN') + 'đ';
-      tr.appendChild(tdGiaCu);
-      const tdGiaMoi = document.createElement('td');
-      const inp = document.createElement('input');
-      inp.type = 'number';
-      inp.min = '1';
-      inp.id = 'giaMoi-' + p.id;
-      inp.value = p.price || '';
-      inp.style.cssText = 'width:140px; padding:6px 8px; border:1px solid var(--border); border-radius:6px;';
-      tdGiaMoi.appendChild(inp);
-      tr.appendChild(tdGiaMoi);
-      const tdSl = document.createElement('td');
-      tdSl.style.textAlign = 'center';
-      tdSl.textContent = p.quantity || 0;
-      tr.appendChild(tdSl);
+      const tdGoc = document.createElement('td');
+      const inpGoc = document.createElement('input');
+      inpGoc.type = 'number';
+      inpGoc.min = '1';
+      inpGoc.id = 'giaGoc-' + p.id;
+      inpGoc.value = giaGocHT || '';
+      inpGoc.style.cssText = 'width:130px; padding:6px 8px; border:1px solid var(--border); border-radius:6px;';
+      tdGoc.appendChild(inpGoc);
+      tr.appendChild(tdGoc);
+      const tdKM = document.createElement('td');
+      const inpKM = document.createElement('input');
+      inpKM.type = 'number';
+      inpKM.min = '0';
+      inpKM.id = 'giaKM-' + p.id;
+      inpKM.value = dangGiam ? p.price : '';
+      inpKM.disabled = !dangGiam;
+      inpKM.placeholder = 'Nhập giá KM...';
+      inpKM.style.cssText = 'width:130px; padding:6px 8px; border:1px solid var(--border); border-radius:6px;';
+      tdKM.appendChild(inpKM);
+      tr.appendChild(tdKM);
+      const tdChk = document.createElement('td');
+      tdChk.style.textAlign = 'center';
+      const chk = document.createElement('input');
+      chk.type = 'checkbox';
+      chk.id = 'chkGiam-' + p.id;
+      chk.checked = dangGiam;
+      chk.title = 'Tick để kích hoạt giảm giá';
+      chk.onchange = () => toggleGiaKM(p.id);
+      tdChk.appendChild(chk);
+      tr.appendChild(tdChk);
       const tdCn = document.createElement('td');
       const btn = document.createElement('button');
       btn.className = 'admin-action-btn btn-edit';
@@ -4570,22 +4751,57 @@ async function renderGiaBan() {
   }
 }
 
+// Phase 4: bat/tat o Gia KM theo checkbox Giam gia.
+function toggleGiaKM(productId) {
+  const km = document.getElementById('giaKM-' + productId);
+  const chk = document.getElementById('chkGiam-' + productId);
+  if (!km || !chk) return;
+  km.disabled = !chk.checked;
+  if (!chk.checked) km.value = '';
+}
+
 async function sellerDoiGia(productId) {
-  const inp = document.getElementById('giaMoi-' + productId);
-  if (!inp) return;
-  const giaMoi = Number(inp.value);
-  if (!giaMoi || giaMoi <= 0) {
-    showToast('⚠️ Giá bán mới phải lớn hơn 0!');
+  const elGoc = document.getElementById('giaGoc-' + productId);
+  const elKM = document.getElementById('giaKM-' + productId);
+  const elChk = document.getElementById('chkGiam-' + productId);
+  if (!elGoc || !elKM || !elChk) return;
+  const giam = elChk.checked;
+  const goc = Number(elGoc.value);
+  // Validation UX (backend van la validator cuoi — khong tin client).
+  if (!Number.isFinite(goc) || goc <= 0) {
+    showToast('⚠️ Giá gốc phải lớn hơn 0!');
     return;
+  }
+  let payload;
+  if (giam) {
+    const kmText = String(elKM.value).trim();
+    if (kmText === '') { showToast('⚠️ Đã bật giảm giá thì phải nhập giá khuyến mãi!'); return; }
+    const km = Number(kmText);
+    if (!Number.isFinite(km) || km < 0) {
+      showToast('⚠️ Giá khuyến mãi phải lớn hơn hoặc bằng 0!');
+      return;
+    }
+    if (!(km < goc)) {
+      showToast('⚠️ Giá khuyến mãi phải nhỏ hơn giá gốc!');
+      return;
+    }
+    payload = { gia_goc: goc, gia_khuyen_mai: km, giam_gia: true };
+  } else {
+    // Tat giam gia → ban dung gia goc, khong active KM.
+    payload = { gia_goc: goc, giam_gia: false };
   }
   try {
     const res = await fetch('/api/seller/san-pham/' + productId + '/gia', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ gia_moi: giaMoi })
+      body: JSON.stringify(payload)
     });
     const result = await res.json();
-    showToast((result.status ? '✅ ' : '❌ ') + (result.message || ''));
+    let thongBao = (result.status ? '✅ ' : '❌ ') + (result.message || '');
+    if (result.status && result.data && result.data.discount_percent != null) {
+      thongBao += ' (-' + result.data.discount_percent + '%)';
+    }
+    showToast(thongBao);
     if (result.status) renderGiaBan();
   } catch (e) {
     showToast('❌ Lỗi kết nối!');

@@ -516,14 +516,22 @@ class MockSanPhamDao:
     """Mock SanPhamDao cho unit test BUS seller (ownership + nhap/giá)."""
 
     def __init__(self, store_cua_sp=None, ton_tai_category=True,
-                 san_pham=None, ket_qua_ghi=True, ton_kho_moi=0):
+                 san_pham=None, ket_qua_ghi=True, ton_kho_moi=0,
+                 tim_kiem_kq=None, trung_ten=False, sp_theo_ten=None):
         self.store_cua_sp = store_cua_sp or {}
         self.ton_tai_category = ton_tai_category
         self.san_pham = san_pham
         self.ket_qua_ghi = ket_qua_ghi
         self.ton_kho_moi = ton_kho_moi
+        # Phase 4: cau hinh autocomplete / trung ten / tim theo ten.
+        self.tim_kiem_kq = tim_kiem_kq
+        self.trung_ten = trung_ten
+        self.sp_theo_ten = sp_theo_ten or {}
         self.goi_nhap_hang = []
+        self.goi_nhap_bulk = []
+        self.goi_tao_va_nhap = []
         self.goi_doi_gia = []
+        self.goi_cap_nhat_gia = []
 
     def lay_store_id(self, product_id):
         return self.store_cua_sp.get(product_id)
@@ -552,6 +560,43 @@ class MockSanPhamDao:
 
     def doi_gia(self, product_id, store_id, gia_moi):
         self.goi_doi_gia.append((product_id, store_id, gia_moi))
+        return self.ket_qua_ghi
+
+    # ── Phase 4: autocomplete / trung ten / bulk / tao-va-nhap / gia ──
+    def tim_kiem_theo_store(self, store_id, tu_khoa, limit=10):
+        if self.tim_kiem_kq is not None:
+            return list(self.tim_kiem_kq)
+        return []
+
+    def kiem_tra_trung_ten(self, store_id, ten, tru_product_id=None):
+        if isinstance(self.trung_ten, (set, list, tuple)):
+            return str(ten or "").strip().lower() in {
+                str(t).strip().lower() for t in self.trung_ten}
+        return bool(self.trung_ten)
+
+    def tim_theo_ten_trong_store(self, store_id, ten):
+        return self.sp_theo_ten.get(str(ten or "").strip().lower())
+
+    def nhap_hang_bulk(self, store_id, nguoi_id, items, ghi_chu=None):
+        self.goi_nhap_bulk.append((store_id, nguoi_id, list(items)))
+        if not self.ket_qua_ghi:
+            return None
+        return {"receipt_id": 1,
+                "items": [{"product_id": it["product_id"],
+                             "quantity": it["quantity"],
+                             "stock_moi": self.ton_kho_moi}
+                            for it in items]}
+
+    def tao_va_nhap(self, store_id, nguoi_id, ten, so_luong, gia_ban=0,
+                    mo_ta=None, category_id=1, emoji=None, image_url=None,
+                    gia_nhap=None, ghi_chu=None):
+        self.goi_tao_va_nhap.append((store_id, ten, so_luong))
+        if not self.ket_qua_ghi:
+            return None
+        return {"product_id": 99, "quantity": so_luong, "receipt_id": 1}
+
+    def cap_nhat_gia(self, product_id, store_id, gia_ban, gia_goc=None):
+        self.goi_cap_nhat_gia.append((product_id, store_id, gia_ban, gia_goc))
         return self.ket_qua_ghi
 
 
@@ -673,6 +718,79 @@ class FakeSanPhamStore:
 
     def lay_theo_store_ca_an_hien(self, store_id):
         return self.lay_theo_store(store_id)
+
+    def lay_lich_su_nhap_hang(self, store_id, top=50):
+        return []
+
+    # ── Phase 4: autocomplete / trung ten / bulk / tao-va-nhap / gia ──
+    def tim_kiem_theo_store(self, store_id, tu_khoa, limit=10):
+        kw = str(tu_khoa or "").strip().lower()
+        try:
+            limit = max(1, min(int(limit or 10), 20))
+        except (TypeError, ValueError):
+            limit = 10
+        ket_qua = [dict(v) for v in self.san_pham.values()
+                   if v.get("store_id") == store_id
+                   and kw in str(v.get("name") or "").lower()]
+        ket_qua.sort(key=lambda sp: sp.get("id", 0), reverse=True)
+        return ket_qua[:limit]
+
+    def kiem_tra_trung_ten(self, store_id, ten, tru_product_id=None):
+        chuan = str(ten or "").strip().lower()
+        return any(v.get("store_id") == store_id
+                   and str(v.get("name") or "").strip().lower() == chuan
+                   and v.get("id") != tru_product_id
+                   for v in self.san_pham.values())
+
+    def tim_theo_ten_trong_store(self, store_id, ten):
+        chuan = str(ten or "").strip().lower()
+        for v in self.san_pham.values():
+            if v.get("store_id") == store_id \
+                    and str(v.get("name") or "").strip().lower() == chuan:
+                return dict(v)
+        return None
+
+    def nhap_hang_bulk(self, store_id, nguoi_id, items, ghi_chu=None):
+        for it in items:
+            cur = self.san_pham.get(int(it["product_id"]))
+            if not cur or cur.get("store_id") != store_id:
+                return None
+        ket_qua_items = []
+        for it in items:
+            cur = self.san_pham[int(it["product_id"])]
+            cur["quantity"] = int(cur.get("quantity") or 0) + int(it["quantity"])
+            ket_qua_items.append({"product_id": int(it["product_id"]),
+                                  "quantity": int(it["quantity"]),
+                                  "stock_moi": cur["quantity"]})
+        rid = self.next_id
+        self.next_id += 1
+        return {"receipt_id": rid, "items": ket_qua_items}
+
+    def tao_va_nhap(self, store_id, nguoi_id, ten, so_luong, gia_ban=0,
+                    mo_ta=None, category_id=1, emoji=None, image_url=None,
+                    gia_nhap=None, ghi_chu=None):
+        if self.kiem_tra_trung_ten(store_id, ten):
+            return None
+        nid = self.next_id
+        self.next_id += 1
+        self.san_pham[nid] = {
+            "id": nid, "name": str(ten).strip(), "price": float(gia_ban or 0),
+            "old_price": None, "quantity": int(so_luong),
+            "store_id": int(store_id), "category_id": int(category_id or 1),
+            "is_active": True, "emoji": emoji or "📦",
+        }
+        rid = self.next_id
+        self.next_id += 1
+        return {"product_id": nid, "quantity": int(so_luong),
+                "receipt_id": rid}
+
+    def cap_nhat_gia(self, product_id, store_id, gia_ban, gia_goc=None):
+        cur = self.san_pham.get(int(product_id))
+        if not cur or cur.get("store_id") != store_id:
+            return False
+        cur["price"] = float(gia_ban)
+        cur["old_price"] = float(gia_goc) if gia_goc is not None else None
+        return True
 
 
 class FakeDonHangSellerStore:

@@ -25,6 +25,12 @@ san_pham_bus   = SanPhamBus()
 cart_bus = GioHangBus()
 don_hang_bus = DonHangBus()
 
+def _json_body():
+    """Đọc body JSON an toàn: trả dict, hoặc None nếu body không phải JSON."""
+    data = request.get_json(silent=True)
+    return data if isinstance(data, dict) else None
+
+
 # ==========================================
 # 0. TRANG CHỦ
 # ==========================================
@@ -39,7 +45,11 @@ def home():
 @app.route('/api/dang-ky', methods=['POST'])
 def register_api():
     """Đăng ký tài khoản khách hàng mới."""
-    data = request.json
+    data = _json_body()
+    if data is None:
+        return jsonify({"status": False,
+                        "message": "Dữ liệu gửi lên không hợp lệ!",
+                        "data": None}), 400
     return jsonify(user_bus.dang_ky_khach_hang(
         ten_user   = data.get('ten_user'),
         dia_chi    = data.get('dia_chi'),
@@ -54,7 +64,11 @@ def register_api():
 @app.route('/api/dang-nhap', methods=['POST'])
 def login_api():
     """Đăng nhập, lưu phiên khi thành công."""
-    data = request.json
+    data = _json_body()
+    if data is None:
+        return jsonify({"status": False,
+                        "message": "Dữ liệu gửi lên không hợp lệ!",
+                        "data": None}), 400
     ket_qua = user_bus.dang_nhap(
         tendangnhap= data.get('tendangnhap'),
         mat_khau   = data.get('mat_khau')
@@ -122,7 +136,11 @@ def cap_nhat_profile():
     gate = user_bus.kiem_tra_nguoi_dung_hoat_dong(session.get('user_id'))
     if not gate.get('status'):
         return jsonify(gate), 403
-    data = request.json
+    data = _json_body()
+    if data is None:
+        return jsonify({"status": False,
+                        "message": "Dữ liệu gửi lên không hợp lệ!",
+                        "data": None}), 400
     ket_qua = user_bus.cap_nhat_thong_tin_cua_toi(
         session.get('user_id'),
         session.get('user_id'),
@@ -144,7 +162,11 @@ def doi_mat_khau():
     gate = user_bus.kiem_tra_nguoi_dung_hoat_dong(session.get('user_id'))
     if not gate.get('status'):
         return jsonify(gate), 403
-    data = request.json or {}
+    data = _json_body()
+    if data is None:
+        return jsonify({"status": False,
+                        "message": "Dữ liệu gửi lên không hợp lệ!",
+                        "data": None}), 400
     ma_user_body = data.get('ma_user')
     if ma_user_body not in (None, "", session.get('user_id')):
         try:
@@ -264,10 +286,13 @@ def get_products():
     """Lấy danh sách sản phẩm, hỗ trợ tìm kiếm theo từ khóa/danh mục."""
     tu_khoa = request.args.get('q', '', type=str)
     category_id = request.args.get('category_id', None, type=str)
-    if tu_khoa or category_id:
+    min_price = request.args.get('min_price', None, type=str)
+    max_price = request.args.get('max_price', None, type=str)
+    if tu_khoa or category_id or min_price or max_price:
         if category_id == "":
             category_id = None
-        return jsonify(san_pham_bus.tim_kiem_san_pham(tu_khoa or "", category_id))
+        return jsonify(san_pham_bus.tim_kiem_san_pham(
+            tu_khoa or "", category_id or None, min_price, max_price))
     return jsonify(san_pham_bus.lay_tat_ca())
 
 
@@ -299,7 +324,11 @@ def api_them_vao_gio():
     gate = user_bus.kiem_tra_nguoi_dung_hoat_dong(session.get('user_id'))
     if not gate.get('status'):
         return jsonify(gate), 403
-    data = request.json
+    data = _json_body()
+    if data is None:
+        return jsonify({"status": False,
+                        "message": "Dữ liệu gửi lên không hợp lệ!",
+                        "data": None}), 400
     result = cart_bus.xu_ly_them_vao_gio(
         session.get('user_id'),
         data.get('ProductId'),
@@ -341,26 +370,85 @@ def api_dat_hang():
     gate = user_bus.kiem_tra_nguoi_dung_hoat_dong(session.get('user_id'))
     if not gate.get('status'):
         return jsonify(gate), 403
-    data = request.json
+    data = _json_body()
+    if data is None:
+        return jsonify({"status": False,
+                        "message": "Dữ liệu gửi lên không hợp lệ!",
+                        "data": None}), 400
+
+    def _so(value, mac_dinh=0.0):
+        """Ép số an toàn; giá trị không phải số trả None để reject input."""
+        if value in (None, ""):
+            return float(mac_dinh)
+        try:
+            so = float(str(value).strip())
+        except (TypeError, ValueError):
+            return None
+        if so != so or so in (float("inf"), float("-inf")):
+            return None
+        return so
+
+    def _nguyen(value, mac_dinh=0):
+        """Ép số nguyên an toàn; giá trị không hợp lệ trả None."""
+        if value in (None, ""):
+            return mac_dinh
+        try:
+            so = float(str(value).strip())
+        except (TypeError, ValueError):
+            return None
+        if so != so or so in (float("inf"), float("-inf")) or not so.is_integer():
+            return None
+        return int(so)
+
+    subtotal = _so(data.get('SubTotal'), 0)
+    shipping_fee = _so(data.get('ShippingFee'), 25000)
+    discount = _so(data.get('Discount'), 0)
+    total_amount = _so(data.get('TotalAmount'), 0)
+    if None in (subtotal, shipping_fee, discount, total_amount):
+        return jsonify({"status": False,
+                        "message": "Thông tin tiền của đơn hàng không hợp lệ!",
+                        "data": None}), 200
+    if subtotal < 0 or shipping_fee < 0 or discount < 0 or total_amount < 0:
+        return jsonify({"status": False,
+                        "message": "Thông tin tiền của đơn hàng không hợp lệ!",
+                        "data": None}), 200
 
     don_hang_moi = DonHang(
         UserId        = session.get('user_id'),
-        ReceiverName  = str(data.get('ReceiverName', '')),
-        ReceiverPhone = str(data.get('ReceiverPhone', '')),
-        ShippingAddress = str(data.get('ShippingAddress', '')),
-        PaymentMethod = str(data.get('PaymentMethod', 'COD')),
-        SubTotal      = float(data.get('SubTotal', 0)),
-        ShippingFee   = float(data.get('ShippingFee', 25000)),
-        DiscountAmount= float(data.get('Discount', 0)),
-        TotalAmount   = float(data.get('TotalAmount', 0))
+        ReceiverName  = str(data.get('ReceiverName') or '').strip(),
+        ReceiverPhone = str(data.get('ReceiverPhone') or '').strip(),
+        ShippingAddress = str(data.get('ShippingAddress') or '').strip(),
+        PaymentMethod = str(data.get('PaymentMethod') or 'COD').strip(),
+        SubTotal      = subtotal,
+        ShippingFee   = shipping_fee,
+        DiscountAmount= discount,
+        TotalAmount   = total_amount
     )
 
-    for item in data.get('Items', []):
-        qty   = int(item.get('Quantity')  or 0)
-        price = float(item.get('UnitPrice') or 0)
+    items = data.get('Items')
+    if not isinstance(items, list):
+        items = []
+    for item in items:
+        if not isinstance(item, dict):
+            return jsonify({"status": False,
+                            "message": "Thông tin đơn hàng không hợp lệ!",
+                            "data": None}), 200
+        qty = _nguyen(item.get('Quantity'), 0)
+        if qty is None or qty <= 0:
+            return jsonify({"status": False,
+                            "message": "Số lượng sản phẩm không hợp lệ!",
+                            "data": None}), 200
+        price = _so(item.get('UnitPrice'), 0)
+        if price < 0:
+            return jsonify({"status": False,
+                            "message": "Đơn giá sản phẩm không hợp lệ!",
+                            "data": None}), 200
+        ma_sp = _nguyen(item.get('ProductId'), 0)
+        if ma_sp is None:
+            ma_sp = 0
         don_hang_moi.Items.append(OrderItem(
-            ProductId   = int(item.get('ProductId')    or 0),
-            ProductName = str(item.get('ProductName')  or f"Sản phẩm #{item.get('ProductId')}"),
+            ProductId   = int(ma_sp),
+            ProductName = str(item.get('ProductName')  or f"Sản phẩm #{ma_sp}"),
             Emoji       = str(item.get('Emoji')        or '📦'),
             Quantity    = qty,
             UnitPrice   = price,
@@ -407,7 +495,11 @@ def api_xoa_khoi_gio():
     gate = user_bus.kiem_tra_nguoi_dung_hoat_dong(session.get('user_id'))
     if not gate.get('status'):
         return jsonify(gate), 403
-    data = request.json
+    data = _json_body()
+    if data is None:
+        return jsonify({"status": False,
+                        "message": "Dữ liệu gửi lên không hợp lệ!",
+                        "data": None}), 400
     return jsonify(cart_bus.xoa_khoi_gio(
         session.get('user_id'),
         data.get('ProductId')
@@ -419,7 +511,11 @@ def api_cap_nhat_so_luong():
     gate = user_bus.kiem_tra_nguoi_dung_hoat_dong(session.get('user_id'))
     if not gate.get('status'):
         return jsonify(gate), 403
-    data = request.json
+    data = _json_body()
+    if data is None:
+        return jsonify({"status": False,
+                        "message": "Dữ liệu gửi lên không hợp lệ!",
+                        "data": None}), 400
     return jsonify(cart_bus.cap_nhat_so_luong(
         session.get('user_id'),
         data.get('ProductId'),

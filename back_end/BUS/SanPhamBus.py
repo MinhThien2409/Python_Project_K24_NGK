@@ -1,5 +1,6 @@
 from back_end.DAO.SanPhamDao import SanPhamDao
 from back_end.Model.SanPham import SanPham
+import inspect
 
 # ─── Hằng số sản phẩm (T048: gom magic value đầu file) ───
 SO_LUONG_BAN_CHAY_MAC_DINH = 10
@@ -40,18 +41,88 @@ class SanPhamBus:
         data = self.dao.lay_ban_chay(top)
         return {"status": True, "data": data}
 
-    def tim_kiem_san_pham(self, tu_khoa, category_id=None):
-        """Tìm sản phẩm theo từ khóa, chỉ lấy hàng đang kinh doanh."""
+    def _doc_moc_gia(self, gia, ten_truong):
+        """Chuẩn hóa một mốc giá lọc; trả (giá_float, lỗi). Rỗng/None hợp lệ."""
+        if gia is None:
+            return None, None
+        if isinstance(gia, str):
+            gia = gia.strip()
+            if gia == "":
+                return None, None
+        if isinstance(gia, bool):
+            return None, {"status": False, "message": f"{ten_truong} không hợp lệ!"}
+        try:
+            so = float(gia)
+        except (TypeError, ValueError):
+            return None, {"status": False, "message": f"{ten_truong} không hợp lệ!"}
+        if so != so or so in (float("inf"), float("-inf")):
+            return None, {"status": False, "message": f"{ten_truong} không hợp lệ!"}
+        if so < 0:
+            return None, {"status": False, "message": f"{ten_truong} không được âm!"}
+        return so, None
+
+    def _dao_loc_gia_duoc(self):
+        """Kiểm tra DAO tim_kiem có nhận min_price/max_price không."""
+        try:
+            tham_so = inspect.signature(self.dao.tim_kiem).parameters
+        except (TypeError, ValueError):
+            return False
+        return "min_price" in tham_so or "max_price" in tham_so
+
+    def _loc_theo_gia(self, danh_sach, gia_min, gia_max):
+        """Lọc danh sách theo khoảng giá ở tầng BUS (authoritative)."""
+        if gia_min is None and gia_max is None:
+            return danh_sach
+        ket_qua = []
+        for sp in danh_sach or []:
+            gia = sp.get("price")
+            try:
+                gia = float(gia) if gia is not None else None
+            except (TypeError, ValueError):
+                gia = None
+            if gia is None:
+                continue
+            if gia_min is not None and gia < gia_min:
+                continue
+            if gia_max is not None and gia > gia_max:
+                continue
+            ket_qua.append(sp)
+        return ket_qua
+
+    def tim_kiem_san_pham(self, tu_khoa, category_id=None,
+                          min_price=None, max_price=None):
+        """Tìm sản phẩm theo từ khóa/danh mục/khoảng giá, chỉ hàng đang bán."""
         kw = (tu_khoa or "").strip()
         cat = category_id
         if isinstance(cat, str) and not cat.strip():
             cat = None
+        if cat not in (None, ""):
+            try:
+                cat = int(str(cat).strip())
+            except (TypeError, ValueError):
+                return {"status": False,
+                        "message": "Danh mục không hợp lệ!"}
+        gia_min, loi = self._doc_moc_gia(min_price, "Giá tối thiểu")
+        if loi:
+            return loi
+        gia_max, loi = self._doc_moc_gia(max_price, "Giá tối đa")
+        if loi:
+            return loi
+        if gia_min is not None and gia_max is not None and gia_min > gia_max:
+            return {"status": False,
+                    "message": "Giá tối thiểu không được lớn hơn giá tối đa!"}
         if not kw and cat in (None, ""):
             tat_ca = self.dao.lay_tat_ca()
-            return {"status": True, "data": [sp for sp in tat_ca
-                                             if sp.get("is_active", True)]}
+            kinh_doanh = [sp for sp in tat_ca if sp.get("is_active", True)]
+            return {"status": True,
+                    "data": self._loc_theo_gia(kinh_doanh, gia_min, gia_max)}
         if hasattr(self.dao, "tim_kiem"):
-            return {"status": True, "data": self.dao.tim_kiem(kw, cat)}
+            if self._dao_loc_gia_duoc():
+                data = self.dao.tim_kiem(kw, cat, gia_min, gia_max)
+            else:
+                data = self._loc_theo_gia(
+                    self.dao.tim_kiem(kw, cat), gia_min, gia_max)
+            return {"status": True, "data": data}
         tat_ca = self.dao.lay_tat_ca()
         kw_thuong = kw.lower()
         ket_qua = []
@@ -63,7 +134,8 @@ class SanPhamBus:
             if kw_thuong and kw_thuong not in (sp.get("name") or "").lower():
                 continue
             ket_qua.append(sp)
-        return {"status": True, "data": ket_qua}
+        return {"status": True,
+                "data": self._loc_theo_gia(ket_qua, gia_min, gia_max)}
 
     # ─── THÊM SẢN PHẨM ──────────────────────────────────────────────────────
 

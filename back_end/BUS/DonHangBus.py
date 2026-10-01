@@ -68,11 +68,46 @@ class DonHangBus:
         if not re.match(SDT_REGEX, str(dh.ReceiverPhone or "").strip()):
             return {"status": False, "message": "Số điện thoại người nhận không hợp lệ!"}
 
+        # Phase 1 (Q6): giới hạn độ dài tên/địa chỉ người nhận (authoritative)
+        if len(str(dh.ReceiverName or "").strip()) > 100:
+            return {"status": False,
+                    "message": "Tên người nhận quá dài, tối đa 100 ký tự!"}
+        if len(str(dh.ShippingAddress or "").strip()) > 500:
+            return {"status": False,
+                    "message": "Địa chỉ giao hàng quá dài, tối đa 500 ký tự!"}
+
         if str(dh.PaymentMethod or "COD") not in PHUONG_THUC_HOP_LE:
             return {"status": False, "message": "Phương thức thanh toán không hợp lệ!"}
 
         if not dh.Items or len(dh.Items) == 0:
             return {"status": False, "message": "Giỏ hàng trống, vui lòng thêm sản phẩm!"}
+
+        # Phase 1: kiểm tra kiểu/giá trị từng dòng hàng (authoritative)
+        for item in dh.Items:
+            try:
+                so_luong = float(item.Quantity)
+            except (TypeError, ValueError):
+                return {"status": False,
+                        "message": "Số lượng sản phẩm không hợp lệ!"}
+            if not so_luong.is_integer() or so_luong <= 0:
+                return {"status": False,
+                        "message": "Số lượng sản phẩm không hợp lệ!"}
+            if item.ProductId in (None, ""):
+                return {"status": False,
+                        "message": "Thông tin sản phẩm không hợp lệ!"}
+            try:
+                int(item.ProductId)
+            except (TypeError, ValueError):
+                return {"status": False,
+                        "message": "Thông tin sản phẩm không hợp lệ!"}
+            try:
+                gia = float(item.UnitPrice or 0)
+            except (TypeError, ValueError):
+                return {"status": False,
+                        "message": "Đơn giá sản phẩm không hợp lệ!"}
+            if gia < 0:
+                return {"status": False,
+                        "message": "Đơn giá sản phẩm không hợp lệ!"}
 
         if dh.TotalAmount <= 0:
             return {"status": False, "message": "Tổng tiền đơn hàng không hợp lệ!"}

@@ -515,7 +515,8 @@
     <div class="profile-tab-content" id="pcontent-security">
       <form onsubmit="handleChangePassword(event)">
         <div class="form-group"><label>Mật khẩu cũ</label><input type="password" id="pwCu" required></div>
-        <div class="form-group"><label>Mật khẩu mới (từ 6 ký tự)</label><input type="password" id="pwMoi" required></div>
+        <div class="form-group"><label>Mật khẩu mới (từ 6 ký tự)</label><input type="password" id="pwMoi" required minlength="6"></div>
+        <div class="form-group"><label>Xác nhận mật khẩu mới</label><input type="password" id="pwXacNhan" required minlength="6"></div>
         <button type="submit" class="btn-submit" style="width:100%;">Đổi mật khẩu</button>
       </form>
     </div>

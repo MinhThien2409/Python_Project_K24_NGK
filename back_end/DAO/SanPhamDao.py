@@ -177,8 +177,12 @@ class SanPhamDao:
         finally:
             cursor.close(); conn.close()
 
-    def tim_kiem(self, tu_khoa, category_id=None):
-        """Tim san pham theo tu khoa khong phan biet hoa/thuong, chi IsActive=1."""
+    def tim_kiem(self, tu_khoa, category_id=None, min_price=None, max_price=None):
+        """Tim san pham theo tu khoa khong phan biet hoa/thuong, chi IsActive=1.
+
+        Ho tro them loc theo khoang gia (min_price/max_price) do BUS truyen
+        xuong — min/max da duoc validate, None = khong loc.
+        """
         conn = DBconnection.get_connection()
         if conn is None: return []
         cursor = conn.cursor()
@@ -201,6 +205,12 @@ class SanPhamDao:
             if category_id not in (None, ""):
                 sql += " AND p.CategoryId = ?"
                 params.append(int(category_id))
+            if min_price is not None:
+                sql += " AND p.Price >= ?"
+                params.append(float(min_price))
+            if max_price is not None:
+                sql += " AND p.Price <= ?"
+                params.append(float(max_price))
             sql += " ORDER BY p.ProductId DESC"
             cursor.execute(sql, tuple(params))
             rows = cursor.fetchall()

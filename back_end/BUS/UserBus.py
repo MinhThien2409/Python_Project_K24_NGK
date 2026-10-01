@@ -14,11 +14,18 @@ class UserBus:
 
     def dang_ky_khach_hang(self, ten_user, dia_chi, sdt, tendangnhap, mat_khau):
         """Đăng ký tài khoản khách hàng mới, gán cứng nhóm quyền Customer."""
+        ten_user    = str(ten_user).strip() if ten_user is not None else ""
+        tendangnhap = str(tendangnhap).strip() if tendangnhap is not None else ""
+        sdt         = str(sdt).strip() if sdt is not None else ""
+        dia_chi     = str(dia_chi).strip() if dia_chi is not None else ""
         if not ten_user or not sdt or not tendangnhap or not mat_khau:
             return {"status": False, "message": "Vui lòng điền đầy đủ Tên, SĐT, Tên đăng nhập và Mật khẩu!"}
 
-        if len(mat_khau) < 6:
+        if len(str(mat_khau)) < 6:
             return {"status": False, "message": "Mật khẩu phải có ít nhất 6 ký tự!"}
+
+        if not re.match(SDT_REGEX_KHACH, sdt):
+            return {"status": False, "message": "Số điện thoại không hợp lệ!"}
 
         if self.dao.kiem_tra_tendangnhap_ton_tai(tendangnhap):
             return {"status": False, "message": f"Tên đăng nhập '{tendangnhap}' đã có người sử dụng!"}
@@ -116,20 +123,26 @@ class UserBus:
         return {"status": True, "data": danh_sach}
 
     def cap_nhat_user(self, ma_user, ten_user, dia_chi, sdt,cmnd):
-        """Cập nhật thông tin người dùng kèm validate tên và SĐT."""
-        if not ma_user or not ten_user:
+        """Cập nhật thông tin người dùng kèm validate tên, SĐT, độ dài.
+
+        Phase 1: chuẩn hóa (trim) giá trị trước khi kiểm tra VÀ trước khi lưu.
+        """
+        if not ma_user or ten_user is None:
             return {"status": False, "message": "Tên người dùng không được để trống!"}
         ten = str(ten_user).strip()
         if not ten:
             return {"status": False, "message": "Tên người dùng không được để trống!"}
-        sdt_sach = (sdt or "").strip() if sdt else ""
+        sdt_sach = str(sdt).strip() if sdt is not None else ""
         if sdt_sach and not re.match(SDT_REGEX_KHACH, sdt_sach):
             return {"status": False, "message": "Số điện thoại không hợp lệ!"}
-        dia_chi_sach = (dia_chi or "").strip() if dia_chi else dia_chi
-        if len(ten) > 100 or len(sdt_sach) > 20 or (dia_chi_sach and len(dia_chi_sach) > 255):
+        dia_chi_sach = str(dia_chi).strip() if dia_chi is not None else None
+        cmnd_sach = str(cmnd).strip() if cmnd is not None else None
+        if len(ten) > 100 or len(sdt_sach) > 20 \
+                or (dia_chi_sach and len(dia_chi_sach) > 255) \
+                or (cmnd_sach and len(cmnd_sach) > 20):
             return {"status": False, "message": "Thông tin quá dài, vui lòng rút gọn!"}
 
-        is_success = self.dao.cap_nhat_user(ma_user, ten, dia_chi, sdt,cmnd)
+        is_success = self.dao.cap_nhat_user(ma_user, ten, dia_chi_sach, sdt_sach, cmnd_sach)
         if is_success:
             return {"status": True, "message": "Cập nhật thông tin thành công!"}
         else:
@@ -172,7 +185,7 @@ class UserBus:
             return {"status": False, "message": "Thiếu mã user!"}
         if not mat_khau_cu:
             return {"status": False, "message": "Vui lòng nhập mật khẩu cũ!"}
-        if not mat_khau_moi or len(mat_khau_moi) < 6:
+        if not mat_khau_moi or len(str(mat_khau_moi)) < 6:
             return {"status": False, "message": "Mật khẩu mới phải có ít nhất 6 ký tự!"}
 
         thong_tin = self.dao.lay_thong_tin_user(ma_user)

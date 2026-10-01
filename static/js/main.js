@@ -704,6 +704,18 @@ async function handleRegister(e) {
     showToast('⚠️ Vui lòng điền đầy đủ thông tin bắt buộc!');
     return;
   }
+  if (ten_user.length > 100) {
+    showToast('⚠️ Họ tên quá dài, tối đa 100 ký tự!');
+    return;
+  }
+  if (mat_khau.length < 6) {
+    showToast('⚠️ Mật khẩu phải có ít nhất 6 ký tự!');
+    return;
+  }
+  if (sdt && !/^0\d{9}$/.test(sdt)) {
+    showToast('⚠️ Số điện thoại không hợp lệ! (VD: 0912345678)');
+    return;
+  }
 
   try {
     const response = await fetch('/api/dang-ky', {
@@ -756,23 +768,32 @@ async function openProfileModal() {
 
     <div class="form-group">
       <label>Họ và tên</label>
-      <input type="text" id="editName" value="${ten_user}" placeholder="Nhập họ tên...">
+      <input type="text" id="editName" value="${ten_user}" placeholder="Nhập họ tên..." oninput="kiemTraThayDoiProfile()">
     </div>
     <div class="form-group">
       <label>Số điện thoại</label>
-      <input type="tel" id="editPhone" value="${sdt === 'Chưa có SĐT' ? '' : sdt}" placeholder="Nhập SĐT...">
+      <input type="tel" id="editPhone" value="${sdt === 'Chưa có SĐT' ? '' : sdt}" placeholder="Nhập SĐT..." oninput="kiemTraThayDoiProfile()">
     </div>
     <div class="form-group">
       <label>Địa chỉ giao hàng</label>
-      <input type="text" id="editAddress" value="${dia_chi === 'Chưa có địa chỉ' ? '' : dia_chi}" placeholder="Nhập địa chỉ...">
+      <input type="text" id="editAddress" value="${dia_chi === 'Chưa có địa chỉ' ? '' : dia_chi}" placeholder="Nhập địa chỉ..." oninput="kiemTraThayDoiProfile()">
     </div>
     <div class="form-group">
       <label>Số CMND/CCCD</label>
-      <input type="text" id="editCmnd" value="${cmnd === 'Chưa cập nhật CMND' ? '' : cmnd}" placeholder="Nhập số CMND/CCCD...">
+      <input type="text" id="editCmnd" value="${cmnd === 'Chưa cập nhật CMND' ? '' : cmnd}" placeholder="Nhập số CMND/CCCD..." oninput="kiemTraThayDoiProfile()">
     </div>
 
-    <button class="btn-submit" style="background: var(--green); width: 100%; margin-top: 10px;" onclick="updateUserProfile()">💾 Lưu cập nhật thông tin</button>
+    <button class="btn-submit" id="btnSaveProfile" style="background: var(--green); width: 100%; margin-top: 10px;" onclick="updateUserProfile()" disabled>💾 Lưu cập nhật thông tin</button>
   `;
+
+  // Phase 1 (Task 5): ghi nhớ giá trị gốc + khóa nút Lưu khi chưa có thay đổi
+  profileGoc = {
+    ten_user: (ten_user || '').trim(),
+    sdt: (sdt === 'Chưa có SĐT' ? '' : (sdt || '')).trim(),
+    dia_chi: (dia_chi === 'Chưa có địa chỉ' ? '' : (dia_chi || '')).trim(),
+    cmnd: (cmnd === 'Chưa cập nhật CMND' ? '' : (cmnd || '')).trim(),
+  };
+  kiemTraThayDoiProfile();
 
   // Kiểm tra xem user có ít nhất 1 quyền "xem" hay không
   // → quyết định hiện/ẩn nút "Vào khu vực Quản trị hệ thống"
@@ -827,6 +848,23 @@ function switchAdminTab(tabName) {
 }
 }
 
+// Phase 1 (Task 5): bật nút Lưu khi có thay đổi, tự khóa lại khi hoàn tác
+let profileGoc = null;
+
+function kiemTraThayDoiProfile() {
+  const btn = document.getElementById('btnSaveProfile');
+  if (!btn) return;
+  const hienTai = {
+    ten_user: (document.getElementById('editName')?.value || '').trim(),
+    sdt: (document.getElementById('editPhone')?.value || '').trim(),
+    dia_chi: (document.getElementById('editAddress')?.value || '').trim(),
+    cmnd: (document.getElementById('editCmnd')?.value || '').trim(),
+  };
+  const goc = profileGoc || hienTai;
+  const coThayDoi = Object.keys(hienTai).some(k => hienTai[k] !== goc[k]);
+  btn.disabled = !coThayDoi;
+}
+
 // GỬI DỮ LIỆU CẬP NHẬT LÊN SERVER
 async function updateUserProfile() {
   const newName = document.getElementById('editName').value.trim();
@@ -835,6 +873,13 @@ async function updateUserProfile() {
   const newCmnd = document.getElementById('editCmnd').value.trim();
 
   if(!newName) { showToast("⚠️ Họ tên không được để trống!"); return; }
+  if(newName.length > 100) { showToast("⚠️ Họ tên quá dài, tối đa 100 ký tự!"); return; }
+  if(newPhone && !/^0\d{9}$/.test(newPhone)) {
+    showToast("⚠️ Số điện thoại không hợp lệ! (VD: 0912345678)"); return;
+  }
+  if(newAddress && newAddress.length > 255) {
+    showToast("⚠️ Địa chỉ quá dài, tối đa 255 ký tự!"); return;
+  }
 
   try {
     const response = await fetch('/api/cap-nhat-profile', {
@@ -857,6 +902,10 @@ async function updateUserProfile() {
       currentUser.dia_chi = newAddress;
       currentUser.cmnd = newCmnd;
       document.getElementById('topbarUserText').innerHTML = `🟢 Xin chào: <b>${newName}</b>`;
+      // Phase 1 (Task 5): cập nhật mốc gốc + khóa lại nút Lưu
+      profileGoc = { ten_user: newName, sdt: newPhone,
+                     dia_chi: newAddress, cmnd: newCmnd };
+      kiemTraThayDoiProfile();
     } else {
       showToast('❌ ' + result.message);
     }
@@ -911,6 +960,19 @@ async function handleChangePassword(e) {
   e.preventDefault();
   const cu = document.getElementById('pwCu').value;
   const moi = document.getElementById('pwMoi').value;
+  const xacNhanEl = document.getElementById('pwXacNhan');
+  const xacNhan = xacNhanEl ? xacNhanEl.value : '';
+
+  if (!cu) { showToast('⚠️ Vui lòng nhập mật khẩu cũ!'); return; }
+  if (!moi || moi.length < 6) {
+    showToast('⚠️ Mật khẩu mới phải có ít nhất 6 ký tự!'); return;
+  }
+  if (moi === cu) {
+    showToast('⚠️ Mật khẩu mới không được trùng mật khẩu cũ!'); return;
+  }
+  if (xacNhanEl && moi !== xacNhan) {
+    showToast('⚠️ Mật khẩu xác nhận không khớp!'); return;
+  }
   try {
     const res = await fetch('/api/doi-mat-khau', {
       method: 'POST',
@@ -922,6 +984,7 @@ async function handleChangePassword(e) {
     if (result.status) {
       document.getElementById('pwCu').value = '';
       document.getElementById('pwMoi').value = '';
+      if (xacNhanEl) xacNhanEl.value = '';
       switchProfileTab('info');
     }
   } catch (err) {
@@ -954,50 +1017,10 @@ async function handleLogout() {
   location.reload();
 }
 
-// Thay thế toàn bộ hàm handleSaveProfile cũ bằng hàm này
-async function handleSaveProfile(e) {
-  e.preventDefault();
-  const newPass = document.getElementById('profileNewPass').value;
-  const confirmPass = document.getElementById('profileConfirmPass').value;
-
-  if (newPass && newPass !== confirmPass) { showToast('⚠️ Mật khẩu xác nhận không khớp!'); return; }
-
-  const newName = document.getElementById('profileName').value;
-  const newPhone = document.getElementById('profilePhone').value;
-  const newAddress = document.getElementById('profileAddress').value;
-  const newNationalId = document.getElementById('profileNationalId').value;
-
-  try {
-    const response = await fetch('/api/cap-nhat-profile', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        ma_user: currentUser.id,
-        ten_user: newName,
-        sdt: newPhone,
-        dia_chi: newAddress,
-        cmnd: newNationalId
-      })
-    });
-
-    const result = await response.json();
-    if(result.status === true) {
-      // Cập nhật biến JS cục bộ
-      currentUser.name = newName;
-      currentUser.phone = newPhone;
-      currentUser.address = newAddress;
-      currentUser.nationalId = newNationalId;
-
-      updateHeaderForUser();
-      closeModalById('profileModal');
-      showToast('✅ Cập nhật thông tin thành công!');
-    } else {
-      showToast('❌ ' + result.message);
-    }
-  } catch (error) {
-    showToast('❌ Lỗi kết nối đến máy chủ!');
-  }
-}
+// (Phase 1 / Q1) Hàm handleSaveProfile cũ đã bị gỡ: nó trỏ tới các input
+// không tồn tại (#profileName/#profileNewPass/#profileConfirmPass) và không
+// còn được template gọi. Luồng hồ sơ chính thức là openProfileModal() +
+// updateUserProfile() (xem phía trên).
 function updateHeaderForUser() {
   if (!currentUser) return;
 
@@ -1224,13 +1247,15 @@ if (searchText) {
   filtered = filtered.filter(p => p.name.toLowerCase().includes(searchText));
 }
 
-  // Lọc theo giá
-  // Thay đoạn lọc theo giá cũ bằng đoạn này
-const priceMin = Number(document.getElementById('priceMin')?.dataset.rawValue) || 0;
-const priceMax = Number(document.getElementById('priceMax')?.dataset.rawValue) || Infinity;
-if (priceMin > 0 || priceMax !== Infinity) {
-  filtered = filtered.filter(p => p.price >= priceMin && (priceMax === Infinity || p.price <= priceMax));
-}
+  // Lọc theo giá (Phase 1: validate khoảng giá, min ≤ max)
+  const priceMinRaw = document.getElementById('priceMin')?.dataset.rawValue;
+  const priceMaxRaw = document.getElementById('priceMax')?.dataset.rawValue;
+  const priceMin = Number(priceMinRaw) || 0;
+  const priceMax = (priceMaxRaw === '' || priceMaxRaw === undefined || priceMaxRaw === null)
+                     ? Infinity : (Number(priceMaxRaw) || 0);
+  if (priceMin <= priceMax && (priceMin > 0 || priceMax !== Infinity)) {
+    filtered = filtered.filter(p => p.price >= priceMin && p.price <= priceMax);
+  }
 
   // Lọc theo danh mục dropdown header
   const catSelect = document.getElementById('searchCategorySelect')?.value;
@@ -1280,6 +1305,21 @@ async function timKiemSanPhamServer() {
   if (tuKhoa) params.set('q', tuKhoa);
   if (catSelect && catSelect !== 'all' && !isNaN(Number(catSelect))) {
     params.set('category_id', catSelect);
+  }
+  // Phase 1: gửi kèm khoảng giá (nếu hợp lệ) để server lọc authoritative
+  const minRaw = document.getElementById('priceMin')?.dataset.rawValue;
+  const maxRaw = document.getElementById('priceMax')?.dataset.rawValue;
+  const giaMin = Number(minRaw) || 0;
+  const giaMax = (maxRaw === '' || maxRaw === undefined || maxRaw === null)
+                   ? null : (Number(maxRaw) || 0);
+  if (giaMin <= 0 && giaMax === null) {
+    // không lọc giá
+  } else if (giaMin <= (giaMax === null ? Infinity : giaMax)) {
+    if (giaMin > 0) params.set('min_price', String(giaMin));
+    if (giaMax !== null) params.set('max_price', String(giaMax));
+  } else {
+    showToast('⚠️ Giá tối thiểu không được lớn hơn giá tối đa!');
+    return;
   }
   try {
     const res = await fetch(`/api/products?${params.toString()}`);
@@ -2314,6 +2354,19 @@ async function handlePlaceOrder(e) {
     showToast('⚠️ Vui lòng điền đầy đủ thông tin giao hàng!');
     return;
   }
+  // Phase 1: validate SĐT người nhận ngay ở FE (backend vẫn là nguồn chân lý)
+  if (!/^0\d{9}$/.test(receiverPhone)) {
+    showToast('⚠️ Số điện thoại người nhận không hợp lệ! (VD: 0912345678)');
+    return;
+  }
+  if (receiverName.length > 100) {
+    showToast('⚠️ Tên người nhận quá dài, tối đa 100 ký tự!');
+    return;
+  }
+  if (receiverAddress.length > 500) {
+    showToast('⚠️ Địa chỉ giao hàng quá dài, tối đa 500 ký tự!');
+    return;
+  }
 
   const subtotal    = cart.reduce((sum, item) => sum + (item.Quantity * item.UnitPrice), 0);
   const totalAmount = Math.max(0, subtotal + currentShippingFee);
@@ -2544,8 +2597,15 @@ async function xoaKhoiGio(productId) {
 async function changeCartQty(productId, newQty) {
   if (!currentUser) return;
 
+  // Phase 1: chỉ chấp nhận số nguyên (chặn thập phân/chữ)
+  const soLuong = Number(newQty);
+  if (!Number.isInteger(soLuong) || soLuong < 0) {
+    showToast('⚠️ Số lượng không hợp lệ!');
+    return;
+  }
+
   // Nếu newQty = 0 → xóa luôn
-  if (newQty === 0) {
+  if (soLuong === 0) {
     if (!confirm('Xóa sản phẩm này khỏi giỏ hàng?')) return;
     await xoaKhoiGio(productId);
     return;
@@ -2558,7 +2618,7 @@ async function changeCartQty(productId, newQty) {
       body   : JSON.stringify({
         UserId   : currentUser.ma_user || currentUser.UserId,
         ProductId: productId,
-        Quantity : newQty
+        Quantity : soLuong
       })
     });
     const result = await res.json();
@@ -3374,6 +3434,16 @@ function onPriceInput() {
   clearTimeout(priceDebounceTimer);
   priceDebounceTimer = setTimeout(() => {
     formatPriceInputs();
+    // Phase 1: chặn khoảng giá không hợp lệ (min > max) — không lọc sai
+    const minRaw = document.getElementById('priceMin')?.dataset.rawValue;
+    const maxRaw = document.getElementById('priceMax')?.dataset.rawValue;
+    const giaMin = Number(minRaw) || 0;
+    const giaMax = (maxRaw === '' || maxRaw === undefined || maxRaw === null)
+                     ? Infinity : (Number(maxRaw) || 0);
+    if (giaMin > giaMax) {
+      showToast('⚠️ Giá tối thiểu không được lớn hơn giá tối đa!');
+      return;
+    }
     applyUserFilters();
   }, 400); // chờ 400ms sau khi ngừng gõ mới filter
 }
@@ -3386,7 +3456,7 @@ function formatPriceInputs() {
 
     // Lấy chỉ các chữ số
     const raw = input.value.replace(/\D/g, '');
-    if (!raw) { input.value = ''; return; }
+    if (!raw) { input.value = ''; input.dataset.rawValue = ''; return; }
 
     // Format: 19900000 → "19,900,000"
     input.value = Number(raw).toLocaleString('vi-VN');

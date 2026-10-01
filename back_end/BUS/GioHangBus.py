@@ -134,3 +134,26 @@ class GioHangBus:
             return {"status": False, "message": "Không tìm thấy giỏ hàng!"}
         ok = self.dao.xoa_toan_bo_gio(cart_id)
         return {"status": ok, "message": "Đã xóa giỏ hàng!" if ok else "Lỗi xóa giỏ hàng!"}
+
+    def xoa_cac_san_pham(self, user_id, product_ids):
+        """Xóa chỉ các món đã mua — giữ món chưa chọn trong giỏ (Phase 2)."""
+        ids = []
+        for pid in (product_ids or []):
+            try:
+                ids.append(int(pid))
+            except (TypeError, ValueError):
+                continue
+        if not ids:
+            return {"status": False, "message": "Chưa chọn sản phẩm nào để xóa!"}
+        cart_id = self.dao.lay_hoac_tao_gio_hang(user_id)
+        if not cart_id:
+            return {"status": False, "message": "Không tìm thấy giỏ hàng!"}
+        xoa_theo_ds = getattr(self.dao, "xoa_cac_san_pham", None)
+        if callable(xoa_theo_ds):
+            ok = xoa_theo_ds(cart_id, ids)
+        else:
+            ok = all(self.dao.xoa_khoi_gio(cart_id, pid) for pid in ids)
+        if ok:
+            self.dao.cap_nhat_tong_tien(cart_id)
+            return {"status": True, "message": "Đã xóa sản phẩm đã mua khỏi giỏ hàng!"}
+        return {"status": False, "message": "Lỗi xóa giỏ hàng!"}

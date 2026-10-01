@@ -674,3 +674,34 @@ class DonHangDao:
         finally:
             cursor.close()
             conn.close()
+
+    def lay_thong_tin_san_pham(self, product_ids):
+        """Trả dict {ProductId: {price, quantity, is_active, name}} để BUS đối chiếu."""
+        if not product_ids:
+            return {}
+        conn = DBconnection().get_connection()
+        if not conn:
+            return {}
+        cursor = conn.cursor()
+        try:
+            placeholders = ",".join(["%s"] * len(product_ids))
+            cursor.execute(
+                f"SELECT ProductId, ProductName, Price, Quantity, IsActive "
+                f"FROM Products WHERE ProductId IN ({placeholders})",
+                tuple(product_ids)
+            )
+            ket_qua = {}
+            for row in cursor.fetchall():
+                ket_qua[int(row[0])] = {
+                    "name": row[1],
+                    "price": float(row[2] or 0),
+                    "quantity": int(row[3] or 0),
+                    "is_active": bool(row[4]),
+                }
+            return ket_qua
+        except Exception as e:
+            logger.exception("Lỗi lay_thong_tin_san_pham: %s", e)
+            return {}
+        finally:
+            cursor.close()
+            conn.close()

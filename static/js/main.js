@@ -21,6 +21,12 @@ const SELLER_CITY = 'hcm'; // mặc định HCM
 let currentShippingFee = 25000; // biến global lưu phí ship hiện tại
 
 let cart = [];
+// Phase 2: selection checkout — Set các ProductId được tick (mặc định chọn tất cả).
+let selectedCartIds = new Set();
+// Giữ các ProductId user đã bỏ chọn để không tự tick lại khi reload giỏ.
+let daBoChonIds = new Set();
+// Backend chỉ hỗ trợ 4 phương thức này (DonHangBus.PHUONG_THUC_HOP_LE).
+const CAC_PHUONG_THUC_HO_TRO = ['COD', 'Bank', 'Momo', 'VNPay'];
 let currentUser = null;
 let orders = [];
 let sellers = [];
@@ -2291,20 +2297,26 @@ async function loadCartFromServer() {
         Emoji      : item.Emoji       || item.emoji        || '📦',
         ImageUrl  : item.ImageUrl || item.image_url || '',
         StoreId   : item.StoreId   || item.store_id,
+        StoreName : item.StoreName || item.store_name || item.shop || '',
         Quantity   : item.Quantity    || item.quantity     || 1,
         UnitPrice  : item.UnitPrice   || item.unit_price   || item.price || 0,
         TotalPrice : (item.Quantity   || item.quantity || 1) *
                      (item.UnitPrice  || item.unit_price || item.price || 0)
       }));
       updateCartBadge();
+      dongBoLuaChonGioHang();
       console.log(`✅ Đã load ${cart.length} sản phẩm trong giỏ hàng`);
     } else {
       cart = [];
+      selectedCartIds.clear();
+      daBoChonIds.clear();
       updateCartBadge();
     }
   } catch (e) {
     console.error('Lỗi load giỏ hàng:', e);
     cart = [];
+    selectedCartIds.clear();
+    daBoChonIds.clear();
   }
 }
 async function addToCart(productId, quantity, unitPrice) {
@@ -2367,8 +2379,19 @@ async function handlePlaceOrder(e) {
     showToast('⚠️ Địa chỉ giao hàng quá dài, tối đa 500 ký tự!');
     return;
   }
+  // Phase 2: chặn phương thức chưa được backend hỗ trợ.
+  if (!CAC_PHUONG_THUC_HO_TRO.includes(paymentMethod)) {
+    showToast('⚠️ Phương thức thanh toán này hiện chưa được hỗ trợ!');
+    return;
+  }
+  // Phase 2: chỉ checkout các món được tick; chặn khi chưa chọn gì.
+  const matHangChon = getSelectedCartItems();
+  if (matHangChon.length === 0) {
+    showToast('⚠️ Vui lòng chọn ít nhất một sản phẩm để thanh toán!');
+    return;
+  }
 
-  const subtotal    = cart.reduce((sum, item) => sum + (item.Quantity * item.UnitPrice), 0);
+  const subtotal    = matHangChon.reduce((sum, item) => sum + (item.Quantity * item.UnitPrice), 0);
   const totalAmount = Math.max(0, subtotal + currentShippingFee);
 
   // Debug: kiểm tra cấu trúc cart trước khi gửi
@@ -2383,7 +2406,7 @@ async function handlePlaceOrder(e) {
     SubTotal       : subtotal,
     ShippingFee    : currentShippingFee,
     TotalAmount    : totalAmount,
-    Items: cart.map(item => ({
+    Items: matHangChon.map(item => ({
       // Thử tất cả các tên field có thể có
       ProductId  : item.ProductId   || item.product_id  || item.id,
       ProductName: item.ProductName || item.product_name|| item.name || 'Sản phẩm',
@@ -2409,7 +2432,10 @@ async function handlePlaceOrder(e) {
       showToast('🎉 ' + result.message);
       closeModal('checkoutModal');
       closeCart();
-      cart = [];
+      // Phase 2: chỉ loại các món đã mua, giữ món chưa chọn trong giỏ.
+      const daMua = new Set(matHangChon.map(i => String(i.ProductId)));
+      cart = cart.filter(i => !daMua.has(String(i.ProductId)));
+      selectedCartIds.clear();
       currentShippingFee = 25000;
       updateCartBadge();
       renderCartItems();
@@ -2494,6 +2520,8 @@ function renderCartItems() {
   const container = document.getElementById('cartItemsList');
 
   if (!cart || cart.length === 0) {
+    selectedCartIds.clear();
+    daBoChonIds.clear();
     container.innerHTML = `
       <div style="text-align:center; padding:40px 20px; color:var(--text-muted);">
         <div style="font-size:40px; margin-bottom:10px;">🛒</div>
@@ -2501,12 +2529,31 @@ function renderCartItems() {
       </div>`;
     document.getElementById('cartSubtotalText').textContent = '0đ';
     document.getElementById('cartTotalText').textContent    = '0đ';
+    capNhatNutThanhToan(false);
     return;
   }
 
-  container.innerHTML = cart.map(item => `
+  // Phase 2: header Chọn tất cả + số món đã chọn (tổng tiền chỉ tính món được tick).
+  const matHangChonHeader = getSelectedCartItems();
+  const tatCaChon = cart.length > 0 && matHangChonHeader.length === cart.length;
+  const headerChonTatCa = `
+    <label style="display:flex; align-items:center; gap:8px; padding:8px 0;
+                  font-size:14px; font-weight:700; cursor:pointer;
+                  border-bottom:1px solid var(--border);">
+      <input type="checkbox" ${tatCaChon ? 'checked' : ''}
+        onchange="toggleSelectAllCart(this.checked)"
+        style="width:18px; height:18px; cursor:pointer;">
+      Chọn tất cả (đã chọn ${matHangChonHeader.length}/${cart.length})
+    </label>`;
+
+  container.innerHTML = headerChonTatCa + cart.map(item => `
     <div style="display:flex; gap:12px; padding:12px 0;
                 border-bottom:1px solid var(--border); align-items:flex-start;">
+      <!-- Phase 2: tick chọn món để thanh toán (không đổi số lượng/xóa) -->
+      <input type="checkbox" ${selectedCartIds.has(String(item.ProductId)) ? 'checked' : ''}
+        onchange="toggleCartItemSelection(${item.ProductId})"
+        title="Chọn sản phẩm để thanh toán"
+        style="width:18px; height:18px; margin-top:4px; cursor:pointer; flex-shrink:0;">
 
       <!-- Emoji sản phẩm -->
       <div style="width:60px;height:60px;flex-shrink:0;">
@@ -2561,11 +2608,68 @@ function renderCartItems() {
     </div>
   `).join('');
 
-  const subtotal = cart.reduce((s, i) => s + i.Quantity * i.UnitPrice, 0);
+  const matHangChon = getSelectedCartItems();
+  const subtotal = matHangChon.reduce((s, i) => s + i.Quantity * i.UnitPrice, 0);
   document.getElementById('cartSubtotalText').textContent =
     subtotal.toLocaleString('vi-VN') + 'đ';
   document.getElementById('cartTotalText').textContent =
     subtotal.toLocaleString('vi-VN') + 'đ';
+  capNhatNutThanhToan(matHangChon.length > 0);
+}
+
+// ─── Phase 2: helpers chọn món trong giỏ ────────────────────
+function layIdGioHang(item) {
+  return String(item.ProductId ?? item.product_id ?? item.id);
+}
+
+function getSelectedCartItems() {
+  return (cart || []).filter(item => selectedCartIds.has(layIdGioHang(item)));
+}
+
+function dongBoLuaChonGioHang() {
+  const hienCo = new Set((cart || []).map(layIdGioHang));
+  for (const id of [...selectedCartIds]) {
+    if (!hienCo.has(id)) selectedCartIds.delete(id);
+  }
+  for (const id of [...daBoChonIds]) {
+    if (!hienCo.has(id)) daBoChonIds.delete(id);
+  }
+  // Món mới vào giỏ được tick sẵn, trừ món user đã bỏ chọn.
+  (cart || []).forEach(item => {
+    const id = layIdGioHang(item);
+    if (!daBoChonIds.has(id)) selectedCartIds.add(id);
+  });
+}
+
+function toggleCartItemSelection(productId) {
+  const id = String(productId);
+  if (selectedCartIds.has(id)) {
+    selectedCartIds.delete(id);
+    daBoChonIds.add(id);
+  } else {
+    selectedCartIds.add(id);
+    daBoChonIds.delete(id);
+  }
+  renderCartItems();
+}
+
+function toggleSelectAllCart(chon) {
+  if (chon) {
+    (cart || []).forEach(item => selectedCartIds.add(layIdGioHang(item)));
+    daBoChonIds.clear();
+  } else {
+    selectedCartIds.clear();
+    (cart || []).forEach(item => daBoChonIds.add(layIdGioHang(item)));
+  }
+  renderCartItems();
+}
+
+function capNhatNutThanhToan(coTheDat) {
+  const nut = document.getElementById('btnCheckoutTrigger');
+  if (!nut) return;
+  nut.disabled = !coTheDat;
+  nut.style.opacity = coTheDat ? '1' : '0.5';
+  nut.style.cursor = coTheDat ? 'pointer' : 'not-allowed';
 }
 
 // ─── Xóa 1 sản phẩm khỏi giỏ ────────────────────────────────
@@ -2647,7 +2751,9 @@ function getShippingFee(buyerCity) {
 }
 
 function getSoShopTrongGio() {
-  const cacStoreId = cart.map(item => item.StoreId).filter(sid => sid !== undefined && sid !== null);
+  // Phase 2: phí ship tính theo shop của các món ĐƯỢC CHỌN.
+  const cacStoreId = getSelectedCartItems()
+    .map(item => item.StoreId).filter(sid => sid !== undefined && sid !== null);
   return new Set(cacStoreId).size;
 }
 
@@ -2668,7 +2774,9 @@ function recalcOrderTotal() {
 }
 
 function updateCheckoutSummary() {
-  const subtotal = cart.reduce((sum, item) => sum + (item.Quantity * item.UnitPrice), 0);
+  // Phase 2: mọi tổng tiền checkout chỉ tính trên món được chọn.
+  const subtotal = getSelectedCartItems()
+    .reduce((sum, item) => sum + (item.Quantity * item.UnitPrice), 0);
   const total = subtotal + currentShippingFee;
 
   document.getElementById('checkoutSubtotalText').textContent =
@@ -2680,9 +2788,13 @@ function updateCheckoutSummary() {
 }
 
 function togglePaymentDetails(val) {
-  document.getElementById('bankDetailsBlock').style.display = val === 'Bank'    ? 'block' : 'none';
-  document.getElementById('momoBlock').style.display        = val === 'Momo'    ? 'block' : 'none';
-  document.getElementById('zalopayBlock').style.display     = val === 'VNPay' ? 'block' : 'none';
+  // Phase 2: phương thức lạ → hiện cảnh báo unsupported, ẩn mọi QR/hướng dẫn.
+  const laHoTro = CAC_PHUONG_THUC_HO_TRO.includes(val);
+  const canhBao = document.getElementById('paymentUnsupportedNote');
+  if (canhBao) canhBao.style.display = laHoTro ? 'none' : 'block';
+  document.getElementById('bankDetailsBlock').style.display = (laHoTro && val === 'Bank')    ? 'block' : 'none';
+  document.getElementById('momoBlock').style.display        = (laHoTro && val === 'Momo')    ? 'block' : 'none';
+  document.getElementById('zalopayBlock').style.display     = (laHoTro && val === 'VNPay') ? 'block' : 'none';
 }
 
 function openCheckoutModal() {
@@ -2695,19 +2807,32 @@ function openCheckoutModal() {
     showToast('⚠️ Giỏ hàng đang trống!');
     return;
   }
+  // Phase 2: chặn checkout khi chưa tick món nào.
+  const matHangChon = getSelectedCartItems();
+  if (matHangChon.length === 0) {
+    showToast('⚠️ Vui lòng chọn ít nhất một sản phẩm để thanh toán!');
+    return;
+  }
 
   // Điền thông tin mặc định từ user
   document.getElementById('chkName').value    = currentUser.ten_user || '';
   document.getElementById('chkPhone').value   = currentUser.sdt || '';
   document.getElementById('chkAddress').value = currentUser.dia_chi || '';
 
-  // Tóm tắt giỏ hàng
+  // Tóm tắt giỏ hàng — Phase 2: nhóm món ĐƯỢC CHỌN theo từng shop.
   const summaryEl = document.getElementById('checkoutCartSummary');
-  summaryEl.innerHTML = cart.map(item => `
-    <div style="display:flex; justify-content:space-between; padding:4px 0; border-bottom:1px solid var(--border); font-size:12px;">
-      <span>${item.ProductName} x${item.Quantity}</span>
-      <span style="font-weight:600;">${(item.Quantity * item.UnitPrice).toLocaleString('vi-VN')}đ</span>
-    </div>
+  const nhomTheoShop = {};
+  matHangChon.forEach(item => {
+    const tenShop = item.StoreName || ('Shop #' + (item.StoreId ?? '?'));
+    (nhomTheoShop[tenShop] = nhomTheoShop[tenShop] || []).push(item);
+  });
+  summaryEl.innerHTML = Object.entries(nhomTheoShop).map(([tenShop, nhom]) => `
+    <div style="font-weight:700; padding:6px 0 2px;">🏪 ${tenShop}</div>
+    ${nhom.map(item => `
+      <div style="display:flex; justify-content:space-between; padding:4px 0 4px 12px; border-bottom:1px solid var(--border); font-size:12px;">
+        <span>${item.ProductName} x${item.Quantity}</span>
+        <span style="font-weight:600;">${(item.Quantity * item.UnitPrice).toLocaleString('vi-VN')}đ</span>
+      </div>`).join('')}
   `).join('');
 
   // Tính phí ship ban đầu & cập nhật tổng

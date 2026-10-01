@@ -79,8 +79,10 @@ class DonHangBus:
         if str(dh.PaymentMethod or "COD") not in PHUONG_THUC_HOP_LE:
             return {"status": False, "message": "Phương thức thanh toán không hợp lệ!"}
 
-        if not dh.Items or len(dh.Items) == 0:
+        if not isinstance(dh.Items, list) or len(dh.Items) == 0:
             return {"status": False, "message": "Giỏ hàng trống, vui lòng thêm sản phẩm!"}
+
+        # Phase 2: đối chiếu giá/tồn/trạng thái với DB, ghi đè giá client gửi.
 
         # Phase 1: kiểm tra kiểu/giá trị từng dòng hàng (authoritative)
         for item in dh.Items:
@@ -109,6 +111,10 @@ class DonHangBus:
                 return {"status": False,
                         "message": "Đơn giá sản phẩm không hợp lệ!"}
 
+        loi_db = self._doi_chieu_gia_va_kho(dh)
+        if loi_db:
+            return loi_db
+
         if dh.TotalAmount <= 0:
             return {"status": False, "message": "Tổng tiền đơn hàng không hợp lệ!"}
         if float(dh.ShippingFee or 0) < 0:
@@ -121,6 +127,44 @@ class DonHangBus:
 
         kq = self._tao_toan_bo_don(ds_don, ds_store_tong)
         return kq
+
+    def _doi_chieu_gia_va_kho(self, dh: DonHang):
+        """Ghi đè UnitPrice/TotalPrice/SubTotal/TotalAmount theo giá DB.
+
+        Từ chối SP không tồn tại/ẩn/vượt kho. Khi DAO không có nguồn
+        đối chiếu (mock/fake cũ) thì bỏ qua để giữ tương thích.
+        """
+        lay_thong_tin = getattr(self.dao, "lay_thong_tin_san_pham", None)
+        if not callable(lay_thong_tin):
+            return None
+        try:
+            bang = lay_thong_tin([int(i.ProductId) for i in dh.Items])
+        except (TypeError, ValueError):
+            return {"status": False,
+                    "message": "Thông tin sản phẩm không hợp lệ!"}
+        if not isinstance(bang, dict):
+            return None
+        for item in dh.Items:
+            thong_tin = bang.get(int(item.ProductId))
+            ten = item.ProductName or f"#{item.ProductId}"
+            if not thong_tin:
+                return {"status": False,
+                        "message": f"Không tìm thấy sản phẩm {ten}!"}
+            if not thong_tin.get("is_active", True):
+                return {"status": False, "message": (
+                    f"Sản phẩm '{thong_tin.get('name') or ten}' không còn kinh doanh!")}
+            ton = int(thong_tin.get("quantity", 0))
+            if int(item.Quantity or 0) > ton:
+                return {"status": False, "message": (
+                    f"Sản phẩm '{thong_tin.get('name') or ten}' "
+                    f"chỉ còn {ton} sản phẩm trong kho!")}
+            gia_chuan = float(thong_tin.get("price", 0))
+            item.UnitPrice = gia_chuan
+            item.TotalPrice = int(item.Quantity or 0) * gia_chuan
+        dh.SubTotal = float(sum(float(i.TotalPrice or 0) for i in dh.Items))
+        dh.TotalAmount = float(dh.SubTotal or 0) + float(dh.ShippingFee or 0) \
+            - float(dh.DiscountAmount or 0)
+        return None
 
     def _loi_tu_dao(self, result):
         """Lỗi hết hàng/không tồn tại trả về từ DAO (đã rollback toàn bộ)."""

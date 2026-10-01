@@ -457,7 +457,14 @@ def api_dat_hang():
 
     result = don_hang_bus.tao_don_hang(don_hang_moi)
     if result.get('status'):
-        cart_bus.xoa_toan_bo_gio(session.get('user_id'))
+        # Phase 2: chỉ xóa các món đã mua, giữ món chưa chọn trong giỏ.
+        da_mua = []
+        for item in don_hang_moi.Items:
+            try:
+                da_mua.append(int(item.ProductId))
+            except (TypeError, ValueError):
+                continue
+        cart_bus.xoa_cac_san_pham(session.get('user_id'), da_mua)
     return jsonify(result)
 
 @app.route('/api/don-hang/hoa-don/<int:order_id>', methods=['GET'])

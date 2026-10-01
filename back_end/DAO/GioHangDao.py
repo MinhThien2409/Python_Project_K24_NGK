@@ -24,9 +24,11 @@ class GioHangDao:
                 p.ProductName AS ProductName,
                 p.Emoji AS Emoji,
                 p.ImageUrl AS ImageUrl,
-                p.StoreId AS StoreId
+                p.StoreId AS StoreId,
+                s.StoreName AS StoreName
             FROM CartItems ci
             LEFT JOIN Products p ON ci.ProductId = p.ProductId
+            LEFT JOIN Stores s ON p.StoreId = s.StoreId
             WHERE ci.CartId = ?
             """
             cursor.execute(sql, (cart_id,))
@@ -159,6 +161,31 @@ class GioHangDao:
             return cursor.rowcount > 0
         except Exception as e:
             logger.exception("Lỗi cập nhật số lượng: %s", e)
+            conn.rollback()
+            return False
+        finally:
+            cursor.close();
+            conn.close()
+
+    def xoa_cac_san_pham(self, cart_id, product_ids):
+        """Xóa chỉ các sản phẩm đã chọn — giữ lại món chưa chọn (Phase 2)."""
+        ids = [int(pid) for pid in (product_ids or [])
+               if str(pid).strip().lstrip("-").isdigit()]
+        if not ids:
+            return False
+        conn = DBconnection.get_connection()
+        if conn is None: return False
+        cursor = conn.cursor()
+        try:
+            placeholders = ",".join(["?"] * len(ids))
+            cursor.execute(
+                f"DELETE FROM CartItems WHERE CartId = ? AND ProductId IN ({placeholders})",
+                (cart_id, *ids)
+            )
+            conn.commit()
+            return cursor.rowcount > 0
+        except Exception as e:
+            logger.exception("Lỗi xoa_cac_san_pham: %s", e)
             conn.rollback()
             return False
         finally:

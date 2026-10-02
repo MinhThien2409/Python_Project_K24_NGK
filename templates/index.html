@@ -191,27 +191,13 @@
 
   <div class="admin-layout">
     <aside class="admin-menu">
-      <div class="admin-menu-item" id="menu-vouchers" onclick="switchAdminTab('vouchers')">🎟️ Quản lý Voucher</div>
       <div class="admin-menu-item" id="menu-categories" onclick="switchAdminTab('categories')">📁 Quản lý danh mục</div>
       <div class="admin-menu-item" id="menu-sellers" onclick="switchAdminTab('sellers')">🏪 Duyệt người bán hàng <span id="sellerPendingBadge" style="color:red; font-weight:bold;"></span></div>
       <div class="admin-menu-item active" id="menu-users" onclick="switchAdminTab('users')">👥 Quản lý tài khoản</div>
     </aside>
 
     <main class="main">
-      <div id="pane-vouchers" class="admin-pane" style="display:none;">
-  <div class="admin-card"><h3>Quản lý Voucher / Discount</h3><input type="hidden" id="voucherId">
-    <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-top:12px;">
-      <input id="voucherCode" maxlength="50" placeholder="Code"><input id="voucherName" maxlength="150" placeholder="Tên voucher">
-      <select id="voucherType"><option value="PERCENT">PERCENT</option><option value="FIXED">FIXED</option></select>
-      <input id="voucherValue" type="number" min="0" step="0.01" placeholder="Discount value">
-      <input id="voucherMin" type="number" min="0" step="0.01" placeholder="Min order">
-      <input id="voucherMax" type="number" min="0" step="0.01" placeholder="Max discount (0 = không giới hạn)">
-      <input id="voucherStart" type="datetime-local"><input id="voucherEnd" type="datetime-local">
-      <input id="voucherQty" type="number" min="0" step="1" placeholder="Quantity">
-    </div><div style="margin-top:10px;"><button class="checkout-btn" onclick="luuVoucher()">Lưu Voucher</button> <button onclick="resetVoucherForm()">Nhập mới</button></div>
-  </div>
-  <div class="admin-card"><table><thead><tr><th>Code</th><th>Name</th><th>Type</th><th>Discount</th><th>Min</th><th>Max</th><th>Hiệu lực</th><th>Qty</th><th>Used</th><th>Status</th><th>Action</th></tr></thead><tbody id="tblAdminVouchersBody"></tbody></table></div>
-</div>
+
 
 <div id="pane-categories" class="admin-pane" style="display:none;">
   <div class="admin-card">
@@ -301,6 +287,7 @@
       <div class="admin-menu-item active" id="smenu-overview" onclick="switchSellerTab('overview')">📊 Tổng quan gian hàng</div>
       <div class="admin-menu-item" id="smenu-products" onclick="switchSellerTab('products')">📦 Sản phẩm của tôi</div>
       <div class="admin-menu-item" id="smenu-nhaphang" onclick="switchSellerTab('nhaphang')">📦 Quản lý nhập hàng</div>
+      <div class="admin-menu-item" id="smenu-vouchers" onclick="switchSellerTab('vouchers')">🎟️ Quản lý Voucher</div>
       <div class="admin-menu-item" id="smenu-orders" onclick="switchSellerTab('orders')">📋 Đơn hàng</div>
       <div class="admin-menu-item" id="smenu-shop" onclick="switchSellerTab('shop')">🏪 Trang shop</div>
       <div class="admin-menu-item" id="smenu-gia" onclick="switchSellerTab('gia')">💰 Quản lý giá bán</div>
@@ -404,6 +391,46 @@
     </table>
   </div>
 </div>
+      <div id="spane-vouchers" class="admin-pane" style="display:none;">
+        <div class="admin-card">
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;">
+            <div>
+              <h3>🎟️ Quản lý Voucher của cửa hàng</h3>
+              <p style="font-size:13px;color:var(--text-muted);margin:4px 0 0;">Voucher chỉ thuộc gian hàng hiện tại. SellerId và UsedQuantity do Backend quản lý.</p>
+            </div>
+            <button class="checkout-btn" onclick="resetSellerVoucherForm()">+ Tạo Voucher</button>
+          </div>
+          <div id="sellerVoucherMessage" style="display:none;margin-top:12px;font-size:13px;"></div>
+          <div style="display:grid;grid-template-columns:repeat(2,minmax(220px,1fr));gap:10px;margin-top:14px;">
+            <div><label>Mã Voucher</label><input id="sellerVoucherCode" maxlength="50" placeholder="VD: SALE20"></div>
+            <div><label>Tên Voucher</label><input id="sellerVoucherName" maxlength="150" placeholder="Tên chương trình"></div>
+            <div><label>Loại giảm</label><select id="sellerVoucherType" onchange="updateSellerVoucherTypeHint()"><option value="PERCENT">PERCENT</option><option value="FIXED">FIXED</option></select></div>
+            <div><label>Giá trị giảm</label><input id="sellerVoucherValue" type="number" min="0" step="0.01"></div>
+            <div><label>Đơn tối thiểu</label><input id="sellerVoucherMin" type="number" min="0" step="0.01"></div>
+            <div><label>Giảm tối đa</label><input id="sellerVoucherMax" type="number" min="0" step="0.01"></div>
+            <div><label>Bắt đầu</label><input id="sellerVoucherStart" type="datetime-local"></div>
+            <div><label>Kết thúc</label><input id="sellerVoucherEnd" type="datetime-local"></div>
+            <div><label>Số lượng</label><input id="sellerVoucherQty" type="number" min="0" step="1"></div>
+            <div><label>Trạng thái</label><select id="sellerVoucherActive"><option value="1">Bật</option><option value="0">Tắt</option></select></div>
+          </div>
+          <div style="margin-top:14px;">
+            <label>Sản phẩm áp dụng <span style="font-size:12px;color:var(--text-muted);">(chỉ sản phẩm của Store hiện tại)</span></label>
+            <div id="sellerVoucherProducts" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:8px;margin-top:8px;"></div>
+          </div>
+          <div style="margin-top:12px;display:flex;gap:8px;">
+            <button class="checkout-btn" id="btnSaveSellerVoucher" onclick="saveSellerVoucher()">Lưu Voucher</button>
+            <button onclick="resetSellerVoucherForm()">Nhập mới</button>
+          </div>
+        </div>
+        <div class="admin-card">
+          <div style="overflow:auto;">
+            <table>
+              <thead><tr><th>Code</th><th>Loại</th><th>Giảm</th><th>Min</th><th>Max</th><th>Bắt đầu</th><th>Kết thúc</th><th>Qty</th><th>Used</th><th>Trạng thái</th><th>Thao tác</th></tr></thead>
+              <tbody id="tblSellerVouchersBody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
       <div id="spane-orders" class="admin-pane" style="display:none;">
         <div class="admin-card">
           <h3>📋 Đơn hàng cần xử lý</h3>

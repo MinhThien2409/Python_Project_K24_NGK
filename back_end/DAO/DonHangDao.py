@@ -1,4 +1,5 @@
 import logging
+from datetime import datetime
 from back_end.DBconnection import DBconnection
 
 logger = logging.getLogger(__name__)
@@ -25,11 +26,16 @@ class DonHangDao:
         cursor = conn.cursor()
         try:
             cac_order_id = []
+            voucher_error = self._ap_dung_voucher(cursor, orders)
+            if voucher_error:
+                conn.rollback()
+                return voucher_error
             for order in orders:
                 new_order_id = self._chen_order_lay_id(cursor, order)
                 loi_kho = self._chen_items_tru_kho(cursor, conn, new_order_id,
                                                    order.Items)
                 if loi_kho:
+                    conn.rollback()
                     return loi_kho
                 cac_order_id.append(new_order_id)
             conn.commit()
@@ -43,26 +49,32 @@ class DonHangDao:
             conn.close()
 
     def _chen_order_lay_id(self, cursor, order):
-        """Chèn Orders và trả về OrderId mới sinh (MySQL: cursor.lastrowid)."""
-        sql_order = """
-        INSERT INTO Orders (Status, ShippingFee, UserId, ReceiverName,
-                            ReceiverPhone, ShippingAddress, PaymentMethod,
-                            SubTotal, DiscountAmount, TotalAmount, Note)
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-        """
-        cursor.execute(sql_order, (
-            str(order.Status),
-            float(order.ShippingFee or 0),
-            int(order.UserId),
-            str(order.ReceiverName),
-            str(order.ReceiverPhone),
-            str(order.ShippingAddress),
-            str(order.PaymentMethod),
-            float(order.SubTotal or 0),
-            float(order.DiscountAmount or 0),
-            float(order.TotalAmount or 0),
-            str(order.Note) if order.Note else None
-        ))
+        """Chèn Orders; VoucherCode được snapshot khi checkout có voucher."""
+        if getattr(order, "VoucherCode", None):
+            sql_order = """
+            INSERT INTO Orders (Status, ShippingFee, UserId, ReceiverName,
+                                ReceiverPhone, ShippingAddress, PaymentMethod,
+                                VoucherCode, SubTotal, DiscountAmount, TotalAmount, Note)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            """
+            params = (str(order.Status),float(order.ShippingFee or 0),int(order.UserId),
+                      str(order.ReceiverName),str(order.ReceiverPhone),str(order.ShippingAddress),
+                      str(order.PaymentMethod),str(order.VoucherCode),float(order.SubTotal or 0),
+                      float(order.DiscountAmount or 0),float(order.TotalAmount or 0),
+                      str(order.Note) if order.Note else None)
+        else:
+            sql_order = """
+            INSERT INTO Orders (Status, ShippingFee, UserId, ReceiverName,
+                                ReceiverPhone, ShippingAddress, PaymentMethod,
+                                SubTotal, DiscountAmount, TotalAmount, Note)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            """
+            params = (str(order.Status),float(order.ShippingFee or 0),int(order.UserId),
+                      str(order.ReceiverName),str(order.ReceiverPhone),str(order.ShippingAddress),
+                      str(order.PaymentMethod),float(order.SubTotal or 0),
+                      float(order.DiscountAmount or 0),float(order.TotalAmount or 0),
+                      str(order.Note) if order.Note else None)
+        cursor.execute(sql_order, params)
         return cursor.lastrowid
 
     def _chen_items_tru_kho(self, cursor, conn, new_order_id, order_items):
@@ -108,6 +120,62 @@ class DonHangDao:
                     "product_name": info[0],
                     "available": info[1]}
         return {"error": "not_found", "product_name": f"#{item.ProductId}"}
+
+    def _ap_dung_voucher(self, cursor, orders):
+        """Khóa Voucher trong cùng transaction, validate và phân bổ discount cho N order con."""
+        if not orders:
+            return {"error": "invalid_voucher", "message": "Giỏ hàng trống, vui lòng thêm sản phẩm!"}
+        code = getattr(orders[0], "VoucherCode", None)
+        if not code:
+            for o in orders:
+                o.DiscountAmount = 0
+                o.TotalAmount = float(o.SubTotal or 0) + float(o.ShippingFee or 0)
+            return None
+        code = str(code).strip().upper()
+        cursor.execute("""SELECT VoucherId,Code,Name,DiscountType,DiscountValue,MinOrderValue,
+                                 MaxDiscount,StartDate,EndDate,Quantity,UsedQuantity,IsActive
+                          FROM Voucher WHERE Code=%s FOR UPDATE""", (code,))
+        row = cursor.fetchone()
+        if not row:
+            return {"error":"invalid_voucher","message":"Voucher không tồn tại!"}
+        _, real_code, _, dtype, value, min_order, max_discount, start_dt, end_dt, quantity, used, active = row
+        now = datetime.now()
+        if not active:
+            return {"error":"invalid_voucher","message":"Voucher đã bị vô hiệu hóa!"}
+        if start_dt and now < start_dt:
+            return {"error":"invalid_voucher","message":"Voucher chưa bắt đầu!"}
+        if end_dt and now > end_dt:
+            return {"error":"invalid_voucher","message":"Voucher đã hết hạn!"}
+        if int(used or 0) >= int(quantity or 0):
+            return {"error":"invalid_voucher","message":"Voucher đã hết lượt!"}
+        subtotal = float(sum(float(i.TotalPrice or 0) for o in orders for i in o.Items))
+        if subtotal < float(min_order or 0):
+            return {"error":"invalid_voucher","message":"Đơn hàng chưa đạt giá trị tối thiểu để sử dụng Voucher!"}
+        if str(dtype).upper() == "PERCENT":
+            discount = subtotal * float(value) / 100.0
+            if float(max_discount or 0) > 0:
+                discount = min(discount, float(max_discount))
+        else:
+            discount = min(float(value), subtotal)
+        discount = max(0.0, min(discount, subtotal))
+        shipping = float(sum(float(o.ShippingFee or 0) for o in orders))
+        if subtotal + shipping - discount < 0:
+            discount = min(discount, subtotal + shipping)
+        remaining = discount
+        for idx, order in enumerate(orders):
+            order_sub = float(order.SubTotal or 0)
+            if idx == len(orders)-1:
+                d = remaining
+            else:
+                d = round(discount * order_sub / subtotal, 2) if subtotal else 0
+                remaining -= d
+            order.VoucherCode = str(real_code)
+            order.DiscountAmount = max(0.0, min(d, order_sub))
+            order.TotalAmount = max(0.0, order_sub + float(order.ShippingFee or 0) - order.DiscountAmount)
+        cursor.execute("UPDATE Voucher SET UsedQuantity=UsedQuantity+1 WHERE VoucherId=%s AND UsedQuantity<Quantity",(row[0],))
+        if cursor.rowcount != 1:
+            return {"error":"invalid_voucher","message":"Voucher đã hết lượt, vui lòng thử lại!"}
+        return None
 
     # ─── ĐỌC ───
     def lay_don_hang_cua_user(self, ma_user):

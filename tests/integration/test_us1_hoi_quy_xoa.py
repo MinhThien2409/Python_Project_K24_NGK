@@ -48,8 +48,8 @@ def test_tat_ca_route_contract_con_ton_tai():
 def test_so_luong_route_khop_contract():
     """Số route /api/* (path+method) nằm trong khoảng hợp lý sau FR-011 (009)."""
     routes = _lay_route_table()
-    assert 44 <= len(routes) <= 56, \
-        f"Số route /api/* lạ: {len(routes)} (kỳ vọng ~46 sau khi gỡ 8 route cũ)"
+    assert 44 <= len(routes) <= 63, \
+        f"Số route /api/* lạ: {len(routes)} (kỳ vọng ~53 sau khi thêm API Voucher)"
 
 
 def test_trang_chu_tra_200():

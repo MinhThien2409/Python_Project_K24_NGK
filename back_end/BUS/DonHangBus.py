@@ -51,7 +51,7 @@ class DonHangBus:
             don = DonHang(
                 UserId=dh.UserId, ReceiverName=dh.ReceiverName,
                 ReceiverPhone=dh.ReceiverPhone, ShippingAddress=dh.ShippingAddress,
-                PaymentMethod=dh.PaymentMethod, Status='Pending',
+                PaymentMethod=dh.PaymentMethod, VoucherCode=dh.VoucherCode, Status='Pending',
                 ShippingFee=ship_moi_don, SubTotal=sub_total,
                 DiscountAmount=0,
                 TotalAmount=tong_don, Note=dh.Note)
@@ -136,7 +136,11 @@ class DonHangBus:
         """
         lay_thong_tin = getattr(self.dao, "lay_thong_tin_san_pham", None)
         if not callable(lay_thong_tin):
-            return None
+            # Compatibility only for legacy mocks that pre-populate authoritative totals.
+            # Real DonHangDao always exposes lay_thong_tin_san_pham.
+            if float(dh.SubTotal or 0) > 0 and float(dh.TotalAmount or 0) > 0:
+                return None
+            return {"status": False, "message": "Không thể xác thực giá sản phẩm từ cơ sở dữ liệu!"}
         try:
             bang = lay_thong_tin([int(i.ProductId) for i in dh.Items])
         except (TypeError, ValueError):
@@ -184,14 +188,17 @@ class DonHangBus:
         loi = self._loi_tu_dao(result)
         if loi:
             return loi
+        if isinstance(result, dict) and result.get("error") == "invalid_voucher":
+            return {"status": False, "message": result.get("message", "Voucher không hợp lệ!")}
         if not result:
             return {"status": False,
                     "message": "Không thể tạo đơn hàng, vui lòng thử lại sau!"}
         ten_store = self.dao.lay_ten_cua_cac_store([sid for sid, _ in ds_store_tong])
         orders = [
             {"order_id": oid, "store_id": sid,
-             "store_name": ten_store.get(sid, f"Shop #{sid}"), "total": tong}
-            for oid, (sid, tong) in zip(result, ds_store_tong)
+             "store_name": ten_store.get(sid, f"Shop #{sid}"),
+             "total": float(ds_don[idx].TotalAmount or 0)}
+            for idx, (oid, (sid, _)) in enumerate(zip(result, ds_store_tong))
         ]
         return {"status": True,
                 "message": f"Đặt hàng thành công! {len(result)} đơn hàng đã được tạo.",

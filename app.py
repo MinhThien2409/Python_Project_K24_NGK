@@ -11,6 +11,7 @@ from back_end.BUS.DanhMucBus import DanhMucBus
 from back_end.BUS.SanPhamBus import SanPhamBus
 from back_end.BUS.GioHangBus import GioHangBus
 from back_end.BUS.DonHangBus import DonHangBus
+from back_end.BUS.VoucherBus import VoucherBus
 from back_end.Model.DonHang import DonHang
 from back_end.Model.OrderItem import OrderItem
 
@@ -24,6 +25,7 @@ category_bus   = DanhMucBus()
 san_pham_bus   = SanPhamBus()
 cart_bus = GioHangBus()
 don_hang_bus = DonHangBus()
+voucher_bus = VoucherBus()
 
 def _json_body():
     """Đọc body JSON an toàn: trả dict, hoặc None nếu body không phải JSON."""
@@ -320,6 +322,64 @@ def get_product_detail(product_id):
 
 
 # ==========================================
+# API VOUCHER — KHÁCH HÀNG
+# ==========================================
+@app.route('/api/voucher/kiem-tra', methods=['POST'])
+def api_voucher_kiem_tra():
+    gate=user_bus.kiem_tra_nguoi_dung_hoat_dong(session.get('user_id'))
+    if not gate.get('status'): return jsonify(gate),403
+    d=_json_body()
+    if d is None:return jsonify({"status":False,"message":"Dữ liệu gửi lên không hợp lệ!","data":None}),400
+    return jsonify(voucher_bus.kiem_tra_ap_dung(d.get('voucherCode') or d.get('Code'),d.get('Items')))
+
+# ==========================================
+# API VOUCHER — QUẢN LÝ (Quản lý)
+# ==========================================
+@app.route('/api/voucher', methods=['GET'])
+def api_voucher_list():
+    gate=user_bus.kiem_tra_quyen_quan_ly(session.get('user_id'))
+    if not gate.get('status'): return jsonify(gate),403
+    return jsonify(voucher_bus.lay_tat_ca())
+
+@app.route('/api/voucher/<int:voucher_id>', methods=['GET'])
+def api_voucher_detail(voucher_id):
+    gate=user_bus.kiem_tra_quyen_quan_ly(session.get('user_id'))
+    if not gate.get('status'): return jsonify(gate),403
+    return jsonify(voucher_bus.lay_theo_id(voucher_id))
+
+@app.route('/api/voucher', methods=['POST'])
+def api_voucher_create():
+    gate=user_bus.kiem_tra_quyen_quan_ly(session.get('user_id'))
+    if not gate.get('status'): return jsonify(gate),403
+    d=_json_body()
+    if d is None:return jsonify({"status":False,"message":"Dữ liệu gửi lên không hợp lệ!","data":None}),400
+    return jsonify(voucher_bus.tao(code=d.get('Code'),name=d.get('Name'),dtype=d.get('DiscountType'),
+        value=d.get('DiscountValue'),min_order=d.get('MinOrderValue'),max_discount=d.get('MaxDiscount'),
+        start=d.get('StartDate'),end=d.get('EndDate'),quantity=d.get('Quantity')))
+
+@app.route('/api/voucher/<int:voucher_id>', methods=['PUT'])
+def api_voucher_update(voucher_id):
+    gate=user_bus.kiem_tra_quyen_quan_ly(session.get('user_id'))
+    if not gate.get('status'): return jsonify(gate),403
+    d=_json_body()
+    if d is None:return jsonify({"status":False,"message":"Dữ liệu gửi lên không hợp lệ!","data":None}),400
+    return jsonify(voucher_bus.sua(voucher_id,code=d.get('Code'),name=d.get('Name'),dtype=d.get('DiscountType'),
+        value=d.get('DiscountValue'),min_order=d.get('MinOrderValue'),max_discount=d.get('MaxDiscount'),
+        start=d.get('StartDate'),end=d.get('EndDate'),quantity=d.get('Quantity')))
+
+@app.route('/api/voucher/<int:voucher_id>/toggle', methods=['POST'])
+def api_voucher_toggle(voucher_id):
+    gate=user_bus.kiem_tra_quyen_quan_ly(session.get('user_id'))
+    if not gate.get('status'): return jsonify(gate),403
+    return jsonify(voucher_bus.toggle(voucher_id))
+
+@app.route('/api/voucher/<int:voucher_id>', methods=['DELETE'])
+def api_voucher_delete(voucher_id):
+    gate=user_bus.kiem_tra_quyen_quan_ly(session.get('user_id'))
+    if not gate.get('status'): return jsonify(gate),403
+    return jsonify(voucher_bus.xoa(voucher_id))
+
+# ==========================================
 # API GIỎ HÀNG
 # ==========================================
 @app.route('/api/gio-hang/them', methods=['POST'])
@@ -404,62 +464,37 @@ def api_dat_hang():
             return None
         return int(so)
 
-    subtotal = _so(data.get('SubTotal'), 0)
+    voucher_code = str(data.get('voucherCode') or data.get('VoucherCode') or '').strip()
+    # Client subtotal/discount/total are intentionally ignored. Product prices and voucher
+    # calculation are authoritative in DonHangBus/DonHangDao.
     shipping_fee = _so(data.get('ShippingFee'), 25000)
-    discount = _so(data.get('Discount'), 0)
-    total_amount = _so(data.get('TotalAmount'), 0)
-    if None in (subtotal, shipping_fee, discount, total_amount):
-        return jsonify({"status": False,
-                        "message": "Thông tin tiền của đơn hàng không hợp lệ!",
-                        "data": None}), 200
-    if subtotal < 0 or shipping_fee < 0 or discount < 0 or total_amount < 0:
-        return jsonify({"status": False,
-                        "message": "Thông tin tiền của đơn hàng không hợp lệ!",
-                        "data": None}), 200
-
+    if shipping_fee is None or shipping_fee < 0:
+        return jsonify({"status": False, "message": "Phí vận chuyển không hợp lệ!", "data": None}), 200
     don_hang_moi = DonHang(
-        UserId        = session.get('user_id'),
-        ReceiverName  = str(data.get('ReceiverName') or '').strip(),
-        ReceiverPhone = str(data.get('ReceiverPhone') or '').strip(),
-        ShippingAddress = str(data.get('ShippingAddress') or '').strip(),
-        PaymentMethod = str(data.get('PaymentMethod') or 'COD').strip(),
-        SubTotal      = subtotal,
-        ShippingFee   = shipping_fee,
-        DiscountAmount= discount,
-        TotalAmount   = total_amount
+        UserId=session.get('user_id'),
+        ReceiverName=str(data.get('ReceiverName') or '').strip(),
+        ReceiverPhone=str(data.get('ReceiverPhone') or '').strip(),
+        ShippingAddress=str(data.get('ShippingAddress') or '').strip(),
+        PaymentMethod=str(data.get('PaymentMethod') or 'COD').strip(),
+        ShippingFee=shipping_fee,
+        VoucherCode=voucher_code or None
     )
-
-    items = data.get('Items')
-    if not isinstance(items, list):
-        items = []
+    items=data.get('Items')
+    if not isinstance(items,list):
+        items=[]
     for item in items:
-        if not isinstance(item, dict):
-            return jsonify({"status": False,
-                            "message": "Thông tin đơn hàng không hợp lệ!",
-                            "data": None}), 200
-        qty = _nguyen(item.get('Quantity'), 0)
-        if qty is None or qty <= 0:
-            return jsonify({"status": False,
-                            "message": "Số lượng sản phẩm không hợp lệ!",
-                            "data": None}), 200
-        price = _so(item.get('UnitPrice'), 0)
-        if price < 0:
-            return jsonify({"status": False,
-                            "message": "Đơn giá sản phẩm không hợp lệ!",
-                            "data": None}), 200
-        ma_sp = _nguyen(item.get('ProductId'), 0)
-        if ma_sp is None:
-            ma_sp = 0
-        don_hang_moi.Items.append(OrderItem(
-            ProductId   = int(ma_sp),
-            ProductName = str(item.get('ProductName')  or f"Sản phẩm #{ma_sp}"),
-            Emoji       = str(item.get('Emoji')        or '📦'),
-            Quantity    = qty,
-            UnitPrice   = price,
-            TotalPrice  = qty * price
-        ))
+        if not isinstance(item,dict):
+            return jsonify({"status":False,"message":"Thông tin đơn hàng không hợp lệ!","data":None}),200
+        qty=_nguyen(item.get('Quantity'),0)
+        if qty is None or qty<=0:
+            return jsonify({"status":False,"message":"Số lượng sản phẩm không hợp lệ!","data":None}),200
+        ma_sp=_nguyen(item.get('ProductId'),0)
+        if ma_sp is None or ma_sp<=0:
+            return jsonify({"status":False,"message":"Thông tin sản phẩm không hợp lệ!","data":None}),200
+        don_hang_moi.Items.append(OrderItem(ProductId=ma_sp,ProductName=str(item.get('ProductName') or f"Sản phẩm #{ma_sp}"),
+            Emoji=str(item.get('Emoji') or '📦'),Quantity=qty,UnitPrice=0,TotalPrice=0))
+    result=don_hang_bus.tao_don_hang(don_hang_moi)
 
-    result = don_hang_bus.tao_don_hang(don_hang_moi)
     if result.get('status'):
         # Phase 2: chỉ xóa các món đã mua, giữ món chưa chọn trong giỏ.
         da_mua = []

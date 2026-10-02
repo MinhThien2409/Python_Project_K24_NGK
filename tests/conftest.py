@@ -1129,6 +1129,14 @@ class FakeDonHangCustomerStore:
         return {int(pid): self.san_pham.get(int(pid), {}).get("store_id", 1)
                 for pid in (product_ids or [])}
 
+    def lay_thong_tin_san_pham(self, product_ids):
+        return {int(pid): {
+            "name": self.san_pham[int(pid)].get("name"),
+            "price": float(self.san_pham[int(pid)].get("price", 0)),
+            "quantity": int(self.san_pham[int(pid)].get("quantity", 0)),
+            "is_active": bool(self.san_pham[int(pid)].get("is_active", True))
+        } for pid in (product_ids or []) if int(pid) in self.san_pham}
+
     def lay_ten_cua_cac_store(self, store_ids):
         return {int(sid): f"Shop {int(sid)}" for sid in (store_ids or [])}
 

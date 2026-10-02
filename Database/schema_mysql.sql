@@ -130,6 +130,27 @@ CREATE TABLE Orders (
     CONSTRAINT FK_Orders_User  FOREIGN KEY (UserId)  REFERENCES Users (UserId)
 );
 
+CREATE TABLE Voucher (
+    VoucherId INT AUTO_INCREMENT PRIMARY KEY,
+    Code VARCHAR(50) NOT NULL UNIQUE,
+    Name VARCHAR(150) NOT NULL,
+    DiscountType VARCHAR(20) NOT NULL,
+    DiscountValue DECIMAL(18,2) NOT NULL,
+    MinOrderValue DECIMAL(18,2) NOT NULL DEFAULT 0,
+    MaxDiscount DECIMAL(18,2) NOT NULL DEFAULT 0,
+    StartDate DATETIME NOT NULL,
+    EndDate DATETIME NOT NULL,
+    Quantity INT NOT NULL DEFAULT 0,
+    UsedQuantity INT NOT NULL DEFAULT 0,
+    IsActive TINYINT(1) NOT NULL DEFAULT 1,
+    CONSTRAINT CK_Voucher_Type CHECK (DiscountType IN ('PERCENT','FIXED')),
+    CONSTRAINT CK_Voucher_Value CHECK ((DiscountType='PERCENT' AND DiscountValue>0 AND DiscountValue<=100) OR (DiscountType='FIXED' AND DiscountValue>0)),
+    CONSTRAINT CK_Voucher_Min CHECK (MinOrderValue>=0),
+    CONSTRAINT CK_Voucher_Max CHECK (MaxDiscount>=0),
+    CONSTRAINT CK_Voucher_Date CHECK (StartDate<=EndDate),
+    CONSTRAINT CK_Voucher_Quantity CHECK (Quantity>=0 AND UsedQuantity>=0 AND UsedQuantity<=Quantity)
+);
+
 CREATE TABLE OrderItems (
     OrderItemId INT AUTO_INCREMENT PRIMARY KEY,
     OrderId     INT NOT NULL,

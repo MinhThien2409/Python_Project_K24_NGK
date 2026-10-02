@@ -191,13 +191,29 @@
 
   <div class="admin-layout">
     <aside class="admin-menu">
+      <div class="admin-menu-item" id="menu-vouchers" onclick="switchAdminTab('vouchers')">🎟️ Quản lý Voucher</div>
       <div class="admin-menu-item" id="menu-categories" onclick="switchAdminTab('categories')">📁 Quản lý danh mục</div>
       <div class="admin-menu-item" id="menu-sellers" onclick="switchAdminTab('sellers')">🏪 Duyệt người bán hàng <span id="sellerPendingBadge" style="color:red; font-weight:bold;"></span></div>
       <div class="admin-menu-item active" id="menu-users" onclick="switchAdminTab('users')">👥 Quản lý tài khoản</div>
     </aside>
 
     <main class="main">
-      <div id="pane-categories" class="admin-pane" style="display:none;">
+      <div id="pane-vouchers" class="admin-pane" style="display:none;">
+  <div class="admin-card"><h3>Quản lý Voucher / Discount</h3><input type="hidden" id="voucherId">
+    <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-top:12px;">
+      <input id="voucherCode" maxlength="50" placeholder="Code"><input id="voucherName" maxlength="150" placeholder="Tên voucher">
+      <select id="voucherType"><option value="PERCENT">PERCENT</option><option value="FIXED">FIXED</option></select>
+      <input id="voucherValue" type="number" min="0" step="0.01" placeholder="Discount value">
+      <input id="voucherMin" type="number" min="0" step="0.01" placeholder="Min order">
+      <input id="voucherMax" type="number" min="0" step="0.01" placeholder="Max discount (0 = không giới hạn)">
+      <input id="voucherStart" type="datetime-local"><input id="voucherEnd" type="datetime-local">
+      <input id="voucherQty" type="number" min="0" step="1" placeholder="Quantity">
+    </div><div style="margin-top:10px;"><button class="checkout-btn" onclick="luuVoucher()">Lưu Voucher</button> <button onclick="resetVoucherForm()">Nhập mới</button></div>
+  </div>
+  <div class="admin-card"><table><thead><tr><th>Code</th><th>Name</th><th>Type</th><th>Discount</th><th>Min</th><th>Max</th><th>Hiệu lực</th><th>Qty</th><th>Used</th><th>Status</th><th>Action</th></tr></thead><tbody id="tblAdminVouchersBody"></tbody></table></div>
+</div>
+
+<div id="pane-categories" class="admin-pane" style="display:none;">
   <div class="admin-card">
     <div style="display:flex; justify-content:space-between; align-items:center;">
       <h3>Quản lý danh mục sản phẩm</h3>
@@ -605,6 +621,7 @@
         💙 ZaloPay: <b>0987654321</b> – POBBY STORE
       </div>
 
+      <div class="form-group"><label>Mã Voucher</label><div style="display:flex;gap:8px;"><input id="checkoutVoucherCode" type="text" maxlength="50" placeholder="Nhập mã voucher" style="flex:1;"><button type="button" onclick="applyCheckoutVoucher()">Áp dụng</button><button type="button" onclick="clearCheckoutVoucher()">Bỏ</button></div><div id="voucherApplyStatus" style="display:none;color:var(--green);font-size:12px;margin-top:5px;"></div></div>
       <!-- TỔNG KẾT -->
       <div style="background:var(--bg); border-radius:8px; padding:12px 14px; margin-bottom:14px; font-size:13px;">
         <div style="display:flex; justify-content:space-between; margin-bottom:6px;">
@@ -613,6 +630,7 @@
         <div style="display:flex; justify-content:space-between; margin-bottom:6px;">
           <span>Phí vận chuyển:</span><span id="checkoutShipText" style="color:var(--green);">0đ</span>
         </div>
+        <div style="display:flex; justify-content:space-between; margin-bottom:6px;"><span>Giảm giá:</span><span id="checkoutDiscountText" style="color:var(--red);">-0đ</span></div>
         <div style="display:flex; justify-content:space-between; font-weight:bold; font-size:15px; padding-top:8px; border-top:1px solid var(--border);">
           <span>Tổng thanh toán:</span>
           <span id="checkoutTotalText" style="color:var(--red); font-size:17px;">0đ</span>

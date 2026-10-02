@@ -19,6 +19,7 @@ let products = [
 const SELLER_CITY = 'hcm'; // mặc định HCM
 
 let currentShippingFee = 25000; // biến global lưu phí ship hiện tại
+let voucherPreview = null;
 
 let cart = [];
 // Phase 2: selection checkout — Set các ProductId được tick (mặc định chọn tất cả).
@@ -122,6 +123,7 @@ function renderAdminMenuTheoVaiTro() {
   const laQuanLy = maQuyen === 2 || currentUser?.role === 'Quản lý';
 
   const menu = {
+    vouchers:    laQuanLy,
     categories: laQuanLy,          // Quản lý: Quản lý danh mục
     sellers:    laQuanLy,          // Quản lý: Duyệt người bán hàng
     users:      laQuanLy || laAdmin, // cả hai: Danh sách tài khoản (015 FR-005 gộp bảng)
@@ -837,6 +839,7 @@ function switchAdminTab(tabName) {
   if (paneEl) paneEl.style.display = 'block';
 
   // Gọi hàm load dữ liệu tương ứng (009: bỏ các tab đã cắt)
+  if (tabName === 'vouchers')     renderAdminVouchers();
   if (tabName === 'categories')  renderAdminCategories();
   if (tabName === 'sellers')     renderAdminSellers();
   if (tabName === 'users') {
@@ -844,6 +847,21 @@ function switchAdminTab(tabName) {
   renderAdminUsers();
 }
 }
+
+async function renderAdminVouchers(){
+  const body=document.getElementById('tblAdminVouchersBody');if(!body)return;
+  try{const r=await fetch('/api/voucher');const j=await r.json();if(!j.status){showToast('❌ '+j.message);return;}
+    body.innerHTML=(j.data||[]).map(function(v){return '<tr><td><b>'+v.Code+'</b></td><td>'+v.Name+'</td><td>'+v.DiscountType+'</td><td>'+Number(v.DiscountValue).toLocaleString('vi-VN')+(v.DiscountType==='PERCENT'?'%':'đ')+'</td><td>'+Number(v.MinOrderValue).toLocaleString('vi-VN')+'đ</td><td>'+Number(v.MaxDiscount).toLocaleString('vi-VN')+'đ</td><td>'+(v.StartDate||'')+'<br>'+(v.EndDate||'')+'</td><td>'+v.Quantity+'</td><td>'+v.UsedQuantity+'</td><td>'+(v.IsActive?'Đang bật':'Đã tắt')+'</td><td><button onclick="suaVoucher('+v.VoucherId+')">Sửa</button> <button onclick="toggleVoucher('+v.VoucherId+')">'+(v.IsActive?'Tắt':'Bật')+'</button> <button onclick="xoaVoucher('+v.VoucherId+')">Xóa</button></td></tr>';}).join('');
+  }catch(e){showToast('❌ Không thể tải danh sách voucher!');}
+}
+function resetVoucherForm(){['voucherId','voucherCode','voucherName','voucherValue','voucherMin','voucherMax','voucherStart','voucherEnd','voucherQty'].forEach(function(id){const e=document.getElementById(id);if(e)e.value='';});document.getElementById('voucherType').value='PERCENT';}
+async function luuVoucher(){
+  const id=document.getElementById('voucherId').value,payload={Code:document.getElementById('voucherCode').value,Name:document.getElementById('voucherName').value,DiscountType:document.getElementById('voucherType').value,DiscountValue:document.getElementById('voucherValue').value,MinOrderValue:document.getElementById('voucherMin').value,MaxDiscount:document.getElementById('voucherMax').value,StartDate:document.getElementById('voucherStart').value,EndDate:document.getElementById('voucherEnd').value,Quantity:document.getElementById('voucherQty').value};
+  try{const r=await fetch(id?'/api/voucher/'+id:'/api/voucher',{method:id?'PUT':'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});const j=await r.json();showToast((j.status?'✅ ':'❌ ')+j.message);if(j.status){resetVoucherForm();renderAdminVouchers();}}catch(e){showToast('❌ Lỗi lưu voucher!');}
+}
+function suaVoucher(id){fetch('/api/voucher/'+id).then(function(r){return r.json();}).then(function(j){if(!j.status)return showToast('❌ '+j.message);const v=j.data;document.getElementById('voucherId').value=v.VoucherId;document.getElementById('voucherCode').value=v.Code;document.getElementById('voucherName').value=v.Name;document.getElementById('voucherType').value=v.DiscountType;document.getElementById('voucherValue').value=v.DiscountValue;document.getElementById('voucherMin').value=v.MinOrderValue;document.getElementById('voucherMax').value=v.MaxDiscount;document.getElementById('voucherStart').value=(v.StartDate||'').replace(' ','T').slice(0,16);document.getElementById('voucherEnd').value=(v.EndDate||'').replace(' ','T').slice(0,16);document.getElementById('voucherQty').value=v.Quantity;window.scrollTo({top:0,behavior:'smooth'});});}
+async function toggleVoucher(id){const r=await fetch('/api/voucher/'+id+'/toggle',{method:'POST'});const j=await r.json();showToast((j.status?'✅ ':'❌ ')+j.message);renderAdminVouchers();}
+async function xoaVoucher(id){if(!confirm('Xóa voucher này? Voucher đã sử dụng sẽ không được xóa.'))return;const r=await fetch('/api/voucher/'+id,{method:'DELETE'});const j=await r.json();showToast((j.status?'✅ ':'❌ ')+j.message);renderAdminVouchers();}
 
 // Phase 1 (Task 5): bật nút Lưu khi có thay đổi, tự khóa lại khi hoàn tác
 let profileGoc = null;
@@ -2404,9 +2422,8 @@ async function handlePlaceOrder(e) {
     ReceiverPhone  : receiverPhone,
     ShippingAddress: receiverAddress,
     PaymentMethod  : paymentMethod,
-    SubTotal       : subtotal,
     ShippingFee    : currentShippingFee,
-    TotalAmount    : totalAmount,
+    voucherCode    : (document.getElementById('checkoutVoucherCode')?.value || '').trim(),
     Items: matHangChon.map(item => ({
       // Thử tất cả các tên field có thể có
       ProductId  : item.ProductId   || item.product_id  || item.id,
@@ -2438,6 +2455,9 @@ async function handlePlaceOrder(e) {
       cart = cart.filter(i => !daMua.has(String(i.ProductId)));
       selectedCartIds.clear();
       currentShippingFee = 25000;
+      voucherPreview = null;
+      const voucherInput = document.getElementById('checkoutVoucherCode');
+      if (voucherInput) voucherInput.value = '';
       updateCartBadge();
       renderCartItems();
       // 011 US2: đặt hàng có thể sinh NHIỀU đơn theo từng shop (data.orders)
@@ -2775,19 +2795,29 @@ function recalcOrderTotal() {
 }
 
 function updateCheckoutSummary() {
-  // Phase 2: mọi tổng tiền checkout chỉ tính trên món được chọn.
-  const subtotal = getSelectedCartItems()
-    .reduce((sum, item) => sum + (item.Quantity * item.UnitPrice), 0);
-  const total = subtotal + currentShippingFee;
-
-  document.getElementById('checkoutSubtotalText').textContent =
-    subtotal.toLocaleString('vi-VN') + 'đ';
-  document.getElementById('checkoutShipText').textContent =
-    currentShippingFee.toLocaleString('vi-VN') + 'đ';
-  document.getElementById('checkoutTotalText').textContent =
-    Math.max(0, total).toLocaleString('vi-VN') + 'đ';
+  const subtotalLocal=getSelectedCartItems().reduce((sum,item)=>sum+(item.Quantity*item.UnitPrice),0);
+  const subtotal=voucherPreview?.Subtotal ?? subtotalLocal;
+  const discount=voucherPreview?.DiscountAmount ?? 0;
+  const total=Math.max(0,subtotal+currentShippingFee-discount);
+  document.getElementById('checkoutSubtotalText').textContent=subtotal.toLocaleString('vi-VN')+'đ';
+  document.getElementById('checkoutShipText').textContent=currentShippingFee.toLocaleString('vi-VN')+'đ';
+  const de=document.getElementById('checkoutDiscountText'); if(de)de.textContent='-'+discount.toLocaleString('vi-VN')+'đ';
+  document.getElementById('checkoutTotalText').textContent=total.toLocaleString('vi-VN')+'đ';
+  const se=document.getElementById('voucherApplyStatus');
+  if(se&&voucherPreview){se.style.display='block';se.textContent='✓ Voucher hợp lệ — giảm '+discount.toLocaleString('vi-VN')+'đ';}
 }
-
+async function applyCheckoutVoucher(){
+  const code=(document.getElementById('checkoutVoucherCode')?.value||'').trim();
+  if(!code){voucherPreview=null;updateCheckoutSummary();showToast('⚠️ Vui lòng nhập mã voucher!');return;}
+  const items=getSelectedCartItems().map(i=>({ProductId:i.ProductId,Quantity:i.Quantity}));
+  try{
+    const res=await fetch('/api/voucher/kiem-tra',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({voucherCode:code,Items:items})});
+    const result=await res.json();
+    if(!result.status){voucherPreview=null;updateCheckoutSummary();showToast('❌ '+result.message);return;}
+    voucherPreview=result.data;updateCheckoutSummary();showToast('🎟️ '+result.message);
+  }catch(e){showToast('❌ Không thể kiểm tra voucher!');}
+}
+function clearCheckoutVoucher(){const i=document.getElementById('checkoutVoucherCode');if(i)i.value='';voucherPreview=null;updateCheckoutSummary();}
 function togglePaymentDetails(val) {
   // Phase 2: phương thức lạ → hiện cảnh báo unsupported, ẩn mọi QR/hướng dẫn.
   const laHoTro = CAC_PHUONG_THUC_HO_TRO.includes(val);

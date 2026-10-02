@@ -140,6 +140,7 @@ CREATE TABLE Orders (
 
 CREATE TABLE Voucher (
     VoucherId INT AUTO_INCREMENT PRIMARY KEY,
+    SellerId INT NOT NULL,
     Code VARCHAR(50) NOT NULL UNIQUE,
     Name VARCHAR(150) NOT NULL,
     DiscountType VARCHAR(20) NOT NULL,
@@ -151,12 +152,23 @@ CREATE TABLE Voucher (
     Quantity INT NOT NULL DEFAULT 0,
     UsedQuantity INT NOT NULL DEFAULT 0,
     IsActive TINYINT(1) NOT NULL DEFAULT 1,
+    CONSTRAINT FK_Voucher_Seller FOREIGN KEY (SellerId) REFERENCES Stores (StoreId),
+    KEY IX_Voucher_SellerId (SellerId),
     CONSTRAINT CK_Voucher_Type CHECK (DiscountType IN ('PERCENT','FIXED')),
     CONSTRAINT CK_Voucher_Value CHECK ((DiscountType='PERCENT' AND DiscountValue>0 AND DiscountValue<=100) OR (DiscountType='FIXED' AND DiscountValue>0)),
     CONSTRAINT CK_Voucher_Min CHECK (MinOrderValue>=0),
     CONSTRAINT CK_Voucher_Max CHECK (MaxDiscount>=0),
     CONSTRAINT CK_Voucher_Date CHECK (StartDate<=EndDate),
     CONSTRAINT CK_Voucher_Quantity CHECK (Quantity>=0 AND UsedQuantity>=0 AND UsedQuantity<=Quantity)
+);
+
+CREATE TABLE VoucherProduct (
+    VoucherId INT NOT NULL,
+    ProductId INT NOT NULL,
+    PRIMARY KEY (VoucherId, ProductId),
+    CONSTRAINT FK_VoucherProduct_Voucher FOREIGN KEY (VoucherId) REFERENCES Voucher (VoucherId),
+    CONSTRAINT FK_VoucherProduct_Product FOREIGN KEY (ProductId) REFERENCES Products (ProductId),
+    KEY IX_VoucherProduct_ProductId (ProductId)
 );
 
 CREATE TABLE OrderItems (

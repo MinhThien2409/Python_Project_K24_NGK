@@ -9,30 +9,49 @@ class GianHangBus:
         self.user_dao = UserDao()
 
     def dang_ky_gian_hang(self, req: YeuCau):
-        """Gửi đơn đăng ký → SellerRequests (chờ Admin duyệt)"""
-        if not req.ShopName or not req.UserId:
-            return {"status": False, "message": "Tên cửa hàng và UserId không được để trống!"}
-
-        # ✅ Tự động lấy NationalId từ hồ sơ user
+        """Validate server-side và gửi đơn Seller; user/CCCD lấy từ session/profile."""
+        import re
+        shop = str(req.ShopName or "").strip()
+        phone = str(req.BusinessPhone or "").strip()
+        category = str(req.Category or "").strip()
+        description = str(req.Description or "").strip()
+        if not shop:
+            return {"status": False, "message": "Tên cửa hàng không được để trống!"}
+        if len(shop) > 150:
+            return {"status": False, "message": "Tên cửa hàng không được vượt quá 150 ký tự!"}
+        if not phone or not re.fullmatch(r"0\d{9}", phone):
+            return {"status": False, "message": "Số điện thoại không hợp lệ!"}
+        if not category:
+            return {"status": False, "message": "Danh mục không được để trống!"}
+        if len(category) > 50:
+            return {"status": False, "message": "Danh mục không được vượt quá 50 ký tự!"}
+        if len(description) > 500:
+            return {"status": False, "message": "Mô tả không được vượt quá 500 ký tự!"}
+        if not req.UserId:
+            return {"status": False, "message": "Tài khoản đăng ký không hợp lệ!"}
         user_info = self.user_dao.lay_thong_tin_user(req.UserId)
         if not user_info:
             return {"status": False, "message": "Không tìm thấy thông tin tài khoản!"}
-
         thieu = []
-        if not user_info.get('FullName'):   thieu.append('Họ tên')
-        if not user_info.get('Phone'):      thieu.append('Số điện thoại')
-        if not user_info.get('Address'):    thieu.append('Địa chỉ')
-        if not user_info.get('NationalId'): thieu.append('CMND/CCCD')
-
+        if not str(user_info.get('FullName') or '').strip(): thieu.append('Họ tên')
+        if not str(user_info.get('Phone') or '').strip(): thieu.append('Số điện thoại')
+        if not str(user_info.get('Address') or '').strip(): thieu.append('Địa chỉ')
+        if not str(user_info.get('NationalId') or '').strip(): thieu.append('CMND/CCCD')
         if thieu:
             return {"status": False,
                     "message": f"Vui lòng cập nhật đầy đủ thông tin trước khi đăng ký! Còn thiếu: {', '.join(thieu)}"}
-
-        req.NationalId = user_info.get('NationalId')  # gán tự động, không cần user nhập lại
-
-        ok = self.dao.gui_yeu_cau_ban_hang(req)  # gọi DAO, hàm này vẫn đúng tên
-        if ok:
+        req.ShopName = shop
+        req.BusinessPhone = phone
+        req.Category = category
+        req.Description = description or None
+        req.NationalId = str(user_info.get('NationalId')).strip()
+        ok = self.dao.gui_yeu_cau_ban_hang(req)
+        if ok is True or ok == "ok":
             return {"status": True, "message": "Đã gửi yêu cầu! Quản lý sẽ xét duyệt trong 24h."}
+        if ok == "da_co_pending":
+            return {"status": False, "message": "Tài khoản đã có yêu cầu đăng ký đang chờ duyệt!"}
+        if ok == "da_la_seller":
+            return {"status": False, "message": "Tài khoản này đã là Seller và có gian hàng!"}
         return {"status": False, "message": "Lỗi hệ thống, vui lòng thử lại!"}
 
     def lay_danh_sach_yeu_cau(self):

@@ -1,4 +1,4 @@
-# -*- coding: utf-8 -*-
+﻿# -*- coding: utf-8 -*-
 """Integration test khóa/mở khóa tài khoản (feature 002, US3) qua Flask test_client.
 
 Login Quản lý → PUT /api/users/<ma_user>/status; kiểm tra đăng nhập của user
@@ -169,15 +169,20 @@ def _tao_dao_admin_quan_ly():
         },
     )
 
-def test_admin_khong_duoc_khoa_quan_ly(client, app_voi_dao):
-    """Policy hiện tại: endpoint trạng thái chỉ cho actor Quản lý."""
+def test_admin_khoa_mo_khoa_quan_ly(client, app_voi_dao):
+    """Phase 5: Admin được khóa/mở khóa đúng target Quản lý."""
     user_dao = _tao_dao_admin_quan_ly()
     _gan_dao(app_voi_dao, user_dao)
 
     _login(client, "admin1")
     resp = client.put("/api/users/8/status", json={"status": "banned"})
-    assert resp.status_code == 403
-    assert resp.get_json()["status"] is False
+    assert resp.status_code == 200
+    assert resp.get_json()["status"] is True
+    assert user_dao.thong_tin[8]["trang_thai"] == "banned"
+    resp = client.put("/api/users/8/status", json={"status": "active"})
+    assert resp.status_code == 200
+    assert resp.get_json()["status"] is True
+    assert user_dao.thong_tin[8]["trang_thai"] == "active"
 
 def test_quan_ly_actor_khong_khoa_duoc_quan_ly(client, app_voi_dao):
     """015 FR-009(1): Quản lý tác động lên Quản lý khác bị chặn — không khóa luôn."""

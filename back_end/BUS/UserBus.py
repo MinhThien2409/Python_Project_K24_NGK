@@ -418,7 +418,7 @@ class UserBus:
         return {"status": False, "message": "Lỗi cập nhật trạng thái."}
 
     def cap_lai_mat_khau(self, nguoi_thao_tac_id, ma_user, mat_khau_moi=None):
-        """Cấp lại mật khẩu cho Seller/Khách hàng bởi Quản lý."""
+        """Cấp lại mật khẩu cho Seller/Customer bởi Quản lý (luồng cũ)."""
         gate = self.kiem_tra_quyen_quan_ly(nguoi_thao_tac_id)
         if not gate.get("status"):
             return gate
@@ -452,4 +452,56 @@ class UserBus:
                 "ten_user": thong_tin.get("FullName"),
                 "mat_khau_moi": mat_khau_moi
             }
+        }
+
+    def cap_nhat_trang_thai_quan_ly(self, nguoi_thao_tac_id, ma_user, trang_thai):
+        """Admin khóa/mở khóa tài khoản Quản lý; backend xác thực target role."""
+        gate = self.kiem_tra_quyen_admin(nguoi_thao_tac_id)
+        if not gate.get("status"):
+            return gate
+        if not ma_user:
+            return {"status": False, "message": "Thiếu mã user!"}
+        if trang_thai not in ("active", "banned"):
+            return {"status": False, "message": "Trạng thái không hợp lệ!"}
+        if int(nguoi_thao_tac_id or 0) == int(ma_user or 0):
+            return {"status": False, "message": "Bạn không thể khóa/mở khóa chính tài khoản của mình!"}
+
+        thong_tin = self.dao.lay_thong_tin_user(ma_user)
+        if not thong_tin:
+            return {"status": False, "message": "Tài khoản không tồn tại!"}
+        role_id = thong_tin.get("Role_Id") or thong_tin.get("Role_id") or thong_tin.get("role_id")
+        if self.dao.lay_ten_vai_tro_theo_id(role_id) != "Quản lý":
+            return {"status": False,
+                    "message": "Admin chỉ được khóa/mở khóa tài khoản Quản lý!"}
+
+        ok = self.dao.cap_nhat_trang_thai(ma_user, trang_thai)
+        if ok:
+            label = "Đã khóa tài khoản!" if trang_thai == "banned" else "Đã mở khóa tài khoản!"
+            return {"status": True, "message": label}
+        return {"status": False, "message": "Lỗi cập nhật trạng thái."}
+
+    def cap_lai_mat_khau_quan_ly(self, nguoi_thao_tac_id, ma_user):
+        """Admin reset mật khẩu Quản lý về đúng giá trị cố định 123456."""
+        gate = self.kiem_tra_quyen_admin(nguoi_thao_tac_id)
+        if not gate.get("status"):
+            return gate
+        if not ma_user:
+            return {"status": False, "message": "Thiếu mã user!", "data": None}
+
+        thong_tin = self.dao.lay_thong_tin_user(ma_user)
+        if not thong_tin:
+            return {"status": False, "message": "Tài khoản không tồn tại!", "data": None}
+        role_id = thong_tin.get("Role_Id") or thong_tin.get("Role_id") or thong_tin.get("role_id")
+        if self.dao.lay_ten_vai_tro_theo_id(role_id) != "Quản lý":
+            return {"status": False,
+                    "message": "Admin chỉ được cấp lại mật khẩu cho Quản lý!",
+                    "data": None}
+
+        if not self.dao.cap_nhat_mat_khau(ma_user, "123456"):
+            return {"status": False, "message": "Lỗi cập nhật mật khẩu!", "data": None}
+        return {
+            "status": True,
+            "message": "Đã cấp lại mật khẩu Quản lý về 123456!",
+            "data": {"ma_user": ma_user, "ten_user": thong_tin.get("FullName"),
+                     "mat_khau_moi": "123456"}
         }

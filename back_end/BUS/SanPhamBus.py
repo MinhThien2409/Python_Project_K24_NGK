@@ -1,4 +1,4 @@
-from back_end.DAO.SanPhamDao import SanPhamDao
+﻿from back_end.DAO.SanPhamDao import SanPhamDao
 from back_end.Model.SanPham import SanPham
 import inspect
 
@@ -150,6 +150,10 @@ class SanPhamBus:
             return {"status": False, "message": "Giá sản phẩm phải lớn hơn 0!"}
         if not category_id:
             return {"status": False, "message": "Vui lòng chọn danh mục!"}
+        try:
+            category_id = int(category_id)
+        except (TypeError, ValueError):
+            return {"status": False, "message": "Danh mục không hợp lệ!"}
         if not store_id:
             return {"status": False, "message": "Thiếu thông tin gian hàng!"}
         if so_luong is not None and int(so_luong) < 0:
@@ -232,8 +236,11 @@ class SanPhamBus:
                                  gia_goc, so_luong, category_id,
                                  emoji=None, image_url=None, **_bo_qua):
         """Seller thêm sản phẩm mới vào gian hàng của mình."""
-        if not ten or not str(ten).strip():
+        ten_sach = str(ten or "").strip()
+        if not ten_sach:
             return {"status": False, "message": "Tên sản phẩm không được để trống!"}
+        if len(ten_sach) > 200:
+            return {"status": False, "message": "Tên sản phẩm không được vượt quá 200 ký tự!"}
         try:
             gia_f = float(gia) if gia is not None else 0
         except (TypeError, ValueError):
@@ -242,6 +249,10 @@ class SanPhamBus:
             return {"status": False, "message": "Giá sản phẩm phải lớn hơn 0!"}
         if not category_id:
             return {"status": False, "message": "Vui lòng chọn danh mục!"}
+        try:
+            category_id = int(category_id)
+        except (TypeError, ValueError):
+            return {"status": False, "message": "Danh mục không hợp lệ!"}
         if not store_id:
             return {"status": False, "message": "Thiếu thông tin gian hàng!"}
         if so_luong is not None:
@@ -252,13 +263,16 @@ class SanPhamBus:
                 return {"status": False, "message": "Số lượng không được âm!"}
         if not self.dao.kiem_tra_category_ton_tai(category_id):
             return {"status": False, "message": "Danh mục không tồn tại, vui lòng chọn danh mục!"}
+        mo_ta_sach = str(mo_ta or "").strip()
+        if len(mo_ta_sach) > 1000:
+            return {"status": False, "message": "Mô tả sản phẩm không được vượt quá 1000 ký tự!"}
         # Phase 4: chong duplicate khong phan biet hoa/thuong trong cung store.
         _trung = getattr(self.dao, "kiem_tra_trung_ten", None)
-        if callable(_trung) and _trung(store_id, ten):
+        if callable(_trung) and _trung(store_id, ten_sach):
             return {"status": False,
                     "message": "Sản phẩm đã tồn tại trong gian hàng, vui lòng chọn từ danh sách!"}
         sp = SanPham(
-            ProductName=str(ten).strip(), Description=mo_ta,
+            ProductName=ten_sach, Description=mo_ta_sach,
             Price=gia_f, OldPrice=float(gia_goc) if gia_goc else None,
             Quantity=int(so_luong) if so_luong is not None else 0,
             SoldCount=0,
@@ -286,20 +300,37 @@ class SanPhamBus:
                 return {"status": False, "message": "Số lượng không hợp lệ!"}
         if chu is None or int(chu) != int(store_id):
             return {"status": False, "message": "Không có quyền thao tác trên sản phẩm này!"}
-        if not ten or not str(ten).strip():
+        ten_sach = str(ten or "").strip()
+        if not ten_sach:
             return {"status": False, "message": "Tên sản phẩm không được để trống!"}
+        if len(ten_sach) > 200:
+            return {"status": False, "message": "Tên sản phẩm không được vượt quá 200 ký tự!"}
         try:
             gia_f = float(gia) if gia is not None else 0
         except (TypeError, ValueError):
             return {"status": False, "message": "Giá sản phẩm phải lớn hơn 0!"}
         if gia_f <= 0:
             return {"status": False, "message": "Giá sản phẩm phải lớn hơn 0!"}
+        mo_ta_sach = str(mo_ta or "").strip()
+        if len(mo_ta_sach) > 1000:
+            return {"status": False, "message": "Mô tả sản phẩm không được vượt quá 1000 ký tự!"}
+        if not category_id:
+            return {"status": False, "message": "Vui lòng chọn danh mục!"}
+        try:
+            category_id = int(category_id)
+        except (TypeError, ValueError):
+            return {"status": False, "message": "Danh mục không hợp lệ!"}
+        if not self.dao.kiem_tra_category_ton_tai(category_id):
+            return {"status": False, "message": "Danh mục không tồn tại, vui lòng chọn danh mục!"}
+        _trung = getattr(self.dao, "kiem_tra_trung_ten", None)
+        if callable(_trung) and _trung(store_id, ten_sach, product_id):
+            return {"status": False, "message": "Sản phẩm đã tồn tại trong gian hàng, vui lòng chọn tên khác!"}
         sp = SanPham(
-            ProductId=int(product_id), ProductName=str(ten).strip(), Description=mo_ta,
+            ProductId=int(product_id), ProductName=ten_sach, Description=mo_ta_sach,
             Price=gia_f, OldPrice=float(gia_goc) if gia_goc else None,
             Quantity=int(so_luong) if so_luong is not None else 0,
             Emoji=emoji or EMOJI_MAC_DINH, ImageUrl=image_url or None,
-            CategoryId=int(category_id) if category_id else CATEGORY_MAC_DINH,
+            CategoryId=category_id,
             StoreId=int(store_id), IsActive=1)
         ok = self.dao.sua_theo_store(sp, store_id)
         if ok:

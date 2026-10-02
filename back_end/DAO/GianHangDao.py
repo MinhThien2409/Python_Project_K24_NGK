@@ -14,6 +14,7 @@ KET_QUA_OK = "ok"
 KET_QUA_DA_XU_LY = "da_xu_ly"
 KET_QUA_KHONG_TIM_THAY = "khong_tim_thay"
 KET_QUA_DA_LA_SELLER = "da_la_seller"
+KET_QUA_DA_CO_PENDING = "da_co_pending"
 
 
 class GianHangDao:
@@ -170,26 +171,46 @@ class GianHangDao:
             cursor.close(); conn.close()
 
     def gui_yeu_cau_ban_hang(self, req: YeuCau):
-        """User gửi đơn đăng ký → insert vào SellerRequests"""
+        """Tạo yêu cầu Seller, bảo đảm mỗi user chỉ có tối đa 1 request pending."""
         conn = DBconnection.get_connection()
-        if conn is None: return False
+        if conn is None:
+            return KET_QUA_KHONG_TIM_THAY
         cursor = conn.cursor()
         try:
-            sql = """
+            cursor.execute(
+                "SELECT UserId FROM Users WHERE UserId=? FOR UPDATE",
+                (req.UserId,))
+            if not cursor.fetchone():
+                return KET_QUA_KHONG_TIM_THAY
+            cursor.execute(
+                "SELECT Role_Id FROM Accounts WHERE UserId=?",
+                (req.UserId,))
+            account = cursor.fetchone()
+            if not account:
+                return KET_QUA_KHONG_TIM_THAY
+            if account.Role_Id == ROLE_SELLER:
+                return KET_QUA_DA_LA_SELLER
+            cursor.execute(
+                "SELECT RequestId FROM SellerRequests "
+                "WHERE UserId=? AND Status='pending' LIMIT 1",
+                (req.UserId,))
+            if cursor.fetchone():
+                return KET_QUA_DA_CO_PENDING
+            cursor.execute("""
                 INSERT INTO SellerRequests
                     (UserId, ShopName, BusinessPhone, Category,
                      Description, NationalId, Status)
                 VALUES (?, ?, ?, ?, ?, ?, 'pending')
-            """
-            cursor.execute(sql, (
+            """, (
                 req.UserId, req.ShopName, req.BusinessPhone,
                 req.Category, req.Description, req.NationalId
             ))
             conn.commit()
-            return True
+            return KET_QUA_OK
         except Exception as e:
             logger.exception("Lỗi gửi yêu cầu: %s", e)
-            return False
+            conn.rollback()
+            return KET_QUA_KHONG_TIM_THAY
         finally:
             cursor.close(); conn.close()
 

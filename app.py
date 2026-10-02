@@ -197,18 +197,22 @@ def get_store_by_user(user_id):
 # ==========================================
 @app.route('/api/dang-ky-gian-hang', methods=['POST'])
 def api_dang_ky_gian_hang():
-    """Gửi đơn đăng ký gian hàng bán hàng."""
+    """Gửi đơn đăng ký gian hàng bán hàng; user lấy từ session, không tin UserId client."""
     gate = user_bus.kiem_tra_nguoi_dung_hoat_dong(session.get('user_id'))
     if not gate.get('status'):
         return jsonify(gate), 403
-    data = request.json
-    req  = YeuCau(
+    data = _json_body()
+    if data is None:
+        return jsonify({"status": False,
+                        "message": "Dữ liệu gửi lên không hợp lệ!",
+                        "data": None}), 400
+    req = YeuCau(
         UserId        = session.get('user_id'),
         ShopName      = data.get('StoreName'),
         BusinessPhone = data.get('Phone'),
         Category      = data.get('Category'),
         Description   = data.get('Description'),
-        NationalId    = data.get('NationalId')
+        NationalId    = None
     )
     return jsonify(gian_hang_bus.dang_ky_gian_hang(req))
 
@@ -564,15 +568,21 @@ def api_cap_nhat_so_luong():
     ))
 @app.route('/api/users/<int:ma_user>/status', methods=['PUT'])
 def update_user_status(ma_user):
-    """Khóa/mở khóa tài khoản Seller/Khách hàng bởi Quản lý."""
+    """Admin khóa/mở khóa Quản lý; Quản lý khóa/mở khóa Seller/Customer."""
     ma_nguoi_thao_tac = session.get('user_id')
-    gate = user_bus.kiem_tra_quyen_quan_ly(ma_nguoi_thao_tac)
-    if not gate.get('status'):
-        return jsonify(gate), 403
-    data   = request.json or {}
+    actor = user_bus.lay_thong_tin_user(ma_nguoi_thao_tac) if ma_nguoi_thao_tac else None
+    if not actor:
+        return jsonify({"status": False, "message": "Bạn chưa đăng nhập!", "data": None}), 403
+    role_name = user_bus.lay_ten_vai_tro_theo_id(actor.get('Role_Id'))
+    data = _json_body()
+    if data is None:
+        return jsonify({"status": False, "message": "Dữ liệu gửi lên không hợp lệ!", "data": None}), 400
     status = data.get('status')
-    return jsonify(user_bus.cap_nhat_trang_thai(
-        ma_nguoi_thao_tac, ma_user, status, "Quản lý"))
+    if role_name == "Admin":
+        return jsonify(user_bus.cap_nhat_trang_thai_quan_ly(ma_nguoi_thao_tac, ma_user, status))
+    if role_name == "Quản lý":
+        return jsonify(user_bus.cap_nhat_trang_thai(ma_nguoi_thao_tac, ma_user, status, "Quản lý"))
+    return jsonify({"status": False, "message": "Bạn không có quyền thực hiện chức năng này!", "data": None}), 403
 
 
 # ==========================================
@@ -580,16 +590,22 @@ def update_user_status(ma_user):
 # ==========================================
 @app.route('/api/cap-lai-mat-khau', methods=['POST'])
 def api_cap_lai_mat_khau():
-    """Cấp lại mật khẩu cho user (quyền Quản lý)."""
-    gate = user_bus.kiem_tra_quyen_quan_ly(session.get('user_id'))
-    if not gate.get('status'):
-        return jsonify(gate), 403
-    data = request.json or {}
-    return jsonify(user_bus.cap_lai_mat_khau(
-        session.get('user_id'),
-        data.get('ma_user'),
-        data.get('mat_khau_moi') or None
-    ))
+    """Admin reset Quản lý về 123456; Quản lý giữ luồng reset Seller/Customer."""
+    ma_nguoi_thao_tac = session.get('user_id')
+    actor = user_bus.lay_thong_tin_user(ma_nguoi_thao_tac) if ma_nguoi_thao_tac else None
+    if not actor:
+        return jsonify({"status": False, "message": "Bạn chưa đăng nhập!", "data": None}), 403
+    role_name = user_bus.lay_ten_vai_tro_theo_id(actor.get('Role_Id'))
+    data = _json_body()
+    if data is None:
+        return jsonify({"status": False, "message": "Dữ liệu gửi lên không hợp lệ!", "data": None}), 400
+    ma_user = data.get('ma_user')
+    if role_name == "Admin":
+        return jsonify(user_bus.cap_lai_mat_khau_quan_ly(ma_nguoi_thao_tac, ma_user))
+    if role_name == "Quản lý":
+        return jsonify(user_bus.cap_lai_mat_khau(
+            ma_nguoi_thao_tac, ma_user, data.get('mat_khau_moi') or None))
+    return jsonify({"status": False, "message": "Bạn không có quyền thực hiện chức năng này!", "data": None}), 403
 
 
 # ==========================================

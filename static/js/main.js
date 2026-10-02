@@ -2240,7 +2240,13 @@ async function renderAdminUsers() {
       // 017: Quản lý chỉ khóa/mở + cấp lại mật khẩu cho Seller/Khách hàng
       let hanhDong = '';
       if (isMe) {
-        hanhDong = `<span style="font-size:12px; color:var(--text-muted);">Tài khoản của bạn</span>`;
+        hanhDong = '<span style="font-size:12px; color:var(--text-muted);">Tài khoản của bạn</span>';
+      } else if (laAdmin && u.ma_nhom_quyen === 2) {
+        const n = (u.ten_user || '').replace(/'/g, "\\'");
+        hanhDong = '<button class="admin-action-btn btn-edit" onclick="openEditUserModal(' + u.ma_user + ', \'' + n + '\', 2, \'' + (u.trang_thai || 'active') + '\')">✏️ Sửa</button>' +
+          '<button class="admin-action-btn btn-cancel" onclick="xacNhanKhoaQuanLy(' + u.ma_user + ', \'' + (isBanned ? 'active' : 'banned') + '\', \'' + n + '\')">' + (isBanned ? '🔓 Mở khóa' : '🔒 Khóa') + '</button>' +
+          '<button class="admin-action-btn btn-confirm" onclick="xacNhanResetQuanLy(' + u.ma_user + ', \'' + n + '\')">🔑 Reset</button>' +
+          '<button class="admin-action-btn btn-cancel" onclick="xacNhanXoaQuanLy(' + u.ma_user + ', \'' + n + '\')">🗑️ Xóa</button>';
       } else if (laQuanLy && (u.ma_nhom_quyen === 3 || u.ma_nhom_quyen === 4)) {
         hanhDong = `
           <button class="admin-action-btn ${isBanned ? 'btn-edit' : 'btn-cancel'}"
@@ -2252,9 +2258,8 @@ async function renderAdminUsers() {
             🔑 Cấp lại mật khẩu
           </button>`;
       } else {
-        hanhDong = `<span style="font-size:12px; color:var(--text-muted);">Chỉ xem</span>`;
+        hanhDong = '<span style="font-size:12px; color:var(--text-muted);">Chỉ xem</span>';
       }
-
       return `
         <tr style="${isBanned ? 'opacity:0.6;' : ''}">
           <td style="font-weight:700; color:var(--text-muted);">#${u.ma_user}</td>
@@ -3185,32 +3190,15 @@ function getRoleCls(roleId) {
 // ─── RENDER BẢNG QUẢN LÝ TÀI KHOẢN (ĐỘNG) ───────────────────
 
 // ─── MỞ MODAL CHỈNH SỬA USER — DROPDOWN VAI TRÒ TĨNH ─────────
-async function openEditUserModal(ma_user, ten_user, ma_nhom_quyen, currentStatus = 'active') {
+async function openEditUserModal(ma_user, ten_user, ma_nhom_quyen, currentStatus = 'active', sdt = '', dia_chi = '') {
   document.getElementById('editUserId').value = ma_user;
-
-  document.getElementById('editUserInfo').innerHTML = `
-    <div style="display:flex; align-items:center; gap:10px;">
-      <div style="width:40px; height:40px; border-radius:50%; background:var(--primary-light);
-                  display:flex; align-items:center; justify-content:center;
-                  font-size:18px; font-weight:700; color:var(--primary);">
-        ${ten_user.charAt(0).toUpperCase()}
-      </div>
-      <div>
-        <div style="font-weight:700;">${ten_user}</div>
-        <div style="font-size:12px; color:var(--text-muted);">ID: #${ma_user}</div>
-      </div>
-    </div>
-  `;
-
-  // Vai trò hiển thị chỉ đọc — không cho sửa role qua modal (feature 002)
-  const roleInput = document.getElementById('editUserRoleReadonly');
-  if (roleInput) {
-    roleInput.value = getRoleName(ma_nhom_quyen);
-  }
-
-  // ✅ Set đúng trạng thái hiện tại
+  document.getElementById('editUserInfo').innerHTML =
+    '<div style="font-weight:700;">' + (ten_user || '') + '</div><div style="font-size:12px;color:var(--text-muted);">ID: #' + ma_user + '</div>';
+  document.getElementById('editUserName').value = ten_user || '';
+  document.getElementById('editUserAddress').value = dia_chi || '';
+  document.getElementById('editUserPhone').value = sdt || '';
+  document.getElementById('editUserRoleReadonly').value = getRoleName(ma_nhom_quyen);
   document.getElementById('editUserStatus').value = currentStatus;
-
   document.getElementById('adminUserModal').classList.add('show');
 }
 async function renderUserRoleFilter() {
@@ -3243,32 +3231,30 @@ async function capNhatTrangThaiNhanh(ma_user, trang_thai_moi) {
 }
 
 async function handleSaveUserRole() {
-  const ma_user   = document.getElementById('editUserId').value;
+  const ma_user = Number(document.getElementById('editUserId').value);
   const newStatus = document.getElementById('editUserStatus').value;
-
-  if (!ma_user) { showToast('⚠️ Thiếu thông tin!'); return; }
-
+  const ten_user = document.getElementById('editUserName').value.trim();
+  const dia_chi = document.getElementById('editUserAddress').value.trim();
+  const sdt = document.getElementById('editUserPhone').value.trim();
+  if (!ma_user || !ten_user) { showToast('⚠️ Họ tên không được để trống!'); return; }
   try {
-    const resStatus = await fetch(`/api/users/${ma_user}/status`, {
-      method : 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body   : JSON.stringify({ status: newStatus })
+    const rInfo = await fetch('/api/quan-ly/' + ma_user, {
+      method:'PUT', headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({ten_user:ten_user,dia_chi:dia_chi,sdt:sdt})
     });
-    const rStatus = await resStatus.json();
-
-    if (rStatus.status) {
-      showToast('✅ Đã cập nhật trạng thái!');
-      closeModal('adminUserModal');
-      renderAdminUsers();
-    } else {
-      showToast('❌ ' + rStatus.message);
-    }
-  } catch (e) {
-    showToast('❌ Lỗi kết nối!');
-  }
+    const info = await rInfo.json();
+    if (!info.status) { showToast('❌ ' + info.message); return; }
+    const rStatus = await fetch('/api/users/' + ma_user + '/status', {
+      method:'PUT', headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({status:newStatus})
+    });
+    const status = await rStatus.json();
+    if (!status.status) { showToast('❌ ' + status.message); return; }
+    showToast('✅ Đã cập nhật tài khoản Quản lý!');
+    closeModal('adminUserModal');
+    renderAdminUsers();
+  } catch (e) { showToast('❌ Lỗi kết nối!'); }
 }
-
-// ─── CẤP LẠI MẬT KHẨU (FR-010 / FR-011) ─────────────────────────────────────
 function moModalCapLaiMatKhau(ma_user = null, ten_user = '') {
   const maUserHienTai = ma_user || document.getElementById('editUserId').value;
   if (!maUserHienTai) { showToast('⚠️ Thiếu thông tin!'); return; }
@@ -3282,7 +3268,6 @@ function moModalCapLaiMatKhau(ma_user = null, ten_user = '') {
     document.getElementById('resetUserInfo').innerHTML =
       document.getElementById('editUserInfo').innerHTML;
   }
-  document.getElementById('resetPasswordInput').value = '';
   document.getElementById('resetPasswordResult').style.display = 'none';
   document.getElementById('resetPasswordValue').textContent = '';
 
@@ -3292,7 +3277,6 @@ function moModalCapLaiMatKhau(ma_user = null, ten_user = '') {
 
 async function hamCapLaiMatKhau() {
   const ma_user     = document.getElementById('resetUserId').value;
-  const mat_khau_moi = document.getElementById('resetPasswordInput').value.trim();
 
   if (!ma_user) { showToast('⚠️ Thiếu thông tin!'); return; }
 
@@ -3300,7 +3284,7 @@ async function hamCapLaiMatKhau() {
     const res = await fetch('/api/cap-lai-mat-khau', {
       method : 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body   : JSON.stringify({ ma_user: Number(ma_user), mat_khau_moi: mat_khau_moi })
+      body   : JSON.stringify({ ma_user: Number(ma_user) })
     });
     const result = await res.json();
 
@@ -3319,7 +3303,6 @@ async function hamCapLaiMatKhau() {
 }
 
 function closeResetPasswordModal() {
-  document.getElementById('resetPasswordInput').value = '';
   document.getElementById('resetPasswordValue').textContent = '';
   document.getElementById('resetPasswordResult').style.display = 'none';
   closeModal('resetPasswordModal');

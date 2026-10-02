@@ -883,6 +883,18 @@
     <input type="hidden" id="editUserId">
     <div id="editUserInfo" style="background:var(--bg); padding:10px; border-radius:6px; margin-bottom:14px; font-size:13px;"></div>
     <div class="form-group">
+      <label>Họ tên</label>
+      <input type="text" id="editUserName" maxlength="100">
+    </div>
+    <div class="form-group">
+      <label>Địa chỉ</label>
+      <input type="text" id="editUserAddress" maxlength="255">
+    </div>
+    <div class="form-group">
+      <label>Số điện thoại</label>
+      <input type="text" id="editUserPhone" maxlength="20">
+    </div>
+    <div class="form-group">
       <label>Vai trò (không thể thay đổi)</label>
       <input type="text" id="editUserRoleReadonly" readonly style="background:var(--bg);">
     </div>
@@ -904,9 +916,8 @@
     <h3 style="margin-bottom:14px;">🔑 Cấp lại mật khẩu</h3>
     <input type="hidden" id="resetUserId">
     <div id="resetUserInfo" style="background:var(--bg); padding:10px; border-radius:6px; margin-bottom:14px; font-size:13px;"></div>
-    <div class="form-group">
-      <label>Mật khẩu mới (bỏ trống để hệ thống sinh ngẫu nhiên)</label>
-      <input type="text" id="resetPasswordInput" placeholder="Tối thiểu 6 ký tự">
+    <div style="background:var(--bg); padding:10px; border-radius:8px; margin-bottom:12px; font-size:13px;">
+      Hệ thống sẽ tự đặt lại mật khẩu theo quyền của tài khoản.
     </div>
     <button onclick="hamCapLaiMatKhau()" class="btn-submit" style="width:100%;">Cấp lại mật khẩu</button>
     <div id="resetPasswordResult" style="display:none; margin-top:14px; background:var(--bg); padding:12px; border-radius:6px; text-align:center;">

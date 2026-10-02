@@ -122,59 +122,134 @@ class DonHangDao:
         return {"error": "not_found", "product_name": f"#{item.ProductId}"}
 
     def _ap_dung_voucher(self, cursor, orders):
-        """Khóa Voucher trong cùng transaction, validate và phân bổ discount cho N order con."""
+        """Khóa Voucher, chỉ giảm các Product có trong VoucherProduct."""
         if not orders:
-            return {"error": "invalid_voucher", "message": "Giỏ hàng trống, vui lòng thêm sản phẩm!"}
+            return {"error": "invalid_voucher", "message": "Giỏ hàng trống, vui lòng thử lại!"}
+
         code = getattr(orders[0], "VoucherCode", None)
         if not code:
             for o in orders:
                 o.DiscountAmount = 0
                 o.TotalAmount = float(o.SubTotal or 0) + float(o.ShippingFee or 0)
             return None
+
         code = str(code).strip().upper()
-        cursor.execute("""SELECT VoucherId,Code,Name,DiscountType,DiscountValue,MinOrderValue,
-                                 MaxDiscount,StartDate,EndDate,Quantity,UsedQuantity,IsActive
-                          FROM Voucher WHERE Code=%s FOR UPDATE""", (code,))
+        cursor.execute(
+            """SELECT VoucherId,SellerId,Code,Name,DiscountType,DiscountValue,
+                      MinOrderValue,MaxDiscount,StartDate,EndDate,Quantity,
+                      UsedQuantity,IsActive
+               FROM Voucher WHERE Code=%s FOR UPDATE""",
+            (code,)
+        )
         row = cursor.fetchone()
         if not row:
-            return {"error":"invalid_voucher","message":"Voucher không tồn tại!"}
-        _, real_code, _, dtype, value, min_order, max_discount, start_dt, end_dt, quantity, used, active = row
+            return {"error": "invalid_voucher", "message": "Voucher không tồn tại!"}
+
+        voucher_id, seller_id, real_code, _, dtype, value, min_order, max_discount,             start_dt, end_dt, quantity, used, active = row
+
         now = datetime.now()
         if not active:
-            return {"error":"invalid_voucher","message":"Voucher đã bị vô hiệu hóa!"}
+            return {"error": "invalid_voucher", "message": "Voucher đã bị vô hiệu hóa!"}
         if start_dt and now < start_dt:
-            return {"error":"invalid_voucher","message":"Voucher chưa bắt đầu!"}
+            return {"error": "invalid_voucher", "message": "Voucher chưa bắt đầu!"}
         if end_dt and now > end_dt:
-            return {"error":"invalid_voucher","message":"Voucher đã hết hạn!"}
+            return {"error": "invalid_voucher", "message": "Voucher đã hết hạn!"}
         if int(used or 0) >= int(quantity or 0):
-            return {"error":"invalid_voucher","message":"Voucher đã hết lượt!"}
-        subtotal = float(sum(float(i.TotalPrice or 0) for o in orders for i in o.Items))
-        if subtotal < float(min_order or 0):
-            return {"error":"invalid_voucher","message":"Đơn hàng chưa đạt giá trị tối thiểu để sử dụng Voucher!"}
+            return {"error": "invalid_voucher", "message": "Voucher đã hết lượt!"}
+
+        product_ids = sorted({
+            int(item.ProductId)
+            for order in orders
+            for item in order.Items
+        })
+        if not product_ids:
+            return {"error": "invalid_voucher", "message": "Giỏ hàng trống, vui lòng thử lại!"}
+
+        placeholders = ",".join(["%s"] * len(product_ids))
+        sql_eligible = """SELECT vp.ProductId,p.Price,p.StoreId,p.Quantity,p.IsActive
+                FROM VoucherProduct vp
+                JOIN Products p ON p.ProductId=vp.ProductId
+                WHERE vp.VoucherId=%s
+                  AND p.StoreId=%s
+                  AND vp.ProductId IN (""" + placeholders + ")"
+        cursor.execute(sql_eligible, tuple([voucher_id, seller_id] + product_ids))
+        eligible = {}
+        for r in cursor.fetchall():
+            eligible[int(r[0])] = {
+                "price": float(r[1] or 0),
+                "store_id": int(r[2]),
+                "quantity": int(r[3] or 0),
+                "is_active": bool(r[4])
+            }
+
+        if not eligible:
+            return {"error": "invalid_voucher",
+                    "message": "Voucher không áp dụng cho sản phẩm trong giỏ hàng!"}
+
+        eligible_subtotal = 0.0
+        order_eligible = []
+        for order in orders:
+            amount = 0.0
+            for item in order.Items:
+                product = eligible.get(int(item.ProductId))
+                if not product:
+                    continue
+                if not product["is_active"]:
+                    return {"error": "invalid_voucher",
+                            "message": "Sản phẩm áp dụng Voucher không còn kinh doanh!"}
+                if int(item.Quantity or 0) > product["quantity"]:
+                    return {"error": "invalid_voucher",
+                            "message": "Sản phẩm áp dụng Voucher không đủ tồn kho!"}
+                # Reload authoritative price from DB for eligible items.
+                item.UnitPrice = product["price"]
+                item.TotalPrice = int(item.Quantity or 0) * product["price"]
+                amount += float(item.TotalPrice or 0)
+            order_eligible.append(amount)
+            eligible_subtotal += amount
+
+        if eligible_subtotal <= 0:
+            return {"error": "invalid_voucher",
+                    "message": "Voucher không áp dụng cho sản phẩm trong giỏ hàng!"}
+        if eligible_subtotal < float(min_order or 0):
+            return {"error": "invalid_voucher",
+                    "message": "Đơn hàng chưa đạt giá trị tối thiểu để sử dụng Voucher!"}
+
         if str(dtype).upper() == "PERCENT":
-            discount = subtotal * float(value) / 100.0
+            discount = eligible_subtotal * float(value) / 100.0
             if float(max_discount or 0) > 0:
                 discount = min(discount, float(max_discount))
         else:
-            discount = min(float(value), subtotal)
-        discount = max(0.0, min(discount, subtotal))
-        shipping = float(sum(float(o.ShippingFee or 0) for o in orders))
-        if subtotal + shipping - discount < 0:
-            discount = min(discount, subtotal + shipping)
+            discount = min(float(value), eligible_subtotal)
+        discount = max(0.0, min(discount, eligible_subtotal))
+
         remaining = discount
+        eligible_order_indexes = [i for i, amount in enumerate(order_eligible) if amount > 0]
+        last_eligible = eligible_order_indexes[-1]
         for idx, order in enumerate(orders):
-            order_sub = float(order.SubTotal or 0)
-            if idx == len(orders)-1:
+            eligible_amount = order_eligible[idx]
+            if eligible_amount <= 0:
+                d = 0.0
+            elif idx == last_eligible:
                 d = remaining
             else:
-                d = round(discount * order_sub / subtotal, 2) if subtotal else 0
+                d = round(discount * eligible_amount / eligible_subtotal, 2)
                 remaining -= d
             order.VoucherCode = str(real_code)
-            order.DiscountAmount = max(0.0, min(d, order_sub))
-            order.TotalAmount = max(0.0, order_sub + float(order.ShippingFee or 0) - order.DiscountAmount)
-        cursor.execute("UPDATE Voucher SET UsedQuantity=UsedQuantity+1 WHERE VoucherId=%s AND UsedQuantity<Quantity",(row[0],))
+            order.DiscountAmount = max(0.0, min(d, eligible_amount))
+            order.TotalAmount = max(
+                0.0,
+                float(order.SubTotal or 0) + float(order.ShippingFee or 0) - order.DiscountAmount
+            )
+
+        cursor.execute(
+            """UPDATE Voucher
+               SET UsedQuantity=UsedQuantity+1
+               WHERE VoucherId=%s AND UsedQuantity<Quantity""",
+            (voucher_id,)
+        )
         if cursor.rowcount != 1:
-            return {"error":"invalid_voucher","message":"Voucher đã hết lượt, vui lòng thử lại!"}
+            return {"error": "invalid_voucher",
+                    "message": "Voucher đã hết lượt, vui lòng thử lại!"}
         return None
 
     # ─── ĐỌC ───

@@ -333,51 +333,71 @@ def api_voucher_kiem_tra():
     return jsonify(voucher_bus.kiem_tra_ap_dung(d.get('voucherCode') or d.get('Code'),d.get('Items')))
 
 # ==========================================
-# API VOUCHER — QUẢN LÝ (Quản lý)
+# API VOUCHER — SELLER
 # ==========================================
 @app.route('/api/voucher', methods=['GET'])
 def api_voucher_list():
-    gate=user_bus.kiem_tra_quyen_quan_ly(session.get('user_id'))
-    if not gate.get('status'): return jsonify(gate),403
-    return jsonify(voucher_bus.lay_tat_ca())
+    store, loi = _seller_store_hien_tai()
+    if loi:
+        return jsonify(loi[0]), loi[1]
+    return jsonify(voucher_bus.lay_tat_ca(store.get('store_id')))
 
 @app.route('/api/voucher/<int:voucher_id>', methods=['GET'])
 def api_voucher_detail(voucher_id):
-    gate=user_bus.kiem_tra_quyen_quan_ly(session.get('user_id'))
-    if not gate.get('status'): return jsonify(gate),403
-    return jsonify(voucher_bus.lay_theo_id(voucher_id))
+    store, loi = _seller_store_hien_tai()
+    if loi:
+        return jsonify(loi[0]), loi[1]
+    result = voucher_bus.lay_theo_id(voucher_id, store.get('store_id'))
+    return jsonify(result), 200 if result.get('status') else 403
 
 @app.route('/api/voucher', methods=['POST'])
 def api_voucher_create():
-    gate=user_bus.kiem_tra_quyen_quan_ly(session.get('user_id'))
-    if not gate.get('status'): return jsonify(gate),403
-    d=_json_body()
-    if d is None:return jsonify({"status":False,"message":"Dữ liệu gửi lên không hợp lệ!","data":None}),400
-    return jsonify(voucher_bus.tao(code=d.get('Code'),name=d.get('Name'),dtype=d.get('DiscountType'),
-        value=d.get('DiscountValue'),min_order=d.get('MinOrderValue'),max_discount=d.get('MaxDiscount'),
-        start=d.get('StartDate'),end=d.get('EndDate'),quantity=d.get('Quantity')))
+    store, loi = _seller_store_hien_tai()
+    if loi:
+        return jsonify(loi[0]), loi[1]
+    d = _json_body()
+    if d is None:
+        return jsonify({"status": False, "message": "Dữ liệu gửi lên không hợp lệ!", "data": None}), 400
+    return jsonify(voucher_bus.tao(
+        seller_id=store.get('store_id'),
+        product_ids=d.get('ProductIds') if d.get('ProductIds') is not None else d.get('product_ids'),
+        code=d.get('Code'), name=d.get('Name'), dtype=d.get('DiscountType'),
+        value=d.get('DiscountValue'), min_order=d.get('MinOrderValue'),
+        max_discount=d.get('MaxDiscount'), start=d.get('StartDate'),
+        end=d.get('EndDate'), quantity=d.get('Quantity')))
 
 @app.route('/api/voucher/<int:voucher_id>', methods=['PUT'])
 def api_voucher_update(voucher_id):
-    gate=user_bus.kiem_tra_quyen_quan_ly(session.get('user_id'))
-    if not gate.get('status'): return jsonify(gate),403
-    d=_json_body()
-    if d is None:return jsonify({"status":False,"message":"Dữ liệu gửi lên không hợp lệ!","data":None}),400
-    return jsonify(voucher_bus.sua(voucher_id,code=d.get('Code'),name=d.get('Name'),dtype=d.get('DiscountType'),
-        value=d.get('DiscountValue'),min_order=d.get('MinOrderValue'),max_discount=d.get('MaxDiscount'),
-        start=d.get('StartDate'),end=d.get('EndDate'),quantity=d.get('Quantity')))
+    store, loi = _seller_store_hien_tai()
+    if loi:
+        return jsonify(loi[0]), loi[1]
+    d = _json_body()
+    if d is None:
+        return jsonify({"status": False, "message": "Dữ liệu gửi lên không hợp lệ!", "data": None}), 400
+    result = voucher_bus.sua(
+        voucher_id, store.get('store_id'),
+        d.get('ProductIds') if d.get('ProductIds') is not None else d.get('product_ids'),
+        code=d.get('Code'), name=d.get('Name'), dtype=d.get('DiscountType'),
+        value=d.get('DiscountValue'), min_order=d.get('MinOrderValue'),
+        max_discount=d.get('MaxDiscount'), start=d.get('StartDate'),
+        end=d.get('EndDate'), quantity=d.get('Quantity'))
+    return jsonify(result), 200 if result.get('status') else 403
 
 @app.route('/api/voucher/<int:voucher_id>/toggle', methods=['POST'])
 def api_voucher_toggle(voucher_id):
-    gate=user_bus.kiem_tra_quyen_quan_ly(session.get('user_id'))
-    if not gate.get('status'): return jsonify(gate),403
-    return jsonify(voucher_bus.toggle(voucher_id))
+    store, loi = _seller_store_hien_tai()
+    if loi:
+        return jsonify(loi[0]), loi[1]
+    result = voucher_bus.toggle(voucher_id, store.get('store_id'))
+    return jsonify(result), 200 if result.get('status') else 403
 
 @app.route('/api/voucher/<int:voucher_id>', methods=['DELETE'])
 def api_voucher_delete(voucher_id):
-    gate=user_bus.kiem_tra_quyen_quan_ly(session.get('user_id'))
-    if not gate.get('status'): return jsonify(gate),403
-    return jsonify(voucher_bus.xoa(voucher_id))
+    store, loi = _seller_store_hien_tai()
+    if loi:
+        return jsonify(loi[0]), loi[1]
+    result = voucher_bus.xoa(voucher_id, store.get('store_id'))
+    return jsonify(result), 200 if result.get('status') else 403
 
 # ==========================================
 # API GIỎ HÀNG

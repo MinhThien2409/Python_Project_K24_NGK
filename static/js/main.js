@@ -224,7 +224,7 @@ async function renderSellerOrders() {
     tbody.innerHTML = result.data.map(o => {
       const s = statusMap[o.Status] || { label: o.Status, cls: '' };
       const itemSummary = (o.Items || [])
-        .map(i => `${i.Emoji || '📦'} ${i.ProductName} x${i.Quantity}`)
+        .map(i => `${i.Emoji || '📦'} ${escHtml(i.ProductName)} x${i.Quantity}`)
         .join('<br>');
       const createdAt = o.CreatedAt
         ? new Date(o.CreatedAt).toLocaleDateString('vi-VN', {
@@ -417,8 +417,8 @@ async function renderSellerOverview() {
               <div style="width:60px;height:60px;flex-shrink:0;">
                 ${
                   p.image_url
-                    ? `<img src="/static/${p.image_url}"
-                          alt="${p.name}"
+                    ? `<img src="/static/${escHtml(p.image_url)}"
+                          alt="${escHtml(p.name)}"
                           style="
                             width:60px;
                             height:60px;
@@ -438,7 +438,7 @@ async function renderSellerOverview() {
                     overflow:hidden;
                     text-overflow:ellipsis;
                 ">
-                  ${p.name}
+                  ${escHtml(p.name)}
                 </div>
 
                 <div style="
@@ -470,7 +470,7 @@ async function renderSellerOverview() {
           ${prods.filter(p => (p.quantity || 0) <= 5).map(p => `
             <div style="display:flex; justify-content:space-between; align-items:center;
                         padding:8px 0; border-bottom:1px solid var(--border); font-size:13px;">
-              <span>${p.emoji || '📦'} ${p.name}</span>
+              <span>${p.emoji || '📦'} ${escHtml(p.name)}</span>
               <span style="color:var(--red); font-weight:700;">
                 Còn ${p.quantity || 0} sản phẩm
               </span>
@@ -489,63 +489,6 @@ async function renderSellerOverview() {
     console.error('Lỗi renderSellerOverview:', e);
   }
 }
-async function renderSellerProducts() {
-    const storeId = currentUser?.store?.store_id;
-    if (!storeId) {
-        document.getElementById('tblSellerProductsBody').innerHTML =
-            `<tr><td colspan="6" style="text-align:center; color:var(--text-muted);">
-                Không tìm thấy gian hàng!
-            </td></tr>`;
-        return;
-    }
-
-    const res    = await fetch(`/api/products/store/${storeId}`);
-    const result = await res.json();
-    const tbody  = document.getElementById('tblSellerProductsBody');
-
-    if (!result.data.length) {
-        tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; color:var(--text-muted);">
-            Chưa có sản phẩm nào. Hãy thêm sản phẩm đầu tiên!
-        </td></tr>`;
-        return;
-    }
-
-    tbody.innerHTML = result.data.map(p => `
-        <tr>
-            <td style="text-align:center;">
-              ${
-                p.image_url
-                  ? `<img src="/static/${p.image_url}"
-                          alt="${p.name}"
-                          style="
-                            width:60px;
-                            height:60px;
-                            object-fit:cover;
-                            border-radius:8px;
-                            border:1px solid #ddd;
-                          ">`
-                  : `<span style="font-size:28px;">${p.emoji || '📦'}</span>`
-              }
-            </td>
-            <td>
-                <div style="font-weight:600;">${p.name}</div>
-                <div style="font-size:11px; color:var(--text-muted);">${p.category_name || ''}</div>
-            </td>
-            <td style="color:var(--red); font-weight:700;">
-                ${Number(p.price).toLocaleString('vi-VN')}đ
-            </td>
-            <td style="text-align:center; color:${p.quantity <= 5 ? 'var(--red)' : 'inherit'}">
-                ${p.quantity || 0}
-            </td>
-            <td style="text-align:center;">${p.sold || 0}</td>
-            <td>
-                <button class="admin-action-btn btn-edit"
-                    onclick="openEditSellerProduct(${p.id})">✏️ Sửa</button>
-            </td>
-        </tr>
-    `).join('');
-}
-
 // ============================================================
 // PHASE 4 — khoa Gia/Ton kho khi Seller SUA san pham (My Products chi
 // sua Ten/Danh muc/Emoji/Thuong hieu/Mo ta; Gia o tab Gia, Ton o tab Nhap)
@@ -1131,7 +1074,7 @@ async function updateUserProfile() {
       currentUser.sdt = newPhone;
       currentUser.dia_chi = newAddress;
       currentUser.cmnd = newCmnd;
-      document.getElementById('topbarUserText').innerHTML = `🟢 Xin chào: <b>${newName}</b>`;
+      document.getElementById('topbarUserText').innerHTML = `🟢 Xin chào: <b>${escHtml(newName)}</b>`;
       // Phase 1 (Task 5): cập nhật mốc gốc + khóa lại nút Lưu
       profileGoc = { ten_user: newName, sdt: newPhone,
                      dia_chi: newAddress, cmnd: newCmnd };
@@ -1255,7 +1198,7 @@ function updateHeaderForUser() {
   if (!currentUser) return;
 
   // Cập nhật tên và các nút cơ bản
-  document.getElementById('topbarUserText').innerHTML = `🟢 <b>${currentUser.ten_user || currentUser.FullName}</b>`;
+  document.getElementById('topbarUserText').innerHTML = `🟢 <b>${escHtml(currentUser.ten_user || currentUser.FullName)}</b>`;
   document.getElementById('authBtnLabel').textContent = 'Tài khoản';
 
   // Ẩn nút Đăng nhập, hiện nút User
@@ -1338,8 +1281,8 @@ async function initAdminDashboard() {
           <div style="width:40px;height:40px;flex-shrink:0;">
             ${
               p.image_url
-                ? `<img src="/static/${p.image_url}"
-                      alt="${p.name}"
+                ? `<img src="/static/${escHtml(p.image_url)}"
+                      alt="${escHtml(p.name)}"
                       style="
                         width:40px;
                         height:40px;
@@ -1352,7 +1295,7 @@ async function initAdminDashboard() {
           </div>
           <div style="flex:1; min-width:0;">
             <div style="font-weight:600; font-size:13px; white-space:nowrap;
-                        overflow:hidden; text-overflow:ellipsis;">${p.name}</div>
+                        overflow:hidden; text-overflow:ellipsis;">${escHtml(p.name)}</div>
             <div style="margin-top:4px; background:var(--bg); border-radius:4px;
                         height:6px; overflow:hidden;">
               <div style="height:100%; background:var(--primary); border-radius:4px;
@@ -1631,11 +1574,11 @@ async function renderAdminSellers() {
 
     tbody.innerHTML = listLoc.map(r => `
       <tr>
-        <td><b>${r.shop_name}</b></td>
-        <td>${r.ten_user}</td>
-        <td>${r.phone}</td>
-        <td>${r.category}</td>
-        <td style="max-width:160px; font-size:12px; color:var(--text-secondary);">${r.description || '—'}</td>
+        <td><b>${escHtml(r.shop_name)}</b></td>
+        <td>${escHtml(r.ten_user)}</td>
+        <td>${escHtml(r.phone)}</td>
+        <td>${escHtml(r.category)}</td>
+        <td style="max-width:160px; font-size:12px; color:var(--text-secondary);">${escHtml(r.description || '—')}</td>
         <td>
           ${r.status === 'pending'  ? '<span class="badge-status status-pending">Chờ duyệt</span>'   : ''}
           ${r.status === 'approved' ? '<span class="badge-status status-confirmed">Đã duyệt</span>'  : ''}
@@ -1772,18 +1715,18 @@ function renderUserProducts(arr) {
       <div class="card-img">
         ${
           p.image_url
-            ? `<img src="/static/${p.image_url}"
-                    alt="${p.name}"
+            ? `<img src="/static/${escHtml(p.image_url)}"
+                    alt="${escHtml(p.name)}"
                     style="width:100%;height:100%;object-fit:cover;">`
             : (p.emoji || '📦')
         }
       </div>
       <div class="card-body">
-        <div class="card-title">${p.name}</div>
+        <div class="card-title">${escHtml(p.name)}</div>
         <div style="font-size:12px; color:var(--text-muted); margin:2px 0 6px;
                     white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
                     display:flex; align-items:center; gap:4px;">
-          🏪 ${p.shop || 'Pobby Official'}
+          🏪 ${escHtml(p.shop || 'Pobby Official')}
         </div>
         ${p.old_price ? `<div style="font-size:12px; color:var(--text-muted); text-decoration:line-through;">${Number(p.old_price).toLocaleString('vi-VN')}đ</div>` : ''}
         <div class="card-price">${Number(p.price).toLocaleString('vi-VN')}đ</div>
@@ -1904,8 +1847,8 @@ async function renderAdminProducts() {
         <td style="text-align:center;">
           ${
             p.image_url
-              ? `<img src="/static/${p.image_url}"
-                    alt="${p.name}"
+              ? `<img src="/static/${escHtml(p.image_url)}"
+                    alt="${escHtml(p.name)}"
                     style="
                         width:50px;
                         height:50px;
@@ -1917,12 +1860,12 @@ async function renderAdminProducts() {
           }
         </td>
         <td>
-          <div style="font-weight:600;">${p.name}</div>
-          <div style="font-size:11px; color:var(--text-muted);">${p.description || ''}</div>
+          <div style="font-weight:600;">${escHtml(p.name)}</div>
+          <div style="font-size:11px; color:var(--text-muted);">${escHtml(p.description || '')}</div>
         </td>
         <td>
           <span class="badge-status status-confirmed" style="font-size:11px;">
-            ${p.category_name || '—'}
+            ${escHtml(p.category_name || '—')}
           </span>
         </td>
         <td>
@@ -2475,11 +2418,13 @@ async function renderAdminUsers() {
       if (isMe) {
         hanhDong = '<span style="font-size:12px; color:var(--text-muted);">Tài khoản của bạn</span>';
       } else if (laAdmin && u.ma_nhom_quyen === 2) {
-        const n = (u.ten_user || '').replace(/'/g, "\\'");
-        hanhDong = '<button class="admin-action-btn btn-edit" onclick="openEditUserModal(' + u.ma_user + ', \'' + n + '\', 2, \'' + (u.trang_thai || 'active') + '\')">✏️ Sửa</button>' +
-          '<button class="admin-action-btn btn-cancel" onclick="xacNhanKhoaQuanLy(' + u.ma_user + ', \'' + (isBanned ? 'active' : 'banned') + '\', \'' + n + '\')">' + (isBanned ? '🔓 Mở khóa' : '🔒 Khóa') + '</button>' +
-          '<button class="admin-action-btn btn-confirm" onclick="xacNhanResetQuanLy(' + u.ma_user + ', \'' + n + '\')">🔑 Reset</button>' +
-          '<button class="admin-action-btn btn-cancel" onclick="xacNhanXoaQuanLy(' + u.ma_user + ', \'' + n + '\')">🗑️ Xóa</button>';
+        const n = JSON.stringify(String(u.ten_user || ''));
+        const status = JSON.stringify(isBanned ? 'active' : 'banned');
+        const current = JSON.stringify(u.trang_thai || 'active');
+        hanhDong = '<button class="admin-action-btn btn-edit" onclick="openEditUserModal(' + u.ma_user + ', ' + n + ', 2, ' + current + ')">✏️ Sửa</button>' +
+          '<button class="admin-action-btn btn-cancel" onclick="xacNhanKhoaQuanLy(' + u.ma_user + ', ' + status + ', ' + n + ')">' + (isBanned ? '🔓 Mở khóa' : '🔒 Khóa') + '</button>' +
+          '<button class="admin-action-btn btn-confirm" onclick="xacNhanResetQuanLy(' + u.ma_user + ', ' + n + ')">🔑 Reset</button>' +
+          '<button class="admin-action-btn btn-cancel" onclick="xacNhanXoaQuanLy(' + u.ma_user + ', ' + n + ')">🗑️ Xóa</button>';
       } else if (laQuanLy && (u.ma_nhom_quyen === 3 || u.ma_nhom_quyen === 4)) {
         hanhDong = `
           <button class="admin-action-btn ${isBanned ? 'btn-edit' : 'btn-cancel'}"
@@ -2487,7 +2432,7 @@ async function renderAdminUsers() {
             ${isBanned ? '🔓 Mở khóa' : '🔒 Khóa'}
           </button>
           <button class="admin-action-btn btn-confirm"
-                  onclick="moModalCapLaiMatKhau(${u.ma_user}, '${u.ten_user.replace(/'/g, "\\'")}')">
+                  onclick="moModalCapLaiMatKhau(${u.ma_user}, ${JSON.stringify(String(u.ten_user || ''))})">
             🔑 Cấp lại mật khẩu
           </button>`;
       } else {
@@ -2497,10 +2442,10 @@ async function renderAdminUsers() {
         <tr style="${isBanned ? 'opacity:0.6;' : ''}">
           <td style="font-weight:700; color:var(--text-muted);">#${u.ma_user}</td>
           <td>
-            <div style="font-weight:600;">${u.ten_user}</div>
-            <div style="font-size:11px; color:var(--text-muted);">@${u.tendangnhap}</div>
+            <div style="font-weight:600;">${escHtml(u.ten_user)}</div>
+            <div style="font-size:11px; color:var(--text-muted);">@${escHtml(u.tendangnhap)}</div>
           </td>
-          <td style="font-size:13px; color:var(--text-secondary);">${u.tendangnhap}</td>
+          <td style="font-size:13px; color:var(--text-secondary);">${escHtml(u.tendangnhap)}</td>
           <td style="font-size:13px;">${u.sdt || '—'}</td>
           <td><span class="role-badge ${roleCls}">${roleName}</span></td>
           <td>${statusHtml}</td>
@@ -2737,7 +2682,7 @@ async function hienThiHoaDon(orderId) {
           <hr style="border:none; border-top:1px solid var(--border); margin:10px 0;">
           ${items.map(it => `
             <div style="display:flex; justify-content:space-between; margin-bottom:4px;">
-              <span>${it.ProductName || it.product_name} × ${it.Quantity || it.quantity}</span>
+              <span>${escHtml(it.ProductName || it.product_name)} × ${it.Quantity || it.quantity}</span>
               <span>${Number(it.TotalPrice || it.total_price || 0).toLocaleString('vi-VN')}đ</span>
             </div>`).join('')}
           <hr style="border:none; border-top:1px solid var(--border); margin:10px 0;">
@@ -2795,7 +2740,7 @@ function renderCartItems() {
       <div style="width:60px;height:60px;flex-shrink:0;">
         ${
           item.ImageUrl
-            ? `<img src="/static/${item.ImageUrl}"
+            ? `<img src="/static/${escHtml(item.ImageUrl)}"
                     style="width:60px;
                           height:60px;
                           object-fit:cover;
@@ -2807,7 +2752,7 @@ function renderCartItems() {
       <div style="flex:1; min-width:0;">
         <div style="font-weight:600; font-size:14px; margin-bottom:4px;
                     white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
-          ${item.ProductName || 'Sản phẩm #' + item.ProductId}
+          ${escHtml(item.ProductName || 'Sản phẩm #' + item.ProductId)}
         </div>
         <div style="font-size:13px; color:var(--text-muted); margin-bottom:8px;">
           ${Number(item.UnitPrice).toLocaleString('vi-VN')}đ / sản phẩm
@@ -3076,7 +3021,7 @@ function openCheckoutModal() {
     <div style="font-weight:700; padding:6px 0 2px;">🏪 ${tenShop}</div>
     ${nhom.map(item => `
       <div style="display:flex; justify-content:space-between; padding:4px 0 4px 12px; border-bottom:1px solid var(--border); font-size:12px;">
-        <span>${item.ProductName} x${item.Quantity}</span>
+        <span>${escHtml(item.ProductName)} x${item.Quantity}</span>
         <span style="font-weight:600;">${(item.Quantity * item.UnitPrice).toLocaleString('vi-VN')}đ</span>
       </div>`).join('')}
   `).join('');
@@ -3179,7 +3124,7 @@ function renderOrderHistoryList(orders) {
     const itemList = (o.Items || []).map(i => `
       <div style="display:flex; justify-content:space-between; align-items:center; gap:8px;
                   padding:6px 0; border-bottom:1px solid var(--border); font-size:13px; flex-wrap:wrap;">
-        <span style="flex:1 1 180px;">${i.Emoji || '📦'} ${i.ProductName || 'Sản phẩm'}</span>
+        <span style="flex:1 1 180px;">${i.Emoji || '📦'} ${escHtml(i.ProductName || 'Sản phẩm')}</span>
         <span style="color:var(--text-muted); white-space:nowrap;">
           ${Number(i.UnitPrice || 0).toLocaleString('vi-VN')}đ x${i.Quantity}
         </span>
@@ -3322,7 +3267,7 @@ async function taiThongBao() {
       box.innerHTML = list.length ? list.map(n => `
         <div style="padding:8px 10px; border-bottom:1px solid var(--border); font-size:13px;
                     ${n.DaDoc ? 'opacity:0.65;' : 'font-weight:600;'}">
-          <div>${n.NoiDung || ''}</div>
+          <div>${escHtml(n.NoiDung || '')}</div>
           <div style="font-size:11px; color:var(--text-muted); font-weight:400;">
             ${n.CreatedAt ? new Date(n.CreatedAt).toLocaleString('vi-VN') : ''}
           </div>
@@ -3390,7 +3335,7 @@ async function renderRecentOrdersPreview() {
             <div style="font-size:24px;">${firstItem?.Emoji || '📦'}</div>
             <div>
               <div style="font-weight:600; font-size:13px;">
-                ${firstItem?.ProductName || 'Sản phẩm'}
+                ${escHtml(firstItem?.ProductName || 'Sản phẩm')}
                 ${moreCount > 0 ? `<span style="color:var(--text-muted); font-weight:400;">+${moreCount} sản phẩm khác</span>` : ''}
               </div>
               <div style="font-size:11px; color:var(--text-muted);">
@@ -3590,8 +3535,8 @@ async function openProductDetail(productId) {
           ${
             p.image_url
               ? `<img
-                    src="/static/${p.image_url}"
-                    alt="${p.name}"
+                    src="/static/${escHtml(p.image_url)}"
+                    alt="${escHtml(p.name)}"
                     style="
                       width:100%;
                       height:100%;
@@ -3633,18 +3578,18 @@ async function openProductDetail(productId) {
 
         <!-- Thông tin chính -->
         <div style="flex:1; min-width:240px;">
-          <h2 style="margin:0 0 6px; font-size:20px;">${p.name}</h2>
+          <h2 style="margin:0 0 6px; font-size:20px;">${escHtml(p.name)}</h2>
 
           <div style="display:flex; align-items:center; gap:10px; margin-bottom:10px; font-size:13px; color:var(--text-muted); flex-wrap:wrap;">
             <span>Đã bán ${p.sold || 0}</span>
             <span>·</span>
-            <span>📁 ${p.category_name || '—'}</span>
+            <span>📁 ${escHtml(p.category_name || '—')}</span>
           </div>
 
           <!-- Shop -->
           <div style="display:flex; align-items:center; gap:8px; margin-bottom:14px;
                       padding:8px 12px; background:var(--bg); border-radius:8px; font-size:13px;">
-            🏪 <b>${p.shop || 'Pobby Official'}</b>
+            🏪 <b>${escHtml(p.shop || 'Pobby Official')}</b>
           </div>
 
           <!-- Giá -->
@@ -3687,7 +3632,7 @@ async function openProductDetail(productId) {
       <div style="margin-top:24px; padding-top:20px; border-top:1px solid var(--border);">
         <h3 style="margin-bottom:10px; font-size:16px;">📝 Mô tả sản phẩm</h3>
         <div style="font-size:14px; line-height:1.7; color:var(--text-secondary); white-space:pre-line;">
-          ${p.description ? p.description : 'Người bán chưa cập nhật mô tả cho sản phẩm này.'}
+          ${escHtml(p.description ? p.description : 'Người bán chưa cập nhật mô tả cho sản phẩm này.')}
         </div>
       </div>
     `;
@@ -4010,8 +3955,8 @@ async function renderSellerNhapHang() {
       return `
         <tr>
           <td>
-            <div style="font-weight:600;">${p.emoji || '📦'} ${p.name}</div>
-            <div style="font-size:11px; color:var(--text-muted);">${p.category_name || ''}</div>
+            <div style="font-weight:600;">${p.emoji || '📦'} ${escHtml(p.name)}</div>
+            <div style="font-size:11px; color:var(--text-muted);">${escHtml(p.category_name || '')}</div>
             <div style="font-size:11px; color:var(--text-muted);">Giá bán hiện tại: <b>${Number(p.price || 0).toLocaleString('vi-VN')}đ</b></div>
           </td>
 
@@ -4126,11 +4071,11 @@ async function renderLichSuNhapHang() {
     tbody.innerHTML = result.data.map(r => `
       <tr>
         <td style="font-weight:700;color:var(--text-muted);">#${r.receipt_id}</td>
-        <td>${r.emoji} ${r.product_name}</td>
+        <td>${r.emoji} ${escHtml(r.product_name)}</td>
         <td style="text-align:center;">${r.quantity}</td>
         <td>${r.unit_cost != null ? Number(r.unit_cost).toLocaleString('vi-VN') + 'đ' : '—'}</td>
         <td style="font-weight:700;color:var(--red);">${Number(r.total_cost).toLocaleString('vi-VN')}đ</td>
-        <td style="font-size:12px;color:var(--text-muted);">${r.created_at || '—'}<br>${r.note || ''}</td>
+        <td style="font-size:12px;color:var(--text-muted);">${r.created_at || '—'}<br>${escHtml(r.note || '')}</td>
       </tr>
     `).join('');
   } catch (e) {

@@ -149,6 +149,7 @@ def test_frontend_giu_pattern_fallback_emoji_cho_anh():
         block = JS[pos:pos + 900]
         # (a) img phải gắn đúng tiền tố /static/
         assert ("/static/${p.image_url}" in block
+                or "/static/${escHtml(p.image_url)}" in block
                 or "'/static/' + p.image_url" in block), (
             f"Vị trí {pos}: img không dùng tiền tố /static/ + image_url"
         )

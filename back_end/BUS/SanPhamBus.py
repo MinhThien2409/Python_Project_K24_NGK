@@ -300,6 +300,13 @@ class SanPhamBus:
                 return {"status": False, "message": "Số lượng không hợp lệ!"}
         if chu is None or int(chu) != int(store_id):
             return {"status": False, "message": "Không có quyền thao tác trên sản phẩm này!"}
+        # Phase 4: FE không gửi giá khi sửa -> giữ nguyên giá/giá gốc hiện tại
+        if gia in (None, ""):
+            hien_tai = self.dao.lay_theo_id(product_id)
+            if not hien_tai:
+                return {"status": False, "message": "Không tìm thấy sản phẩm!"}
+            gia = hien_tai["price"]
+            gia_goc = hien_tai["old_price"]
         ten_sach = str(ten or "").strip()
         if not ten_sach:
             return {"status": False, "message": "Tên sản phẩm không được để trống!"}

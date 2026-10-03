@@ -4024,7 +4024,7 @@ async function renderSellerNhapHang() {
               <div style="display:flex; align-items:center; gap:6px;">
                 <span style="font-size:16px; width:20px;">💰</span>
                 <input type="number" id="nhGia${p.id}" min="0" placeholder="Giá nhập/đơn vị"
-                  value="${giaGoiY}" data-sellprice="${p.price || 0}"
+                  value="${giaGoiY}"
                   oninput="capNhatThanhTien(${p.id})"
                   style="flex:1; padding:6px 8px; border:1px solid var(--border); border-radius:6px; font-size:13px;">
               </div>
@@ -4059,21 +4059,14 @@ async function renderSellerNhapHang() {
   }
 }
 
-// Tính "Thành tiền" + lợi nhuận dự kiến, cập nhật live khi gõ
-function tinhTomTatNhapHang(gia, sl, giaBan) {
+// Tính "Thành tiền", cập nhật live khi gõ
+function tinhTomTatNhapHang(gia, sl) {
   const g = Number(gia) || 0;
   const s = Number(sl) || 0;
   if (g <= 0 || s <= 0) return 'Nhập giá & số lượng để xem thành tiền';
 
   const thanhTien = g * s;
-  let dong2 = '';
-  if (giaBan > 0) {
-    const loiNhuan = giaBan - g;
-    const mauSac = loiNhuan >= 0 ? 'var(--green)' : 'var(--red)';
-    const pct = ((loiNhuan / giaBan) * 100).toFixed(0);
-    dong2 = `<br>Lợi nhuận/sp: <b style="color:${mauSac};">${loiNhuan.toLocaleString('vi-VN')}đ (${pct}%)</b>`;
-  }
-  return `Thành tiền: <b>${thanhTien.toLocaleString('vi-VN')}đ</b>${dong2}`;
+  return `Thành tiền: <b>${thanhTien.toLocaleString('vi-VN')}đ</b>`;
 }
 
 function capNhatThanhTien(productId) {
@@ -4081,8 +4074,7 @@ function capNhatThanhTien(productId) {
   const slInput  = document.getElementById('nhQty' + productId);
   const tomTat   = document.getElementById('nhTomTat' + productId);
   if (!giaInput || !slInput || !tomTat) return;
-  const giaBan = Number(giaInput.dataset.sellprice || 0);
-  tomTat.innerHTML = tinhTomTatNhapHang(giaInput.value, slInput.value, giaBan);
+  tomTat.innerHTML = tinhTomTatNhapHang(giaInput.value, slInput.value);
 }
 
 // Xác nhận nhập — bỏ prompt(), dùng ô ghi chú inline sẵn có
@@ -4708,25 +4700,7 @@ renderSellerOverview = async function () {
       + String(d.hoan_thanh || 0) + ' hoàn thành · ' + String(d.da_huy || 0) + ' đã hủy';
     cardDoanhThu.appendChild(dDon);
     container.appendChild(cardDoanhThu);
-        // 💵 Thu nhập ròng (lợi nhuận thực tế)
-    const ketQuaThuNhap = await tinhThuNhapRongSeller(dsSanPham);
-    const cardThuNhap = document.createElement('div');
-    cardThuNhap.className = 'admin-card';
-    const hThuNhap = document.createElement('h3');
-    hThuNhap.textContent = '💵 Thu nhập thực tế (Lợi nhuận)';
-    cardThuNhap.appendChild(hThuNhap);
-    const dThuNhap = document.createElement('div');
-    dThuNhap.className = 'stat-val';
-    dThuNhap.style.color = ketQuaThuNhap.thuNhap >= 0 ? 'var(--green)' : 'var(--red)';
-    dThuNhap.textContent = Number(ketQuaThuNhap.thuNhap || 0).toLocaleString('vi-VN') + 'đ';
-    cardThuNhap.appendChild(dThuNhap);
-    const pGhiChu = document.createElement('p');
-    pGhiChu.style.cssText = 'font-size:12px;color:var(--text-muted);margin:4px 0 0;';
-    pGhiChu.textContent = ''
-      + (ketQuaThuNhap.thieuGiaVon ? ' ' : '');
-    cardThuNhap.appendChild(pGhiChu);
-    container.appendChild(cardThuNhap);
-    const cardTopSp = document.createElement('div');
+        const cardTopSp = document.createElement('div');
     cardTopSp.className = 'admin-card';
     if ((d.top_san_pham || []).length) {
       const hTop = document.createElement('h3');
@@ -4756,88 +4730,6 @@ renderSellerOverview = async function () {
     container.appendChild(loi);
   }
 };
-// Tính giá vốn trung bình theo product_id từ lịch sử nhập hàng (bình quân gia quyền)
-function tinhGiaVonTrungBinhMap(logs) {
-  const tong = {};
-  (logs || []).forEach(r => {
-    const pid = r.product_id ?? r.ProductId;
-    const sl  = Number(r.quantity ?? r.Quantity) || 0;
-    const gia = r.unit_cost ?? r.UnitCost;
-    if (!pid || !sl || gia == null || isNaN(Number(gia))) return;
-    if (!tong[pid]) tong[pid] = { tongTien: 0, tongSoLuong: 0 };
-    tong[pid].tongTien += Number(gia) * sl;
-    tong[pid].tongSoLuong += sl;
-  });
-  const map = {};
-  Object.keys(tong).forEach(pid => {
-    map[pid] = tong[pid].tongSoLuong > 0 ? tong[pid].tongTien / tong[pid].tongSoLuong : 0;
-  });
-  return map;
-}
-
-// Tính thu nhập ròng (lợi nhuận thực tế) từ các đơn đã hoàn thành
-async function tinhThuNhapRongSeller(dsSanPham) {
-  try {
-    const [rDon, rLog, rCat] = await Promise.all([
-      fetch('/api/seller/don-hang'),
-      fetch('/api/seller/lich-su-nhap-hang'),
-      fetch('/api/categories')
-    ]);
-    const donRes = await rDon.json();
-    const logRes = await rLog.json();
-    const catRes = await rCat.json();
-
-    if (!donRes.status) return { thuNhap: 0, coDuLieu: false, thieuGiaVon: false };
-
-    // Map category_name -> phí sàn %
-    const phiSanMap = {};
-    if (catRes.status) {
-      (catRes.data || []).forEach(c => {
-        const ten = c.category_name ?? c.name;
-        phiSanMap[ten] = Number(c.platform_fee_percent ?? c.phi_san ?? 0);
-      });
-    }
-
-    // Map tra cứu sản phẩm theo id / theo tên (fallback nếu Item không có ProductId)
-    const spById   = {};
-    const spByName = {};
-    (dsSanPham || []).forEach(p => {
-      spById[p.id] = p;
-      spByName[(p.name || '').toLowerCase()] = p;
-    });
-
-    const giaVonMap = tinhGiaVonTrungBinhMap(logRes.status ? logRes.data : []);
-
-    let tongThuNhap = 0;
-    let thieuGiaVon = false;
-
-    const donHoanThanh = (donRes.data || []).filter(o => o.Status === 'Completed');
-
-    donHoanThanh.forEach(o => {
-      (o.Items || []).forEach(it => {
-        const pid     = it.ProductId ?? it.product_id ?? null;
-        const sanPham = (pid != null ? spById[pid] : null) || spByName[(it.ProductName || '').toLowerCase()];
-        const idThuc  = sanPham ? sanPham.id : pid;
-
-        const soLuong   = Number(it.Quantity) || 0;
-        const giaBan    = Number(it.UnitPrice) || 0;
-        const phiSanPct = sanPham ? (phiSanMap[sanPham.category_name] || 0) : 0;
-        const giaVon    = (idThuc != null && giaVonMap[idThuc] != null) ? giaVonMap[idThuc] : 0;
-
-        if (giaVon === 0) thieuGiaVon = true;
-
-        const thucNhan   = giaBan * (1 - phiSanPct / 100);
-        tongThuNhap += (thucNhan - giaVon) * soLuong;
-      });
-    });
-
-    return { thuNhap: tongThuNhap, coDuLieu: true, thieuGiaVon };
-  } catch (e) {
-    console.error('Lỗi tính thu nhập ròng:', e);
-    return { thuNhap: 0, coDuLieu: false, thieuGiaVon: false };
-  }
-}
-
 // 010 US2 — TRANG SHOP (tách khỏi Tổng quan): đọc shop về điền vào form spane-shop
 async function renderTrangShop() {
   const inputTen = document.getElementById('sellerShopName');

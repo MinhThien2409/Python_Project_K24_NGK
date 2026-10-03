@@ -56,13 +56,13 @@ INSERT INTO Stores (StoreId, StoreName, Address, UserId, Phone, Category, Descri
 (3, 'Shop Gia Dụng Gia Đình', 'TP. Hồ Chí Minh', 5, '0902222003', 'Gia dụng',   'Đồ gia dụng, sách và quà tặng',         1, '2026-09-01 09:00:00');
 
 -- ═══════════ DANH MỤC ═══════════
-INSERT INTO Categories (CategoryId, CategoryName) VALUES
-(1, 'Điện thoại'),
-(2, 'Laptop'),
-(3, 'Thời trang'),
-(4, 'Gia dụng'),
-(5, 'Sách'),
-(6, 'Đồng hồ');
+INSERT INTO Categories (CategoryId, CategoryName, PlatformFeePercent) VALUES
+(1, 'Điện thoại', 10.00),
+(2, 'Laptop', 5.00),
+(3, 'Thời trang', 0.00),
+(4, 'Gia dụng', 0.00),
+(5, 'Sách', 0.00),
+(6, 'Đồng hồ', 0.00);
 
 -- ═══════════ SẢN PHẨM ═══════════
 INSERT INTO Products (ProductId, ProductName, Quantity, Price, CategoryId, StoreId, Description, OldPrice, ImageUrl, SoldCount, Emoji, IsActive) VALUES
@@ -108,3 +108,5 @@ INSERT INTO OrderItems (OrderItemId, OrderId, ProductId, ProductName, Emoji, Qua
 (4, 2,  8, 'Máy xay sinh tố',       '🥤', 1, 1150000.00,  1150000.00),
 (5, 3,  3, 'MacBook Air M3',        '📦', 1, 31000000.00, 31000000.00),
 (6, 4, 10, 'Đồng hồ Casio',         '⌚', 1, 1800000.00,  1800000.00);
+-- StockReceipts, StockReceiptItems va Suppliers khong co demo rows.
+-- Cac record runtime-specific hien tai khong duoc dua vao canonical seed.

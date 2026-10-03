@@ -145,8 +145,8 @@ def test_quan_ly_khong_khoa_duoc_quan_ly_khac(client, gan_dao):
     resp = client.put("/api/users/1/status", json={"status": "banned"})
     assert resp.status_code == 200
     assert resp.get_json()["status"] is False
-    assert resp.get_json()["message"] == "Không ai có quyền khóa tài khoản Admin!"
+    assert resp.get_json()["message"] == "Quản lý chỉ được khóa/mở khóa tài khoản Seller hoặc Khách hàng!"
 
     resp = client.put("/api/users/5/status", json={"status": "banned"})
     assert resp.get_json()["status"] is False
-    assert resp.get_json()["message"] == "Không thể khóa tài khoản Quản lý!"
+    assert resp.get_json()["message"] == "Quản lý chỉ được khóa/mở khóa tài khoản Seller hoặc Khách hàng!"

@@ -90,7 +90,7 @@ def test_chen_order_lay_id_khong_output_inserted():
     # SQL không còn mệnh đề OUTPUT INSERTED.OrderId (SQL Server)
     assert "OUTPUT" not in cur.sql_log[0]
     # Vẫn dùng placeholder ? cho wrapper DBconnection
-    assert "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)" in cur.sql_log[0]
+    assert "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)" in cur.sql_log[0]
     # Không gọi fetchone() để lấy id
     assert cur.da_goi_fetchone is False
 

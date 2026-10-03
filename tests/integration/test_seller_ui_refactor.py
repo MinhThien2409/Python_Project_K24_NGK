@@ -9,7 +9,7 @@ US3 (T014): #spane-products không còn thao tác đổi giá; #spane-gia chứa
             pill 4 mức (FR-020/023/024/025); luồng 🙈 Ẩn/👁️ Hiện giữ nguyên.
 
 KHÔNG cần DB — đọc tĩnh templates/index.html + static/js/main.js theo contract
-contracts/seller-ui-map.md.
+UI contract hiện tại.
 """
 import sys
 from pathlib import Path
@@ -48,24 +48,24 @@ def test_seller_dashboard_dung_admin_layout():
 def test_menu_seller_dung_admin_menu_item():
     block = _seller_block()
     for mid in ["smenu-overview", "smenu-products", "smenu-orders",
-                "smenu-nhaphang", "smenu-shop", "smenu-gia"]:
+                "smenu-nhaphang", "smenu-shop", "smenu-gia", "smenu-vouchers"]:
         assert f'id="{mid}"' in block, f"Thiếu mục menu {mid}"
-    assert block.count('id="smenu-') == 6
+    assert block.count('id="smenu-') == 7
 
 
 def test_pane_seller_dung_admin_pane():
     block = _seller_block()
     for pid in ["spane-overview", "spane-products", "spane-orders",
-                "spane-nhaphang", "spane-shop", "spane-gia"]:
+                "spane-nhaphang", "spane-shop", "spane-gia", "spane-vouchers"]:
         assert f'id="{pid}"' in block, f"Thiếu pane {pid}"
-    assert block.count('class="admin-pane"') == 6
+    assert block.count('class="admin-pane"') == 7
 
 
 def test_switch_seller_tab_dung_convention_va_co_nhanh_moi():
     seg = JS[JS.index("async function switchSellerTab"):]
     seg = seg[:seg.index("\n}\n") + 3]
     for nhanh in ["'overview'", "'products'", "'orders'", "'nhaphang'",
-                  "'shop'", "'gia'"]:
+                  "'shop'", "'gia'", "'vouchers'"]:
         assert nhanh in seg, f"switchSellerTab thiếu nhánh {nhanh}"
     assert "renderSellerNhapHang" in seg
     assert "renderTrangShop" in seg
@@ -179,3 +179,31 @@ def test_pill_trang_thai_sp_co_4_muc_va_so_da_ban():
     # SoldCount vẫn hiển thị dưới pill (FR-025)
     assert "Đã bán" in seg
     assert "sold" in seg or "SoldCount" in seg
+
+def test_seller_voucher_ui_khong_co_sellerid_hoac_usedquantity_input():
+    block = _block_of("spane-vouchers").split('id="spane-orders"')[0]
+    assert 'id="sellerVoucherSellerId"' not in block
+    assert 'id="sellerVoucherUsedQuantity"' not in block
+    assert 'name="SellerId"' not in block
+    assert 'name="UsedQuantity"' not in block
+    assert "ProductIds" in JS
+
+
+def test_manager_ui_khong_con_voucher_crud():
+    admin = HTML[HTML.index('<div id="adminInterface"'):HTML.index('<!-- ====================== SELLER DASHBOARD')]
+    assert 'id="menu-vouchers"' not in admin
+    assert 'id="pane-vouchers"' not in admin
+    assert "renderAdminVouchers" not in JS
+    assert "luuVoucher" not in JS
+    assert "suaVoucher" not in JS
+    assert "toggleVoucher" not in JS
+    assert "xoaVoucher" not in JS
+
+
+def test_seller_voucher_ui_uses_existing_backend_contract():
+    block = _block_of("spane-vouchers").split('id="spane-orders"')[0]
+    assert "/api/voucher" in JS
+    assert "/api/voucher/" in JS
+    assert "/api/voucher/' + id + '/toggle" in JS
+    assert "/api/seller/san-pham" in JS
+    assert "currentUser" in JS

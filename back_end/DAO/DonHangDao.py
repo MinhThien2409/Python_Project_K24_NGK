@@ -1,9 +1,6 @@
 import logging
-import uuid
-
+from datetime import datetime
 from back_end.DBconnection import DBconnection
-from back_end.Model.DonHang import DonHang
-from back_end.Model.OrderItem import OrderItem
 
 logger = logging.getLogger(__name__)
 
@@ -29,11 +26,16 @@ class DonHangDao:
         cursor = conn.cursor()
         try:
             cac_order_id = []
+            voucher_error = self._ap_dung_voucher(cursor, orders)
+            if voucher_error:
+                conn.rollback()
+                return voucher_error
             for order in orders:
                 new_order_id = self._chen_order_lay_id(cursor, order)
                 loi_kho = self._chen_items_tru_kho(cursor, conn, new_order_id,
                                                    order.Items)
                 if loi_kho:
+                    conn.rollback()
                     return loi_kho
                 cac_order_id.append(new_order_id)
             conn.commit()
@@ -47,26 +49,32 @@ class DonHangDao:
             conn.close()
 
     def _chen_order_lay_id(self, cursor, order):
-        """Chèn Orders và trả về OrderId mới sinh (MySQL: cursor.lastrowid)."""
-        sql_order = """
-        INSERT INTO Orders (Status, ShippingFee, UserId, ReceiverName,
-                            ReceiverPhone, ShippingAddress, PaymentMethod,
-                            SubTotal, DiscountAmount, TotalAmount, Note)
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-        """
-        cursor.execute(sql_order, (
-            str(order.Status),
-            float(order.ShippingFee or 0),
-            int(order.UserId),
-            str(order.ReceiverName),
-            str(order.ReceiverPhone),
-            str(order.ShippingAddress),
-            str(order.PaymentMethod),
-            float(order.SubTotal or 0),
-            float(order.DiscountAmount or 0),
-            float(order.TotalAmount or 0),
-            str(order.Note) if order.Note else None
-        ))
+        """Chèn Orders; VoucherCode được snapshot khi checkout có voucher."""
+        if getattr(order, "VoucherCode", None):
+            sql_order = """
+            INSERT INTO Orders (Status, ShippingFee, UserId, ReceiverName,
+                                ReceiverPhone, ShippingAddress, PaymentMethod,
+                                VoucherCode, SubTotal, DiscountAmount, TotalAmount, Note)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            """
+            params = (str(order.Status),float(order.ShippingFee or 0),int(order.UserId),
+                      str(order.ReceiverName),str(order.ReceiverPhone),str(order.ShippingAddress),
+                      str(order.PaymentMethod),str(order.VoucherCode),float(order.SubTotal or 0),
+                      float(order.DiscountAmount or 0),float(order.TotalAmount or 0),
+                      str(order.Note) if order.Note else None)
+        else:
+            sql_order = """
+            INSERT INTO Orders (Status, ShippingFee, UserId, ReceiverName,
+                                ReceiverPhone, ShippingAddress, PaymentMethod,
+                                SubTotal, DiscountAmount, TotalAmount, Note)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            """
+            params = (str(order.Status),float(order.ShippingFee or 0),int(order.UserId),
+                      str(order.ReceiverName),str(order.ReceiverPhone),str(order.ShippingAddress),
+                      str(order.PaymentMethod),float(order.SubTotal or 0),
+                      float(order.DiscountAmount or 0),float(order.TotalAmount or 0),
+                      str(order.Note) if order.Note else None)
+        cursor.execute(sql_order, params)
         return cursor.lastrowid
 
     def _chen_items_tru_kho(self, cursor, conn, new_order_id, order_items):
@@ -112,6 +120,137 @@ class DonHangDao:
                     "product_name": info[0],
                     "available": info[1]}
         return {"error": "not_found", "product_name": f"#{item.ProductId}"}
+
+    def _ap_dung_voucher(self, cursor, orders):
+        """Khóa Voucher, chỉ giảm các Product có trong VoucherProduct."""
+        if not orders:
+            return {"error": "invalid_voucher", "message": "Giỏ hàng trống, vui lòng thử lại!"}
+
+        code = getattr(orders[0], "VoucherCode", None)
+        if not code:
+            for o in orders:
+                o.DiscountAmount = 0
+                o.TotalAmount = float(o.SubTotal or 0) + float(o.ShippingFee or 0)
+            return None
+
+        code = str(code).strip().upper()
+        cursor.execute(
+            """SELECT VoucherId,SellerId,Code,Name,DiscountType,DiscountValue,
+                      MinOrderValue,MaxDiscount,StartDate,EndDate,Quantity,
+                      UsedQuantity,IsActive
+               FROM Voucher WHERE Code=%s FOR UPDATE""",
+            (code,)
+        )
+        row = cursor.fetchone()
+        if not row:
+            return {"error": "invalid_voucher", "message": "Voucher không tồn tại!"}
+
+        voucher_id, seller_id, real_code, _, dtype, value, min_order, max_discount,             start_dt, end_dt, quantity, used, active = row
+
+        now = datetime.now()
+        if not active:
+            return {"error": "invalid_voucher", "message": "Voucher đã bị vô hiệu hóa!"}
+        if start_dt and now < start_dt:
+            return {"error": "invalid_voucher", "message": "Voucher chưa bắt đầu!"}
+        if end_dt and now > end_dt:
+            return {"error": "invalid_voucher", "message": "Voucher đã hết hạn!"}
+        if int(used or 0) >= int(quantity or 0):
+            return {"error": "invalid_voucher", "message": "Voucher đã hết lượt!"}
+
+        product_ids = sorted({
+            int(item.ProductId)
+            for order in orders
+            for item in order.Items
+        })
+        if not product_ids:
+            return {"error": "invalid_voucher", "message": "Giỏ hàng trống, vui lòng thử lại!"}
+
+        placeholders = ",".join(["%s"] * len(product_ids))
+        sql_eligible = """SELECT vp.ProductId,p.Price,p.StoreId,p.Quantity,p.IsActive
+                FROM VoucherProduct vp
+                JOIN Products p ON p.ProductId=vp.ProductId
+                WHERE vp.VoucherId=%s
+                  AND p.StoreId=%s
+                  AND vp.ProductId IN (""" + placeholders + ")"
+        cursor.execute(sql_eligible, tuple([voucher_id, seller_id] + product_ids))
+        eligible = {}
+        for r in cursor.fetchall():
+            eligible[int(r[0])] = {
+                "price": float(r[1] or 0),
+                "store_id": int(r[2]),
+                "quantity": int(r[3] or 0),
+                "is_active": bool(r[4])
+            }
+
+        if not eligible:
+            return {"error": "invalid_voucher",
+                    "message": "Voucher không áp dụng cho sản phẩm trong giỏ hàng!"}
+
+        eligible_subtotal = 0.0
+        order_eligible = []
+        for order in orders:
+            amount = 0.0
+            for item in order.Items:
+                product = eligible.get(int(item.ProductId))
+                if not product:
+                    continue
+                if not product["is_active"]:
+                    return {"error": "invalid_voucher",
+                            "message": "Sản phẩm áp dụng Voucher không còn kinh doanh!"}
+                if int(item.Quantity or 0) > product["quantity"]:
+                    return {"error": "invalid_voucher",
+                            "message": "Sản phẩm áp dụng Voucher không đủ tồn kho!"}
+                # Reload authoritative price from DB for eligible items.
+                item.UnitPrice = product["price"]
+                item.TotalPrice = int(item.Quantity or 0) * product["price"]
+                amount += float(item.TotalPrice or 0)
+            order_eligible.append(amount)
+            eligible_subtotal += amount
+
+        if eligible_subtotal <= 0:
+            return {"error": "invalid_voucher",
+                    "message": "Voucher không áp dụng cho sản phẩm trong giỏ hàng!"}
+        if eligible_subtotal < float(min_order or 0):
+            return {"error": "invalid_voucher",
+                    "message": "Đơn hàng chưa đạt giá trị tối thiểu để sử dụng Voucher!"}
+
+        if str(dtype).upper() == "PERCENT":
+            discount = eligible_subtotal * float(value) / 100.0
+            if float(max_discount or 0) > 0:
+                discount = min(discount, float(max_discount))
+        else:
+            discount = min(float(value), eligible_subtotal)
+        discount = max(0.0, min(discount, eligible_subtotal))
+
+        remaining = discount
+        eligible_order_indexes = [i for i, amount in enumerate(order_eligible) if amount > 0]
+        last_eligible = eligible_order_indexes[-1]
+        for idx, order in enumerate(orders):
+            eligible_amount = order_eligible[idx]
+            if eligible_amount <= 0:
+                d = 0.0
+            elif idx == last_eligible:
+                d = remaining
+            else:
+                d = round(discount * eligible_amount / eligible_subtotal, 2)
+                remaining -= d
+            order.VoucherCode = str(real_code)
+            order.DiscountAmount = max(0.0, min(d, eligible_amount))
+            order.TotalAmount = max(
+                0.0,
+                float(order.SubTotal or 0) + float(order.ShippingFee or 0) - order.DiscountAmount
+            )
+
+        cursor.execute(
+            """UPDATE Voucher
+               SET UsedQuantity=UsedQuantity+1
+               WHERE VoucherId=%s AND UsedQuantity<Quantity""",
+            (voucher_id,)
+        )
+        if cursor.rowcount != 1:
+            return {"error": "invalid_voucher",
+                    "message": "Voucher đã hết lượt, vui lòng thử lại!"}
+        return None
 
     # ─── ĐỌC ───
     def lay_don_hang_cua_user(self, ma_user):
@@ -516,10 +655,10 @@ class DonHangDao:
             conn.close()
 
     def _thong_ke_chinh_cua_store(self, cursor, store_id):
-        """Tổng doanh thu và đếm đơn theo trạng thái của 1 store."""
+        """Doanh thu Completed theo items cua store, nhat quan voi bao cao thang."""
         cursor.execute("""
             SELECT
-                COALESCE(SUM(CASE WHEN o.Status <> 'Cancelled'
+                COALESCE(SUM(CASE WHEN o.Status = 'Completed'
                     THEN oi.Quantity * oi.UnitPrice ELSE 0 END), 0) AS doanh_thu,
                 COUNT(DISTINCT o.OrderId) AS tong_don,
                 SUM(CASE WHEN o.Status = 'Pending' THEN 1 ELSE 0 END) AS cho_duyet,
@@ -675,6 +814,134 @@ class DonHangDao:
         except Exception as e:
             logger.exception("Lỗi lay_ten_cua_cac_store: %s", e)
             return {}
+        finally:
+            cursor.close()
+            conn.close()
+
+    def lay_thong_tin_san_pham(self, product_ids):
+        """Trả dict {ProductId: {price, quantity, is_active, name}} để BUS đối chiếu."""
+        if not product_ids:
+            return {}
+        conn = DBconnection().get_connection()
+        if not conn:
+            return {}
+        cursor = conn.cursor()
+        try:
+            placeholders = ",".join(["%s"] * len(product_ids))
+            cursor.execute(
+                f"SELECT ProductId, ProductName, Price, Quantity, IsActive "
+                f"FROM Products WHERE ProductId IN ({placeholders})",
+                tuple(product_ids)
+            )
+            ket_qua = {}
+            for row in cursor.fetchall():
+                ket_qua[int(row[0])] = {
+                    "name": row[1],
+                    "price": float(row[2] or 0),
+                    "quantity": int(row[3] or 0),
+                    "is_active": bool(row[4]),
+                }
+            return ket_qua
+        except Exception as e:
+            logger.exception("Lỗi lay_thong_tin_san_pham: %s", e)
+            return {}
+        finally:
+            cursor.close()
+            conn.close()
+
+    # ─── THÔNG BÁO (Phase 3: persist sau hủy đơn) ───
+    def _dam_bao_bang_thong_bao(self, cursor):
+        """Tạo bảng Notifications nếu chưa có để lưu thông báo."""
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS Notifications (
+                ThongBaoId INT AUTO_INCREMENT PRIMARY KEY,
+                UserId INT NOT NULL,
+                NoiDung VARCHAR(500) NOT NULL DEFAULT '',
+                OrderId INT NULL,
+                DaDoc TINYINT(1) NOT NULL DEFAULT 0,
+                CreatedAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+
+    def tao_thong_bao(self, user_id, noi_dung, order_id=None):
+        """Lưu một thông báo cho user, trả id mới hoặc None khi lỗi."""
+        conn = DBconnection().get_connection()
+        if not conn:
+            return None
+        cursor = conn.cursor()
+        try:
+            self._dam_bao_bang_thong_bao(cursor)
+            cursor.execute(
+                "INSERT INTO Notifications (UserId, NoiDung, OrderId) "
+                "VALUES (%s, %s, %s)",
+                (int(user_id), str(noi_dung or "")[:500],
+                 int(order_id) if order_id is not None else None)
+            )
+            conn.commit()
+            return cursor.lastrowid
+        except Exception as e:
+            conn.rollback()
+            logger.exception("Lỗi tao_thong_bao: %s", e)
+            return None
+        finally:
+            cursor.close()
+            conn.close()
+
+    def lay_thong_bao_cua_user(self, user_id, gioi_han=20):
+        """Lấy thông báo đã lưu của user, mới nhất trước."""
+        conn = DBconnection().get_connection()
+        if not conn:
+            return []
+        cursor = conn.cursor()
+        try:
+            self._dam_bao_bang_thong_bao(cursor)
+            cursor.execute(
+                "SELECT ThongBaoId, UserId, NoiDung, OrderId, DaDoc, CreatedAt "
+                "FROM Notifications WHERE UserId = %s "
+                "ORDER BY CreatedAt DESC LIMIT %s",
+                (int(user_id), int(gioi_han))
+            )
+            rows = cursor.fetchall()
+            columns = [col[0] for col in cursor.description]
+            ket_qua = []
+            for row in rows:
+                muc = dict(zip(columns, row))
+                if muc.get("CreatedAt"):
+                    muc["CreatedAt"] = str(muc["CreatedAt"])
+                ket_qua.append(muc)
+            return ket_qua
+        except Exception as e:
+            logger.exception("Lỗi lay_thong_bao_cua_user: %s", e)
+            return []
+        finally:
+            cursor.close()
+            conn.close()
+
+    def danh_dau_thong_bao_da_doc(self, user_id, thong_bao_id=None):
+        """Đánh dấu một hoặc toàn bộ thông báo của user là đã đọc."""
+        conn = DBconnection().get_connection()
+        if not conn:
+            return False
+        cursor = conn.cursor()
+        try:
+            self._dam_bao_bang_thong_bao(cursor)
+            if thong_bao_id is None:
+                cursor.execute(
+                    "UPDATE Notifications SET DaDoc = 1 WHERE UserId = %s",
+                    (int(user_id),)
+                )
+            else:
+                cursor.execute(
+                    "UPDATE Notifications SET DaDoc = 1 "
+                    "WHERE UserId = %s AND ThongBaoId = %s",
+                    (int(user_id), int(thong_bao_id))
+                )
+            conn.commit()
+            return cursor.rowcount > 0
+        except Exception as e:
+            conn.rollback()
+            logger.exception("Lỗi danh_dau_thong_bao_da_doc: %s", e)
+            return False
         finally:
             cursor.close()
             conn.close()

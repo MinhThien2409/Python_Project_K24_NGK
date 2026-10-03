@@ -135,7 +135,7 @@ def test_cap_lai_mat_khau_admin_bi_tu_choi(client, app_voi_dao):
     body = resp.get_json()
     assert resp.status_code == 200
     assert body["status"] is False
-    assert body["message"] == "Không thể cấp lại mật khẩu cho tài khoản Admin!"
+    assert body["message"] == "Quản lý chỉ được cấp lại mật khẩu cho Seller hoặc Khách hàng!"
 
 
 def test_reset_user_banned_van_giu_banned(client, app_voi_dao):
@@ -175,3 +175,42 @@ def test_user_khong_ton_tai_bi_tu_choi(client, app_voi_dao):
     body = resp.get_json()
     assert body["status"] is False
     assert body["message"] == "Tài khoản không tồn tại!"
+def test_admin_cap_lai_mat_khau_quan_ly_co_dinh(client, app_voi_dao):
+    user_dao = conftest.FakeUserDaoBus(
+        users={
+            "admin1": _user(1, 1, "admin1", "Admin"),
+            "manager1": _user(8, 2, "manager1", "Quản Lý"),
+        },
+        thong_tin={
+            1: _thong_tin(1, 1, ten="Admin"),
+            8: _thong_tin(8, 2, ten="Quản Lý"),
+        },
+    )
+    _gan_dao(app_voi_dao, user_dao)
+    _login(client, "admin1")
+    resp = client.post("/api/cap-lai-mat-khau", json={"ma_user": 8})
+    body = resp.get_json()
+    assert resp.status_code == 200
+    assert body["status"] is True
+    assert body["data"]["mat_khau_moi"] == "123" + "456"
+    assert user_dao.mat_khau["manager1"] == "123" + "456"
+
+
+def test_admin_cap_lai_mat_khau_sai_target_bi_tu_choi(client, app_voi_dao):
+    user_dao = conftest.FakeUserDaoBus(
+        users={
+            "admin1": _user(1, 1, "admin1", "Admin"),
+            "customer1": _user(9, 4, "customer1", "Khách"),
+        },
+        thong_tin={
+            1: _thong_tin(1, 1, ten="Admin"),
+            9: _thong_tin(9, 4, ten="Khách"),
+        },
+    )
+    _gan_dao(app_voi_dao, user_dao)
+    _login(client, "admin1")
+    resp = client.post("/api/cap-lai-mat-khau", json={"ma_user": 9, "mat_khau_moi": "hacker123"})
+    body = resp.get_json()
+    assert resp.status_code == 200
+    assert body["status"] is False
+    assert body["message"] == "Admin chỉ được cấp lại mật khẩu cho Quản lý!"

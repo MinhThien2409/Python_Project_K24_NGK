@@ -204,7 +204,7 @@ def test_quan_ly_khoa_quan_ly_khac_bi_cham(client, gan_nguoi_dung):
     body = resp.get_json()
     assert resp.status_code == 200
     assert body["status"] is False
-    assert body["message"] == "Không thể khóa tài khoản Quản lý!"
+    assert body["message"] == "Quản lý chỉ được khóa/mở khóa tài khoản Seller hoặc Khách hàng!"
 
 
 # ── US4: cấp lại mật khẩu ────────────────────────────────────────────────────

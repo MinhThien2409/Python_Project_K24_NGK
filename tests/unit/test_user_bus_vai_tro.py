@@ -59,10 +59,10 @@ def test_cap_nhat_trang_thai_tu_choi_khoa_admin(mock_user_dao):
     dao.lay_thong_tin_user = lambda ma_user: {"UserId": 1, "Role_Id": 1, "trang_thai": "active"}
     bus.dao = dao
 
-    ket_qua = bus.cap_nhat_trang_thai(2, 1, "banned")
+    ket_qua = bus.cap_nhat_trang_thai(2, 1, "banned", "Quản lý")
 
     assert ket_qua["status"] is False
-    assert ket_qua["message"] == "Không ai có quyền khóa tài khoản Admin!"
+    assert "Seller hoặc Khách hàng" in ket_qua["message"]
 
 
 def test_cap_nhat_trang_thai_cho_phep_khoa_non_admin(mock_user_dao):
@@ -72,7 +72,7 @@ def test_cap_nhat_trang_thai_cho_phep_khoa_non_admin(mock_user_dao):
     dao.cap_nhat_trang_thai = lambda ma_user, trang_thai: True
     bus.dao = dao
 
-    ket_qua = bus.cap_nhat_trang_thai(2, 5, "banned")
+    ket_qua = bus.cap_nhat_trang_thai(2, 5, "banned", "Quản lý")
 
     assert ket_qua["status"] is True
 

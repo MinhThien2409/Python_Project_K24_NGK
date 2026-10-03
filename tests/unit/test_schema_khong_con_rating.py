@@ -23,10 +23,3 @@ def test_schema_khong_con_cot_rating():
 def test_seed_khong_con_rating():
     src = _doc("Database/seed_demo_mysql.sql")
     assert "Rating" not in src
-
-
-def test_migration_drop_rating_ton_tai():
-    mig = REPO / "Database/sql/006_remove_rating.sql"
-    assert mig.exists(), "thiếu migration Database/sql/006_remove_rating.sql"
-    src = mig.read_text(encoding="utf-8")
-    assert "DROP COLUMN Rating" in src

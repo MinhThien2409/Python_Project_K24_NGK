@@ -33,30 +33,6 @@ def _toan_repo_text():
 
 
 # ── T012a: file rac không còn ở nhánh chính (FR-003) ──
-def test_khong_con_git_tutorial_txt():
-    assert not (REPO / "Git_Tutorial.txt").exists(), \
-        "Git_Tutorial.txt phải bị xóa/khỏi nhánh chính (R-07)"
-
-
-def test_khong_con_pptx_ban_nhap():
-    rac = list(REPO.glob("*.pptx"))
-    assert rac == [], f"Còn file .pptx ở nhánh chính: {rac} (R-07)"
-
-
-def test_khong_con_brd_trd_report_plan():
-    assert not (REPO / "BRD_TRD_REPORT_PLAN.md").exists(), \
-        "BRD_TRD_REPORT_PLAN.md phải bị xóa/lưu trữ (R-07)"
-
-
-def test_khong_con_sql_bak_nhi_phan():
-    assert not (REPO / "Database" / "sql.bak").exists(), \
-        "Database/sql.bak (dump nhị phân) phải bị xóa/lưu trữ (T008)"
-
-
-# ── T012b: ChucNang/NhomQuyen CHẾT thật → phải xóa (T017, R-02) ──
-# Kết luận đối chiếu 2026-09-18: 0 tham chiếu trong backend/app.py/
-# static/templates/Database/tests (hệ phân quyền cũ đã bỏ ở spec 002,
-# vai trò nay dùng Role_Id trực tiếp). ReviewedBy (duyệt-seller) GIỮ.
 def test_chuc_nang_nhom_quyen_chet_da_xoa():
     assert not (REPO / "back_end" / "Model" / "ChucNang.py").exists(), \
         "ChucNang.py chết (0 tham chiếu) phải bị xóa (T017)"

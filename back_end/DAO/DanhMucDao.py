@@ -34,7 +34,7 @@ class DanhMucDao:
                 } for r in rows
             ]
         except Exception as e:
-            print("Lỗi lay_tat_ca DanhMuc:", e)
+            logger.exception("Lỗi lay_tat_ca DanhMuc: %s", e)
             return []
         finally:
             cursor.close();
@@ -97,7 +97,7 @@ class DanhMucDao:
             conn.commit()
             return cursor.rowcount > 0
         except Exception as e:
-            print("Lỗi them DanhMuc:", e)
+            logger.exception("Lỗi them DanhMuc: %s", e)
             return False
         finally:
             cursor.close();
@@ -115,7 +115,7 @@ class DanhMucDao:
             conn.commit()
             return cursor.rowcount > 0
         except Exception as e:
-            print("Lỗi sua DanhMuc:", e)
+            logger.exception("Lỗi sua DanhMuc: %s", e)
             return False
         finally:
             cursor.close();

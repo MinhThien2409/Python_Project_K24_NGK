@@ -42,6 +42,11 @@
           <span class="icon">📋</span>
           <span class="label">Lịch sử đơn</span>
         </button>
+        <button class="hdr-btn" id="hdrNotifBtn" onclick="moThongBao()" style="display:none; position:relative;">
+          <span class="icon">🔔</span>
+          <span class="label">Thông báo</span>
+          <span class="badge" id="notifBadge" style="display:none;">0</span>
+        </button>
 
 
 
@@ -192,7 +197,9 @@
     </aside>
 
     <main class="main">
-      <div id="pane-categories" class="admin-pane" style="display:none;">
+
+
+<div id="pane-categories" class="admin-pane" style="display:none;">
   <div class="admin-card">
     <div style="display:flex; justify-content:space-between; align-items:center;">
       <h3>Quản lý danh mục sản phẩm</h3>
@@ -280,6 +287,7 @@
       <div class="admin-menu-item active" id="smenu-overview" onclick="switchSellerTab('overview')">📊 Tổng quan gian hàng</div>
       <div class="admin-menu-item" id="smenu-products" onclick="switchSellerTab('products')">📦 Sản phẩm của tôi</div>
       <div class="admin-menu-item" id="smenu-nhaphang" onclick="switchSellerTab('nhaphang')">📦 Quản lý nhập hàng</div>
+      <div class="admin-menu-item" id="smenu-vouchers" onclick="switchSellerTab('vouchers')">🎟️ Quản lý Voucher</div>
       <div class="admin-menu-item" id="smenu-orders" onclick="switchSellerTab('orders')">📋 Đơn hàng</div>
       <div class="admin-menu-item" id="smenu-shop" onclick="switchSellerTab('shop')">🏪 Trang shop</div>
       <div class="admin-menu-item" id="smenu-gia" onclick="switchSellerTab('gia')">💰 Quản lý giá bán</div>
@@ -319,6 +327,23 @@
       </div>
 <div id="spane-nhaphang" class="admin-pane" style="display:none;">
   <div class="admin-card">
+    <h3>📥 Phiếu nhập hàng (nhiều sản phẩm)</h3>
+    <p style="font-size:13px; color:var(--text-muted); margin-bottom:14px;">
+      Gõ tên để tìm sản phẩm có sẵn (gợi ý tự động), bấm “＋ Thêm dòng” để nhập nhiều
+      sản phẩm trong một phiếu. Tên chưa tồn tại → bấm “✨ Tạo mới” để tạo sản phẩm
+      rồi nhập kho. Dòng trùng sẽ được gộp số lượng. Tồn kho mới = tồn cũ + số nhập.
+    </p>
+    <div id="phieuNhapRows"></div>
+    <div style="display:flex; gap:8px; flex-wrap:wrap; margin:10px 0;">
+      <button type="button" class="admin-action-btn btn-edit" onclick="themDongNhap()">＋ Thêm dòng</button>
+      <input type="text" id="phieuNhapGhiChu" placeholder="Ghi chú chung cho phiếu (không bắt buộc)"
+             style="flex:1; min-width:220px; padding:8px 10px; border:1px solid var(--border); border-radius:8px;">
+      <button type="button" class="admin-action-btn btn-edit" onclick="submitPhieuNhap()">✅ Xác nhận nhập hàng</button>
+    </div>
+    <div id="phieuNhapMsg" style="font-size:13px; color:var(--text-muted);"></div>
+  </div>
+  <div class="admin-card">
+    <h3>⚡ Nhập nhanh từng sản phẩm</h3>
     <div class="filter-bar">
       <div class="filter-item">
         <label for="nhSearchFilter">Tìm kiếm</label>
@@ -366,6 +391,46 @@
     </table>
   </div>
 </div>
+      <div id="spane-vouchers" class="admin-pane" style="display:none;">
+        <div class="admin-card">
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;">
+            <div>
+              <h3>🎟️ Quản lý Voucher của cửa hàng</h3>
+              <p style="font-size:13px;color:var(--text-muted);margin:4px 0 0;">Voucher chỉ thuộc gian hàng hiện tại. SellerId và UsedQuantity do Backend quản lý.</p>
+            </div>
+            <button class="checkout-btn" onclick="resetSellerVoucherForm()">+ Tạo Voucher</button>
+          </div>
+          <div id="sellerVoucherMessage" style="display:none;margin-top:12px;font-size:13px;"></div>
+          <div style="display:grid;grid-template-columns:repeat(2,minmax(220px,1fr));gap:10px;margin-top:14px;">
+            <div><label>Mã Voucher</label><input id="sellerVoucherCode" maxlength="50" placeholder="VD: SALE20"></div>
+            <div><label>Tên Voucher</label><input id="sellerVoucherName" maxlength="150" placeholder="Tên chương trình"></div>
+            <div><label>Loại giảm</label><select id="sellerVoucherType" onchange="updateSellerVoucherTypeHint()"><option value="PERCENT">PERCENT</option><option value="FIXED">FIXED</option></select></div>
+            <div><label>Giá trị giảm</label><input id="sellerVoucherValue" type="number" min="0" step="0.01"></div>
+            <div><label>Đơn tối thiểu</label><input id="sellerVoucherMin" type="number" min="0" step="0.01"></div>
+            <div><label>Giảm tối đa</label><input id="sellerVoucherMax" type="number" min="0" step="0.01"></div>
+            <div><label>Bắt đầu</label><input id="sellerVoucherStart" type="datetime-local"></div>
+            <div><label>Kết thúc</label><input id="sellerVoucherEnd" type="datetime-local"></div>
+            <div><label>Số lượng</label><input id="sellerVoucherQty" type="number" min="0" step="1"></div>
+            <div><label>Trạng thái</label><select id="sellerVoucherActive"><option value="1">Bật</option><option value="0">Tắt</option></select></div>
+          </div>
+          <div style="margin-top:14px;">
+            <label>Sản phẩm áp dụng <span style="font-size:12px;color:var(--text-muted);">(chỉ sản phẩm của Store hiện tại)</span></label>
+            <div id="sellerVoucherProducts" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:8px;margin-top:8px;"></div>
+          </div>
+          <div style="margin-top:12px;display:flex;gap:8px;">
+            <button class="checkout-btn" id="btnSaveSellerVoucher" onclick="saveSellerVoucher()">Lưu Voucher</button>
+            <button onclick="resetSellerVoucherForm()">Nhập mới</button>
+          </div>
+        </div>
+        <div class="admin-card">
+          <div style="overflow:auto;">
+            <table>
+              <thead><tr><th>Code</th><th>Loại</th><th>Giảm</th><th>Min</th><th>Max</th><th>Bắt đầu</th><th>Kết thúc</th><th>Qty</th><th>Used</th><th>Trạng thái</th><th>Thao tác</th></tr></thead>
+              <tbody id="tblSellerVouchersBody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
       <div id="spane-orders" class="admin-pane" style="display:none;">
         <div class="admin-card">
           <h3>📋 Đơn hàng cần xử lý</h3>
@@ -416,12 +481,14 @@
         <div class="admin-card">
           <h3>💰 Quản lý giá bán</h3>
           <p style="font-size:13px; color:var(--text-muted); margin-bottom:14px;">
-            Nhập giá bán mới cho từng sản phẩm rồi bấm “Lưu giá” để cập nhật.
+            Nhập <b>giá gốc</b> và <b>giá khuyến mãi</b> cho từng sản phẩm, tick <b>Giảm giá</b>
+            để kích hoạt khuyến mãi (giá KM phải nhỏ hơn giá gốc), rồi bấm “Lưu giá”.
+            Bỏ tick = bán đúng giá gốc, không áp dụng khuyến mãi.
           </p>
         </div>
         <div class="admin-card">
           <table>
-            <thead><tr><th>Tên sản phẩm</th><th>Giá hiện tại</th><th>Giá bán mới</th><th>Tồn kho</th><th>Thao tác</th></tr></thead>
+            <thead><tr><th>Sản phẩm</th><th>Giá gốc</th><th>Giá khuyến mãi</th><th>Giảm giá</th><th>Thao tác</th></tr></thead>
             <tbody id="tblSellerGiaBody"></tbody>
           </table>
         </div>
@@ -461,7 +528,13 @@
     </div>
     <form id="formLogin" class="auth-form active" onsubmit="handleLogin(event)">
   <div class="form-group"><label>Tên đăng nhập</label><input type="text" id="loginUsername" required placeholder="Nhập tên đăng nhập..."></div>
-  <div class="form-group"><label>Mật khẩu</label><input type="password" id="loginPass" required placeholder="••••••"></div>
+  <div class="form-group login-password-group">
+    <label for="loginPass">Mật khẩu</label>
+    <div class="password-input-wrap">
+      <input type="password" id="loginPass" required placeholder="••••••" autocomplete="current-password">
+      <button type="button" class="password-toggle" id="toggleLoginPassword" aria-label="Hiện mật khẩu" title="Hiện mật khẩu" style="display:none;">👁</button>
+    </div>
+  </div>
   <button type="submit" class="btn-submit">Đăng nhập</button>
 </form>
 
@@ -509,7 +582,8 @@
     <div class="profile-tab-content" id="pcontent-security">
       <form onsubmit="handleChangePassword(event)">
         <div class="form-group"><label>Mật khẩu cũ</label><input type="password" id="pwCu" required></div>
-        <div class="form-group"><label>Mật khẩu mới (từ 6 ký tự)</label><input type="password" id="pwMoi" required></div>
+        <div class="form-group"><label>Mật khẩu mới (từ 6 ký tự)</label><input type="password" id="pwMoi" required minlength="6"></div>
+        <div class="form-group"><label>Xác nhận mật khẩu mới</label><input type="password" id="pwXacNhan" required minlength="6"></div>
         <button type="submit" class="btn-submit" style="width:100%;">Đổi mật khẩu</button>
       </form>
     </div>
@@ -560,6 +634,9 @@
           <option value="VNPay">VNPay</option>
         </select>
       </div>
+      <div id="paymentUnsupportedNote" style="display:none; background:#FDECEA; border:1px solid #FFB8B8; padding:12px; border-radius:8px; font-size:12px; margin-bottom:14px;">
+        ⚠️ Phương thức thanh toán này hiện chưa được hỗ trợ.
+      </div>
       <div id="bankDetailsBlock" style="display:none; background:#FFF8EC; border:1px solid #FFD4A8; padding:12px; border-radius:8px; font-size:12px; margin-bottom:14px; line-height:1.6;">
         <strong>🏦 MB Bank:</strong> STK <b>0987654321999</b><br>
         Nội dung CK: <span style="color:red; font-weight:bold;">POBBYPAY [Mã đơn hàng]</span>
@@ -571,6 +648,7 @@
         💙 ZaloPay: <b>0987654321</b> – POBBY STORE
       </div>
 
+      <div class="form-group"><label>Mã Voucher</label><div style="display:flex;gap:8px;"><input id="checkoutVoucherCode" type="text" maxlength="50" placeholder="Nhập mã voucher" style="flex:1;"><button type="button" onclick="applyCheckoutVoucher()">Áp dụng</button><button type="button" onclick="clearCheckoutVoucher()">Bỏ</button></div><div id="voucherApplyStatus" style="display:none;color:var(--green);font-size:12px;margin-top:5px;"></div></div>
       <!-- TỔNG KẾT -->
       <div style="background:var(--bg); border-radius:8px; padding:12px 14px; margin-bottom:14px; font-size:13px;">
         <div style="display:flex; justify-content:space-between; margin-bottom:6px;">
@@ -579,6 +657,7 @@
         <div style="display:flex; justify-content:space-between; margin-bottom:6px;">
           <span>Phí vận chuyển:</span><span id="checkoutShipText" style="color:var(--green);">0đ</span>
         </div>
+        <div style="display:flex; justify-content:space-between; margin-bottom:6px;"><span>Giảm giá:</span><span id="checkoutDiscountText" style="color:var(--red);">-0đ</span></div>
         <div style="display:flex; justify-content:space-between; font-weight:bold; font-size:15px; padding-top:8px; border-top:1px solid var(--border);">
           <span>Tổng thanh toán:</span>
           <span id="checkoutTotalText" style="color:var(--red); font-size:17px;">0đ</span>
@@ -601,10 +680,10 @@
 
 <div class="modal-overlay" id="orderHistoryModal">  <div class="modal-box" style="width:740px; max-height:85vh; overflow-y:auto;">
     <button class="modal-close" onclick="closeModal('orderHistoryModal')">✕</button>
-    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+    <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-bottom:16px; padding-right:28px;">
       <h3 style="margin:0;">📋 Lịch sử đơn hàng</h3>
       <select id="historyFilterStatus" onchange="filterOrderHistory()"
-        style="padding:6px 10px; border-radius:6px; border:1px solid var(--border); font-family:inherit; font-size:13px;">
+        style="padding:6px 10px; border-radius:6px; border:1px solid var(--border); font-family:inherit; font-size:13px; max-width:100%;">
         <option value="all">Tất cả</option>
         <option value="Pending">Chờ duyệt</option>
         <option value="Confirmed">Đã xác nhận</option>
@@ -614,6 +693,24 @@
       </select>
     </div>
     <div id="orderHistoryContent"></div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="confirmCancelModal">
+  <div class="modal-box" style="width:420px;">
+    <button class="modal-close" onclick="closeModal('confirmCancelModal')">✕</button>
+    <h3 style="margin-bottom:12px;">⚠️ Xác nhận hủy đơn</h3>
+    <div id="confirmCancelContent" style="font-size:14px; margin-bottom:16px;"></div>
+    <div style="display:flex; gap:10px; justify-content:flex-end;">
+      <button onclick="closeModal('confirmCancelModal')"
+        style="padding:8px 16px; border-radius:6px; border:1px solid var(--border); background:#fff; cursor:pointer; font-family:inherit;">
+        Giữ lại đơn
+      </button>
+      <button id="confirmCancelBtn" onclick="xacNhanHuyDon()"
+        style="padding:8px 16px; border-radius:6px; border:1px solid var(--red); background:#fff; color:var(--red); cursor:pointer; font-weight:600; font-family:inherit;">
+        Xác nhận hủy
+      </button>
+    </div>
   </div>
 </div>
 
@@ -686,6 +783,11 @@
   <div class="modal-box" style="width:460px;">
     <button class="modal-close" onclick="closeModal('adminProductModal')">✕</button>
     <h3 id="adminProductModalTitle" style="margin-bottom:14px;">Thêm sản phẩm</h3>
+    <div id="sellerPriceNote" style="display:none; margin-bottom:12px; padding:10px 12px;
+         background:var(--bg); border:1px dashed var(--border); border-radius:8px;
+         font-size:12px; color:var(--text-muted);">
+      🔒 Giá &amp; tồn kho không sửa ở đây — chỉnh ở tab <b>📥 Nhập hàng</b> / <b>💰 Giá bán</b>.
+    </div>
     <form onsubmit="handleSaveProduct(event)">
       <input type="hidden" id="editProductId">
       <div class="form-group"><label>Tên sản phẩm</label><input type="text" id="prodName" required></div>
@@ -826,6 +928,18 @@
     <input type="hidden" id="editUserId">
     <div id="editUserInfo" style="background:var(--bg); padding:10px; border-radius:6px; margin-bottom:14px; font-size:13px;"></div>
     <div class="form-group">
+      <label>Họ tên</label>
+      <input type="text" id="editUserName" maxlength="100">
+    </div>
+    <div class="form-group">
+      <label>Địa chỉ</label>
+      <input type="text" id="editUserAddress" maxlength="255">
+    </div>
+    <div class="form-group">
+      <label>Số điện thoại</label>
+      <input type="text" id="editUserPhone" maxlength="20">
+    </div>
+    <div class="form-group">
       <label>Vai trò (không thể thay đổi)</label>
       <input type="text" id="editUserRoleReadonly" readonly style="background:var(--bg);">
     </div>
@@ -847,9 +961,8 @@
     <h3 style="margin-bottom:14px;">🔑 Cấp lại mật khẩu</h3>
     <input type="hidden" id="resetUserId">
     <div id="resetUserInfo" style="background:var(--bg); padding:10px; border-radius:6px; margin-bottom:14px; font-size:13px;"></div>
-    <div class="form-group">
-      <label>Mật khẩu mới (bỏ trống để hệ thống sinh ngẫu nhiên)</label>
-      <input type="text" id="resetPasswordInput" placeholder="Tối thiểu 6 ký tự">
+    <div style="background:var(--bg); padding:10px; border-radius:8px; margin-bottom:12px; font-size:13px;">
+      Hệ thống sẽ tự đặt lại mật khẩu theo quyền của tài khoản.
     </div>
     <button onclick="hamCapLaiMatKhau()" class="btn-submit" style="width:100%;">Cấp lại mật khẩu</button>
     <div id="resetPasswordResult" style="display:none; margin-top:14px; background:var(--bg); padding:12px; border-radius:6px; text-align:center;">

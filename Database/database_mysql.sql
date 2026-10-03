@@ -1,0 +1,312 @@
+-- database_mysql.sql
+-- Canonical combined file: schema_mysql.sql + seed_demo_mysql.sql.
+-- Do not maintain an independent schema/data definition here.
+
+-- =====================================================
+-- SCHEMA
+-- =====================================================
+
+-- schema_mysql.sql
+-- Chỉ tạo cấu trúc database PobbyDB (không kèm dữ liệu).
+-- Dữ liệu demo nằm riêng ở Database/seed_demo_mysql.sql.
+--
+-- Cách dùng:
+--     mysql -u root -p < Database/schema_mysql.sql
+--     mysql -u root -p < Database/seed_demo_mysql.sql
+-- Lưu ý: chạy lại sẽ DROP và tạo mới toàn bộ database PobbyDB.
+
+DROP DATABASE IF EXISTS PobbyDB;
+CREATE DATABASE PobbyDB CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+USE PobbyDB;
+
+CREATE TABLE Roles (
+    RoleId   INT AUTO_INCREMENT PRIMARY KEY,
+    RoleName VARCHAR(100) NOT NULL
+);
+
+CREATE TABLE Users (
+    UserId     INT AUTO_INCREMENT PRIMARY KEY,
+    FullName   VARCHAR(100) NOT NULL,
+    Address    VARCHAR(255) NULL,
+    Phone      VARCHAR(20)  NULL,
+    NationalId VARCHAR(20)  NULL
+);
+
+-- ═══════════ TÀI KHOẢN (tách ra khỏi Users) ═══════════
+CREATE TABLE Accounts (
+    AccountId   INT AUTO_INCREMENT PRIMARY KEY,
+    UserId      INT NOT NULL UNIQUE,
+    Username    VARCHAR(50)  NOT NULL UNIQUE,
+    Password    VARCHAR(255) NOT NULL,
+    Role_Id     INT          NULL,
+    trang_thai  VARCHAR(10)  NULL DEFAULT 'active',
+    CONSTRAINT FK_Accounts_Users      FOREIGN KEY (UserId) REFERENCES Users (UserId),
+    CONSTRAINT FK_Accounts_Roles       FOREIGN KEY (Role_Id) REFERENCES Roles (RoleId),
+    CONSTRAINT CK_Accounts_Admin_KhongDuocKhoa  CHECK (NOT (trang_thai = 'banned' AND Role_Id = 1))
+);
+
+CREATE TABLE Stores (
+    StoreId     INT AUTO_INCREMENT PRIMARY KEY,
+    StoreName   VARCHAR(150) NOT NULL,
+    Address     VARCHAR(255) NULL,
+    UserId      INT          NOT NULL,
+    Phone       VARCHAR(20)  NULL,
+    Category    VARCHAR(50)  NULL,
+    Description VARCHAR(500) NULL,
+    IsActive    TINYINT(1)   NOT NULL DEFAULT 1,
+    CreatedAt   DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    ThamNien    INT          NULL,
+    CONSTRAINT FK_Stores_UserId FOREIGN KEY (UserId) REFERENCES Users (UserId),
+    CONSTRAINT CK_Stores_ThamNien_0_100 CHECK (ThamNien IS NULL OR (ThamNien >= 0 AND ThamNien <= 100))
+);
+
+CREATE TABLE Categories (
+    CategoryId   INT AUTO_INCREMENT PRIMARY KEY,
+    CategoryName VARCHAR(100) NOT NULL,
+    PlatformFeePercent DECIMAL(5,2) DEFAULT 0.00
+);
+
+CREATE TABLE Products (
+    ProductId   INT AUTO_INCREMENT PRIMARY KEY,
+    ProductName VARCHAR(200) NOT NULL,
+    Quantity    INT          NULL DEFAULT 0,
+    Price       DECIMAL(18, 2) NOT NULL,
+    CategoryId  INT          NOT NULL,
+    StoreId     INT          NOT NULL,
+    Description VARCHAR(1000) NULL,
+    OldPrice    DECIMAL(18, 2) NULL,
+    ImageUrl    VARCHAR(500) NULL,
+    SoldCount   INT          NULL DEFAULT 0,
+    Emoji       VARCHAR(10)   NULL,
+    IsActive    TINYINT(1)   NULL DEFAULT 1,
+    CONSTRAINT FK_Products_Categories FOREIGN KEY (CategoryId) REFERENCES Categories (CategoryId),
+    CONSTRAINT FK_Products_Stores     FOREIGN KEY (StoreId)    REFERENCES Stores (StoreId)
+);
+
+CREATE TABLE Carts (
+    CartId      INT AUTO_INCREMENT PRIMARY KEY,
+    UserId      INT NOT NULL,
+    TotalAmount DECIMAL(18, 2) NULL DEFAULT 0,
+    CreatedAt   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT FK_Carts_UserId FOREIGN KEY (UserId) REFERENCES Users (UserId)
+);
+
+CREATE TABLE CartItems (
+    CartId    INT NOT NULL,
+    ProductId INT NOT NULL,
+    Quantity  INT NOT NULL DEFAULT 1,
+    UnitPrice DECIMAL(18, 2) NOT NULL DEFAULT 0,
+    PRIMARY KEY (CartId, ProductId),
+    CONSTRAINT FK_CartItems_Cart     FOREIGN KEY (CartId)    REFERENCES Carts    (CartId),
+    CONSTRAINT FK_CartItems_Product  FOREIGN KEY (ProductId) REFERENCES Products (ProductId)
+);
+
+CREATE TABLE SellerRequests (
+    RequestId     INT AUTO_INCREMENT PRIMARY KEY,
+    UserId        INT NOT NULL,
+    ShopName      VARCHAR(255) NOT NULL,
+    BusinessPhone VARCHAR(20)  NOT NULL,
+    Category      VARCHAR(50)  NOT NULL,
+    Status        VARCHAR(50)  NULL DEFAULT 'pending',
+    CreatedAt     DATETIME     NULL DEFAULT CURRENT_TIMESTAMP,
+    ReviewedAt    DATETIME     NULL,
+    ReviewedBy    INT          NULL,
+    RejectReason  VARCHAR(500) NULL,
+    Description   VARCHAR(500) NULL,
+    NationalId    VARCHAR(20)  NULL,
+    CONSTRAINT FK_SellerRequests_UserId FOREIGN KEY (UserId) REFERENCES Users (UserId)
+);
+
+CREATE TABLE Orders (
+    OrderId         INT AUTO_INCREMENT PRIMARY KEY,
+    Status          VARCHAR(50) NULL DEFAULT 'Pending',
+    ShippingFee     DECIMAL(18, 2) NULL DEFAULT 0,
+    CartId          INT NULL,
+    UserId          INT NOT NULL DEFAULT 0,
+    ReceiverName    VARCHAR(150) NOT NULL DEFAULT '',
+    ReceiverPhone   VARCHAR(20)  NOT NULL DEFAULT '',
+    ShippingAddress VARCHAR(500) NOT NULL DEFAULT '',
+    PaymentMethod   VARCHAR(20)  NOT NULL DEFAULT 'COD',
+    VoucherCode     VARCHAR(50)  NULL,
+    SubTotal        DECIMAL(18, 2) NOT NULL DEFAULT 0,
+    DiscountAmount  DECIMAL(18, 2) NOT NULL DEFAULT 0,
+    TotalAmount     DECIMAL(18, 2) NOT NULL DEFAULT 0,
+    Note            VARCHAR(500) NULL,
+    CreatedAt       DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UpdatedAt       DATETIME NULL,
+    CONSTRAINT FK_Orders_Cart  FOREIGN KEY (CartId)  REFERENCES Carts (CartId),
+    CONSTRAINT FK_Orders_User  FOREIGN KEY (UserId)  REFERENCES Users (UserId)
+);
+
+CREATE TABLE Voucher (
+    VoucherId INT AUTO_INCREMENT PRIMARY KEY,
+    SellerId INT NOT NULL,
+    Code VARCHAR(50) NOT NULL UNIQUE,
+    Name VARCHAR(150) NOT NULL,
+    DiscountType VARCHAR(20) NOT NULL,
+    DiscountValue DECIMAL(18,2) NOT NULL,
+    MinOrderValue DECIMAL(18,2) NOT NULL DEFAULT 0,
+    MaxDiscount DECIMAL(18,2) NOT NULL DEFAULT 0,
+    StartDate DATETIME NOT NULL,
+    EndDate DATETIME NOT NULL,
+    Quantity INT NOT NULL DEFAULT 0,
+    UsedQuantity INT NOT NULL DEFAULT 0,
+    IsActive TINYINT(1) NOT NULL DEFAULT 1,
+    CONSTRAINT FK_Voucher_Seller FOREIGN KEY (SellerId) REFERENCES Stores (StoreId),
+    KEY IX_Voucher_SellerId (SellerId),
+    CONSTRAINT CK_Voucher_Type CHECK (DiscountType IN ('PERCENT','FIXED')),
+    CONSTRAINT CK_Voucher_Value CHECK ((DiscountType='PERCENT' AND DiscountValue>0 AND DiscountValue<=100) OR (DiscountType='FIXED' AND DiscountValue>0)),
+    CONSTRAINT CK_Voucher_Min CHECK (MinOrderValue>=0),
+    CONSTRAINT CK_Voucher_Max CHECK (MaxDiscount>=0),
+    CONSTRAINT CK_Voucher_Date CHECK (StartDate<=EndDate),
+    CONSTRAINT CK_Voucher_Quantity CHECK (Quantity>=0 AND UsedQuantity>=0 AND UsedQuantity<=Quantity)
+);
+
+CREATE TABLE VoucherProduct (
+    VoucherId INT NOT NULL,
+    ProductId INT NOT NULL,
+    PRIMARY KEY (VoucherId, ProductId),
+    CONSTRAINT FK_VoucherProduct_Voucher FOREIGN KEY (VoucherId) REFERENCES Voucher (VoucherId),
+    CONSTRAINT FK_VoucherProduct_Product FOREIGN KEY (ProductId) REFERENCES Products (ProductId),
+    KEY IX_VoucherProduct_ProductId (ProductId)
+);
+
+CREATE TABLE OrderItems (
+    OrderItemId INT AUTO_INCREMENT PRIMARY KEY,
+    OrderId     INT NOT NULL,
+    ProductId   INT NOT NULL,
+    ProductName VARCHAR(255) NOT NULL DEFAULT '',
+    Emoji       VARCHAR(10)  NULL,
+    Quantity    INT NOT NULL DEFAULT 1,
+    UnitPrice   DECIMAL(18, 2) NOT NULL DEFAULT 0,
+    TotalPrice  DECIMAL(18, 2) NOT NULL DEFAULT 0,
+    CONSTRAINT FK_OrderItems_Order   FOREIGN KEY (OrderId)   REFERENCES Orders   (OrderId),
+    CONSTRAINT FK_OrderItems_Product FOREIGN KEY (ProductId) REFERENCES Products (ProductId)
+);
+-- NHAP KHO
+CREATE TABLE StockReceipts (
+    ReceiptId INT AUTO_INCREMENT PRIMARY KEY, StoreId INT NOT NULL, SupplierId INT NULL, SupplierNote VARCHAR(255) NULL, CreatedBy INT NOT NULL, CreatedAt DATETIME DEFAULT CURRENT_TIMESTAMP, TotalCost DECIMAL(18,2) DEFAULT 0.00, Note VARCHAR(500) NULL
+);
+CREATE TABLE StockReceiptItems (
+    ItemId INT AUTO_INCREMENT PRIMARY KEY, ReceiptId INT NOT NULL, ProductId INT NOT NULL, Quantity INT NOT NULL, UnitCost DECIMAL(18,2) NULL, KEY ReceiptId (ReceiptId), KEY ProductId (ProductId), CONSTRAINT stockreceiptitems_ibfk_1 FOREIGN KEY (ReceiptId) REFERENCES StockReceipts (ReceiptId), CONSTRAINT stockreceiptitems_ibfk_2 FOREIGN KEY (ProductId) REFERENCES Products (ProductId)
+);
+CREATE TABLE Suppliers (
+    SupplierId INT AUTO_INCREMENT PRIMARY KEY, StoreId INT NOT NULL, Name VARCHAR(200) NOT NULL, Phone VARCHAR(20) NULL, Address VARCHAR(255) NULL
+);
+
+-- =====================================================
+-- DEMO DATA
+-- =====================================================
+
+-- seed_demo_mysql.sql
+-- Dữ liệu demo cho database PobbyDB (tách riêng khỏi file tạo bảng).
+-- Yêu cầu chạy trước: Database/schema_mysql.sql
+--
+-- ⚠️ IMPORT QUAN TRỌNG (tiếng Việt): luôn import với
+--     mysql -u root -p --default-character-set=utf8mb4 < Database/seed_demo_mysql.sql
+--   Nếu quên cờ này, client Windows mặc định dùng CP850 → dữ liệu bị lỗi
+--   mojibake (thấy "Quß║ún l├¢" thay vì "Quản lý"). Có thể chạy
+--   Database/fix_utf8mb4.sql để sửa dữ liệu đã bị hỏng.
+
+-- Bộ tài khoản demo (mật khẩu đều là 123456):
+--     admin    → Admin
+--     quanly1  → Quản lý
+--     seller1..3 → Người bán (mỗi seller có 1 gian hàng)
+--     khach1..5  → Người mua (khach5 đang bị khóa để test chức năng khóa tài khoản)
+
+USE PobbyDB;
+
+-- ═══════════ VAI TRÒ ═══════════
+INSERT INTO Roles (RoleId, RoleName) VALUES
+(1, 'Admin'),
+(2, 'Quản lý'),
+(3, 'Seller'),
+(4, 'Customer');
+
+-- ═══════════ HỒ SƠ (tách ra khỏi Accounts) ═══════════
+INSERT INTO Users (UserId, FullName, Address, Phone, NationalId) VALUES
+(1,  'Nguyễn Văn An',      '120 An Liễng, Phường 12, Hà Nội',        '0901111111', '111111111'),
+(2,  'Lê Thị Quản Lý',     '12 Nguyễn Huệ, Quận 1, TP. Hồ Chí Minh','0901111112', '111111112'),
+(3,  'Trần Văn Bán',       '18A Cộng Hòa, Quận Tân Bình, TP. HCM',  '0901111113', '111111113'),
+(4,  'Phạm Thị Buôn',      '105 Trần Hưng Đạo, Quận 1, TP. HCM',    '0901111114', '111111114'),
+(5,  'Hoàng Văn Shop',     'Số 45 Phan Đăng Lưu, Quận Phú Nhuận, TP. HCM', '0901111115', '111111115'),
+(6,  'Nguyễn Minh Khách',  '88 Võ Văn Ngân, TP. Thủ Đức, TP. HCM',  '0901111116', '111111116'),
+(7,  'Trịnh Quỳnh Anh',    '220/15 Nguyễn Trãi, Quận 5, TP. HCM',    '0901111117', '111111117'),
+(8,  'Đặng Tuấn Kiệt',     'Số 5 Tôn Đức Thắng, Quận 1, TP. HCM',    '0901111118', '111111118'),
+(9,  'Vũ Ngọc Hà',         '15 Ngõ 34 Xuân La, Tây Hồ, Hà Nội',      '0901111119', '111111119'),
+(10, 'Lâm Hồng Nhung',     '9B Mai Thị Lựu, Quận 1, TP. HCM',        '0901111120', '111111120');
+
+-- ═══════════ TÀI KHOẢN ═══════════
+INSERT INTO Accounts (UserId, Username, Password, Role_Id, trang_thai) VALUES
+(1, 'admin',   '123456', 1, 'active'),
+(2, 'quanly1', '123456', 2, 'active'),
+(3, 'seller1', '123456', 3, 'active'),
+(4, 'seller2', '123456', 3, 'active'),
+(5, 'seller3', '123456', 3, 'active'),
+(6, 'khach1',  '123456', 4, 'active'),
+(7, 'khach2',  '123456', 4, 'active'),
+(8, 'khach3',  '123456', 4, 'active'),
+(9, 'khach4',  '123456', 4, 'active'),
+(10, 'khach5', '123456', 4, 'banned');
+
+-- ═══════════ GIAN HÀNG ═══════════
+INSERT INTO Stores (StoreId, StoreName, Address, UserId, Phone, Category, Description, IsActive, CreatedAt) VALUES
+(1, 'Shop Điện Tử Anh Minh',  'TP. Hồ Chí Minh', 3, '0902222001', 'Điện thoại', 'Chuyên điện thoại, laptop chính hãng', 1, '2026-09-01 09:00:00'),
+(2, 'Shop Thời Trang Xinh',   'TP. Hồ Chí Minh', 4, '0902222002', 'Thời trang', 'Quần áo, giày dép, phụ kiện thời trang', 1, '2026-09-01 09:00:00'),
+(3, 'Shop Gia Dụng Gia Đình', 'TP. Hồ Chí Minh', 5, '0902222003', 'Gia dụng',   'Đồ gia dụng, sách và quà tặng',         1, '2026-09-01 09:00:00');
+
+-- ═══════════ DANH MỤC ═══════════
+INSERT INTO Categories (CategoryId, CategoryName, PlatformFeePercent) VALUES
+(1, 'Điện thoại', 10.00),
+(2, 'Laptop', 5.00),
+(3, 'Thời trang', 0.00),
+(4, 'Gia dụng', 0.00),
+(5, 'Sách', 0.00),
+(6, 'Đồng hồ', 0.00);
+
+-- ═══════════ SẢN PHẨM ═══════════
+INSERT INTO Products (ProductId, ProductName, Quantity, Price, CategoryId, StoreId, Description, OldPrice, ImageUrl, SoldCount, Emoji, IsActive) VALUES
+(1,  'iPhone 15 Pro Max',     10,  32000000.00, 1, 1, 'Hàng chính hãng VN/A, bảo hành 12 tháng', 35000000.00, 'images/products/iphone-15-pro-max.png', 120,  '📱', 1),
+(2,  'Samsung Galaxy S25',    15,  25000000.00, 1, 1, 'Mới nhất 2026, tích hợp AI thông minh',    28000000.00, 'images/products/samsung.jpg', 85,   '📦', 1),
+(3,  'MacBook Air M3',        8,   31000000.00, 2, 1, 'Chip M3 siêu mạnh mẽ, pin trâu 18 tiếng',  34000000.00, 'images/products/macbook.jpg', 42,   '📦', 1),
+(4,  'Áo Hoodie Local Brand', 50,  450000.00,   3, 2, 'Chất liệu cotton 100% thoáng mát, form rộng', 650000.00, 'images/products/hoodie-local-brand.png', 320, '🧥', 1),
+(5,  'Giày Sneaker Nike',     30,  2200000.00,  3, 2, 'Giày thể thao nam nữ, êm chân, bền bỉ',    2800000.00,  'images/products/giay-nike-air-max.png', 98,   '📦', 1),
+(6,  'Balo Du Lịch',          40,  890000.00,   3, 2, 'Chống nước nhẹ, nhiều ngăn tiện dụng',      1200000.00,  'images/products/tui_xach.png', 115,  '🎒', 1),
+(7,  'Nồi chiên không dầu',   12,  2500000.00,  4, 3, 'Dung tích 5L, công nghệ Rapid Air',         3200000.00,  'images/products/noi-chien-khong-dau.jpg', 64,   '📦', 1),
+(8,  'Máy xay sinh tố',       20,  1150000.00,  4, 3, 'Cối thủy tinh 1.5L, 6 lưỡi dao',            1500000.00,  NULL, 130,  '🥤', 1),
+(9,  'Sách Lập trình Python', 100, 120000.00,   5, 3, 'Giáo trình thực hành từ con số 0',          180000.00,   'images/products/sach-python.jpg', 890,  '📦', 1),
+(10, 'Đồng hồ Casio',         22,  1800000.00,  6, 3, 'Chống nước 50m, tuổi thọ pin 10 năm',       2200000.00,  'images/products/dong-ho-casio.jpg', 53,   '⌚', 1);
+
+-- ═══════════ GIỎ HÀNG ═══════════
+INSERT INTO Carts (CartId, UserId, TotalAmount, CreatedAt) VALUES
+(1, 6, 900000.00,  '2026-09-05 10:00:00'),
+(2, 8, 240000.00,  '2026-09-06 11:30:00'),
+(3, 9, 2200000.00, '2026-09-07 14:00:00');
+
+INSERT INTO CartItems (CartId, ProductId, Quantity, UnitPrice) VALUES
+(1, 1, 1, 450000.00),
+(1, 4, 1, 450000.00),
+(2, 9, 2, 120000.00),
+(3, 5, 1, 2200000.00);
+
+-- ═══════════ ĐƠN ĐĂNG KÝ BÁN HÀNG ═══════════
+INSERT INTO SellerRequests (RequestId, UserId, ShopName, BusinessPhone, Category, Status, CreatedAt, ReviewedAt, ReviewedBy, RejectReason, Description, NationalId) VALUES
+(1, 8,  'Shop Trái Cây Sạch', '0912345001', 'Thực phẩm', 'pending', '2026-09-10 09:00:00', NULL, NULL, NULL, 'Nhập trái cây sạch về bán sỉ và lẻ', '123124125'),
+(2, 9,  'Xưởng Gỗ Mộc',       '0912345002', 'Nội thất',  'pending', '2026-09-11 09:00:00', NULL, NULL, NULL, 'Bàn ghế gỗ công nghiệp',             '1412412');
+
+-- ═══════════ ĐƠN HÀNG ═══════════
+INSERT INTO Orders (OrderId, Status, ShippingFee, CartId, UserId, ReceiverName, ReceiverPhone, ShippingAddress, PaymentMethod, VoucherCode, SubTotal, DiscountAmount, TotalAmount, Note, CreatedAt, UpdatedAt) VALUES
+(1, 'Completed', 25000.00, NULL, 6, 'Nguyễn Minh Khách', '0901111116', '88 Võ Văn Ngân, TP. Thủ Đức, TP. HCM', 'COD',  NULL, 32900000.00, 0.00, 32925000.00, NULL, '2026-09-08 09:15:00', '2026-09-10 17:00:00'),
+(2, 'Shipping',  25000.00, NULL, 7, 'Trịnh Quỳnh Anh',   '0901111117', '220/15 Nguyễn Trãi, Quận 5, TP. HCM',    'MOMO', NULL, 3650000.00,  0.00, 3675000.00,  NULL, '2026-09-12 10:00:00', NULL),
+(3, 'Pending',   25000.00, NULL, 8, 'Đặng Tuấn Kiệt',    '0901111118', 'Số 5 Tôn Đức Thắng, Quận 1, TP. HCM',    'BANK', NULL, 31000000.00, 0.00, 31025000.00, NULL, '2026-09-15 15:30:00', NULL),
+(4, 'Cancelled', 25000.00, NULL, 9, 'Vũ Ngọc Hà',        '0901111119', '15 Ngõ 34 Xuân La, Tây Hồ, Hà Nội',     'COD',  NULL, 1800000.00,  0.00, 1825000.00,  NULL, '2026-09-09 08:00:00', '2026-09-09 08:20:00');
+
+INSERT INTO OrderItems (OrderItemId, OrderId, ProductId, ProductName, Emoji, Quantity, UnitPrice, TotalPrice) VALUES
+(1, 1,  1, 'iPhone 15 Pro Max',     '📱', 1, 32000000.00, 32000000.00),
+(2, 1,  4, 'Áo Hoodie Local Brand', '🧥', 2, 450000.00,   900000.00),
+(3, 2,  7, 'Nồi chiên không dầu',   '📦', 1, 2500000.00,  2500000.00),
+(4, 2,  8, 'Máy xay sinh tố',       '🥤', 1, 1150000.00,  1150000.00),
+(5, 3,  3, 'MacBook Air M3',        '📦', 1, 31000000.00, 31000000.00),
+(6, 4, 10, 'Đồng hồ Casio',         '⌚', 1, 1800000.00,  1800000.00);
+-- StockReceipts, StockReceiptItems va Suppliers khong co demo rows.
+-- Cac record runtime-specific hien tai khong duoc dua vao canonical seed.

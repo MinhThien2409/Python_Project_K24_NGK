@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """Test đối chiếu seed-đĩa + API image_url (spec 014) — viết TRƯỚC implementation.
 
-Test bất biến (contract `contracts/product-images.md`):
+Test bất biến (contract `seed dữ liệu và asset ảnh hiện tại`):
 - Seed `Database/seed_demo_mysql.sql` cột ImageUrl khớp 100% bảng mapping
   (9 dòng có giá trị, ProductId 8 = NULL) — FR-001/FR-002.
 - Mọi ImageUrl khác NULL đều trỏ tới file THẬT trên đĩa trong
@@ -27,7 +27,7 @@ SEED = REPO / "Database" / "seed_demo_mysql.sql"
 IMAGES = (REPO / "static" / "images" / "products")
 JS = (REPO / "static" / "js" / "main.js").read_text(encoding="utf-8")
 
-# Bảng mapping chuẩn (contracts/product-images.md + data-model.md mục 2)
+# Bảng mapping chuẩn (contracts/product-images.md + mapping seed/asset hiện tại)
 MAPPING = {
     1: "images/products/iphone-15-pro-max.png",
     2: "images/products/samsung.jpg",
@@ -149,6 +149,7 @@ def test_frontend_giu_pattern_fallback_emoji_cho_anh():
         block = JS[pos:pos + 900]
         # (a) img phải gắn đúng tiền tố /static/
         assert ("/static/${p.image_url}" in block
+                or "/static/${escHtml(p.image_url)}" in block
                 or "'/static/' + p.image_url" in block), (
             f"Vị trí {pos}: img không dùng tiền tố /static/ + image_url"
         )

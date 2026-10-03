@@ -389,21 +389,26 @@ class UserDao:
             conn.close()
 
     def cap_nhat_quan_ly(self, ma_user, ten_user, dia_chi, sdt):
-        """T037: cập nhật Quản lý — chỉ FullName/Address/Phone; điều kiện
-        `Role_Id=2` kiểm tra qua bảng `Accounts` (JOIN trong WHERE)."""
+        """Cập nhật Quản lý — chỉ FullName/Address/Phone; chỉ áp dụng cho Role_Id=2."""
         conn = DBconnection.get_connection()
         if conn is None: return False
         cursor = conn.cursor()
         try:
-            sql = """
-                UPDATE Users SET FullName=?, Address=?, Phone=?
-                WHERE UserId = ?
-                  AND EXISTS (SELECT 1 FROM Accounts a
-                              WHERE a.UserId = Users.UserId AND a.Role_Id = 2)
-            """
-            cursor.execute(sql, (ten_user, dia_chi, sdt, ma_user))
+            # 1. Kiểm tra tồn tại + đúng vai trò Quản lý (không phụ thuộc rowcount)
+            cursor.execute(
+                "SELECT 1 FROM Accounts WHERE UserId = ? AND Role_Id = 2",
+                (ma_user,)
+            )
+            if not cursor.fetchone():
+                return False
+
+            # 2. Cập nhật; giá trị không đổi vẫn tính là thành công
+            cursor.execute(
+                "UPDATE Users SET FullName=?, Address=?, Phone=? WHERE UserId=?",
+                (ten_user, dia_chi, sdt, ma_user)
+            )
             conn.commit()
-            return cursor.rowcount > 0
+            return True
         except Exception as e:
             logger.exception("Lỗi khi cập nhật quản lý: %s", e)
             try:

@@ -211,5 +211,17 @@ class GioHangDao:
 
     def lay_gio_hang_id(self, user_id):
         """Chỉ tra cứu CartId, KHÔNG tạo mới. Trả None nếu chưa có."""
-        # SELECT CartId FROM Carts WHERE UserId = %s LIMIT 1
+        conn = DBconnection.get_connection()
+        if conn is None: return None
+        cursor = conn.cursor()
+        try:
+            cursor.execute("SELECT CartId FROM Carts WHERE UserId = ? LIMIT 1", (user_id,))
+            row = cursor.fetchone()
+            return row[0] if row else None
+        except Exception as e:
+            logger.exception("Lỗi lay_gio_hang_id: %s", e)
+            return None
+        finally:
+            cursor.close()
+            conn.close()
 

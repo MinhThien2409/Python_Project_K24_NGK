@@ -124,8 +124,10 @@ class GioHangBus:
         so_luong, hop_le = self._ep_so_luong_nguyen(quantity)
         if not hop_le:
             return {"status": False, "message": "Số lượng không hợp lệ!"}
-        if so_luong <= 0:
-            return self.xoa_khoi_gio(user_id, product_id)
+        if so_luong < 0:
+            return {"status": False, "message": "Số lượng phải lớn hơn 0!"}
+        if so_luong == 0:
+            return self.xoa_khoi_gio(user_id, product_id)  # 0 = xóa món (nút "−" ở SL 1)
         _, loi = self._kiem_kho(product_id, so_luong)
         if loi:
             return loi

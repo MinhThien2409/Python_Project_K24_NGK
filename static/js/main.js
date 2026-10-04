@@ -2306,6 +2306,8 @@ function onGiaBanInput() {
 }
 function openAddSellerProductModal() {
     // Reset form (dùng lại adminProductModal hoặc tạo modal riêng)
+    khoaGiaTonKhoSellerMode(false);
+    document.getElementById('prodShop').value = '';
     document.getElementById('adminProductModalTitle').textContent = '➕ Thêm sản phẩm vào gian hàng';
     document.getElementById('editProductId').value = '';
     document.getElementById('prodName').value      = '';
@@ -2413,26 +2415,28 @@ async function renderAdminUsers() {
         ? `<span class="user-status-banned">🔒 Đã khóa</span>`
         : `<span class="user-status-active">✅ Hoạt động</span>`;
 
-      // 017: Quản lý chỉ khóa/mở + cấp lại mật khẩu cho Seller/Khách hàng
+            // 017: Quản lý chỉ khóa/mở + cấp lại mật khẩu cho Seller/Khách hàng
       let hanhDong = '';
       if (isMe) {
         hanhDong = '<span style="font-size:12px; color:var(--text-muted);">Tài khoản của bạn</span>';
       } else if (laAdmin && u.ma_nhom_quyen === 2) {
-        const n = JSON.stringify(String(u.ten_user || ''));
-        const status = JSON.stringify(isBanned ? 'active' : 'banned');
-        const current = JSON.stringify(u.trang_thai || 'active');
+        // escHtml: JSON.stringify sinh dấu " nên phải đổi thành &quot; trước khi đặt vào onclick="..."
+        const n       = escHtml(JSON.stringify(String(u.ten_user || '')));
+        const status  = escHtml(JSON.stringify(isBanned ? 'active' : 'banned'));
+        const current = escHtml(JSON.stringify(u.trang_thai || 'active'));
         hanhDong = '<button class="admin-action-btn btn-edit" onclick="openEditUserModal(' + u.ma_user + ', ' + n + ', 2, ' + current + ')">✏️ Sửa</button>' +
           '<button class="admin-action-btn btn-cancel" onclick="xacNhanKhoaQuanLy(' + u.ma_user + ', ' + status + ', ' + n + ')">' + (isBanned ? '🔓 Mở khóa' : '🔒 Khóa') + '</button>' +
           '<button class="admin-action-btn btn-confirm" onclick="xacNhanResetQuanLy(' + u.ma_user + ', ' + n + ')">🔑 Reset</button>' +
           '<button class="admin-action-btn btn-cancel" onclick="xacNhanXoaQuanLy(' + u.ma_user + ', ' + n + ')">🗑️ Xóa</button>';
       } else if (laQuanLy && (u.ma_nhom_quyen === 3 || u.ma_nhom_quyen === 4)) {
+        const tenAnToan = escHtml(JSON.stringify(String(u.ten_user || '')));
         hanhDong = `
           <button class="admin-action-btn ${isBanned ? 'btn-edit' : 'btn-cancel'}"
                   onclick="capNhatTrangThaiNhanh(${u.ma_user}, '${isBanned ? 'active' : 'banned'}')">
             ${isBanned ? '🔓 Mở khóa' : '🔒 Khóa'}
           </button>
           <button class="admin-action-btn btn-confirm"
-                  onclick="moModalCapLaiMatKhau(${u.ma_user}, ${JSON.stringify(String(u.ten_user || ''))})">
+                  onclick="moModalCapLaiMatKhau(${u.ma_user}, ${tenAnToan})">
             🔑 Cấp lại mật khẩu
           </button>`;
       } else {
@@ -4871,4 +4875,10 @@ async function sellerDoiGia(productId) {
   } catch (e) {
     showToast('❌ Lỗi kết nối!');
   }
+}
+function resetUserHome(e) {
+  if (e && e.preventDefault) e.preventDefault();
+  clearUserFilters();
+  loadProducts();
+  window.scrollTo({ top: 0, behavior: 'smooth' });
 }

@@ -23,11 +23,12 @@ TC_PATTERN = re.compile(r"test_tc(\d{3}(?:_\d{3})*)")
 def login(page):
     def _login(username, password):
         page.goto("/")
-        page.get_by_text("Đăng nhập").first.click()
+        page.wait_for_selector("#hdrAuthBtn", state="visible", timeout=10000)
+        page.click("#hdrAuthBtn")
+        page.wait_for_selector("#authModal.show", timeout=5000)
         page.fill("#loginUsername", username)
         page.fill("#loginPass", password)
         page.click("#formLogin button[type='submit']")
-
     return _login
 
 

@@ -791,7 +791,7 @@
     <form onsubmit="handleSaveProduct(event)">
       <input type="hidden" id="editProductId">
       <div class="form-group"><label>Tên sản phẩm</label><input type="text" id="prodName" required></div>
-      <div class="form-group"><label>Danh mục</label><select id="prodCategory"></select></div>
+      <div class="form-group"><label>Danh mục</label><select id="prodCategory" onchange="onCategoryChange()"></select></div>
  <!-- ===== GIÁ GỐC (giá niêm yết) ===== -->
 <div class="form-group">
   <label>Giá gốc / giá niêm yết (đ)</label>

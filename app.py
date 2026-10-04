@@ -889,14 +889,18 @@ def api_seller_thong_ke_tong_quan():
 
 @app.route('/api/seller/thong-ke/doanh-thu-theo-thang', methods=['GET'])
 def api_seller_doanh_thu_theo_thang():
-    """Seller xem doanh thu theo tháng của shop mình."""
     store, loi = _seller_store_hien_tai()
     if loi:
         return jsonify(loi[0]), loi[1]
-    year = request.args.get('year', datetime.now().year, type=int)
-    return jsonify(don_hang_bus.lay_doanh_thu_seller_theo_thang(
-        store.get('store_id'), year))
-
+    year_raw = request.args.get('year', '').strip()
+    if year_raw == '':
+        year = datetime.now().year          # TC-234: không truyền year → năm hiện tại
+    else:
+        try:
+            year = int(year_raw)
+        except ValueError:
+            return jsonify({"status": False, "message": "Năm không hợp lệ!", "data": []}), 400
+    return jsonify(don_hang_bus.lay_doanh_thu_seller_theo_thang(store.get('store_id'), year))
 
 @app.route('/api/seller/trang-shop', methods=['GET'])
 def api_seller_xem_trang_shop():

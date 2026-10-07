@@ -36,7 +36,7 @@ class FakeCursor:
 
     def fetchall(self):
         self.da_goi_fetchall = True
-        return []
+        return [(10, 'Hoa Hong', 100000, 5, 1)]
 
     @property
     def description(self):

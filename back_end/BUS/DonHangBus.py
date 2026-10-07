@@ -180,6 +180,9 @@ class DonHangBus:
         if result.get('error') == 'not_found':
             return {"status": False, "message":
                     f"Không tìm thấy sản phẩm {result['product_name']}!"}
+        if result.get('error') == 'inactive':
+            return {"status": False, "message":
+                    f"Sản phẩm '{result['product_name']}' không còn kinh doanh!"}
         return None
 
     def _tao_toan_bo_don(self, ds_don, ds_store_tong):

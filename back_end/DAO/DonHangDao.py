@@ -13,6 +13,41 @@ logger = logging.getLogger(__name__)
 
 class DonHangDao:
     # ─── GHI ───
+    def _nap_du_lieu_san_pham_checkout(self, cursor, orders):
+        """Reload + lock giá/tồn/trạng thái trong transaction checkout."""
+        product_ids = sorted({int(item.ProductId) for order in orders for item in order.Items})
+        if not product_ids:
+            return {"error": "not_found", "product_name": "giỏ hàng trống"}
+        placeholders = ",".join(["%s"] * len(product_ids))
+        cursor.execute(
+            f"SELECT ProductId, ProductName, Price, Quantity, IsActive "
+            f"FROM Products WHERE ProductId IN ({placeholders}) FOR UPDATE",
+            tuple(product_ids)
+        )
+        rows = {int(r[0]): r for r in cursor.fetchall()}
+        for order in orders:
+            for item in order.Items:
+                pid = int(item.ProductId)
+                row = rows.get(pid)
+                if not row:
+                    return {"error": "not_found", "product_name": str(item.ProductName or f"#{pid}")}
+                name, price, stock, active = row[1], float(row[2] or 0), int(row[3] or 0), bool(row[4])
+                if not active:
+                    return {"error": "inactive", "product_name": str(name or item.ProductName or f"#{pid}")}
+                qty = int(item.Quantity or 0)
+                if qty <= 0:
+                    return {"error": "invalid_quantity", "product_name": str(name or item.ProductName or f"#{pid}")}
+                if qty > stock:
+                    return {"error": "out_of_stock", "product_name": str(name or item.ProductName or f"#{pid}"), "available": stock}
+                item.ProductName = name or f"Sản phẩm #{pid}"
+                item.UnitPrice = price
+                item.TotalPrice = qty * price
+        for order in orders:
+            order.SubTotal = float(sum(float(i.TotalPrice or 0) for i in order.Items))
+            order.DiscountAmount = 0.0
+            order.TotalAmount = order.SubTotal + float(order.ShippingFee or 0)
+        return None
+
     def tao_don_hang(self, orders: list):
         """Tạo N đơn + chi tiết trong 1 giao dịch; trả list OrderId mới.
 
@@ -25,6 +60,11 @@ class DonHangDao:
             return False
         cursor = conn.cursor()
         try:
+            authoritative_error = self._nap_du_lieu_san_pham_checkout(cursor, orders)
+            if authoritative_error:
+                conn.rollback()
+                return authoritative_error
+
             cac_order_id = []
             voucher_error = self._ap_dung_voucher(cursor, orders)
             if voucher_error:

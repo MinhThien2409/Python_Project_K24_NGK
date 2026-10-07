@@ -33,6 +33,22 @@ def _json_body():
     return data if isinstance(data, dict) else None
 
 
+def _active_user():
+    """Lấy user hiện tại từ session và xác nhận tài khoản vẫn hoạt động."""
+    user_id = session.get('user_id')
+    gate = user_bus.kiem_tra_nguoi_dung_hoat_dong(user_id)
+    if not gate.get('status'):
+        return None, (jsonify(gate), 403)
+    user = user_bus.lay_thong_tin_user(user_id)
+    if not user:
+        return None, (jsonify({
+            "status": False,
+            "message": "Tài khoản không tồn tại!",
+            "data": None
+        }), 403)
+    return user, None
+
+
 # ==========================================
 # 0. TRANG CHỦ
 # ==========================================
@@ -192,8 +208,17 @@ def doi_mat_khau():
 # Lay user ID
 @app.route('/api/stores/by-user/<int:user_id>', methods=['GET'])
 def get_store_by_user(user_id):
-    """Lấy gian hàng theo mã user."""
-    return jsonify(gian_hang_bus.lay_store_theo_user(user_id))
+    """Lấy gian hàng của chính user đang đăng nhập; không tin user_id để đổi identity."""
+    _, error = _active_user()
+    if error:
+        return error
+    if int(user_id) != int(session.get('user_id')):
+        return jsonify({
+            "status": False,
+            "message": "Không thể thao tác trên tài khoản khác!",
+            "data": None
+        }), 403
+    return jsonify(gian_hang_bus.lay_store_theo_user(session.get('user_id')))
 # ==========================================
 # 7. GIAN HÀNG / SELLER
 # ==========================================
@@ -624,10 +649,10 @@ def api_cap_nhat_so_luong():
 @app.route('/api/users/<int:ma_user>/status', methods=['PUT'])
 def update_user_status(ma_user):
     """Admin khóa/mở khóa Quản lý; Quản lý khóa/mở khóa Seller/Customer."""
+    actor, error = _active_user()
+    if error:
+        return error
     ma_nguoi_thao_tac = session.get('user_id')
-    actor = user_bus.lay_thong_tin_user(ma_nguoi_thao_tac) if ma_nguoi_thao_tac else None
-    if not actor:
-        return jsonify({"status": False, "message": "Bạn chưa đăng nhập!", "data": None}), 403
     role_name = user_bus.lay_ten_vai_tro_theo_id(actor.get('Role_Id'))
     data = _json_body()
     if data is None:
@@ -645,11 +670,11 @@ def update_user_status(ma_user):
 # ==========================================
 @app.route('/api/cap-lai-mat-khau', methods=['POST'])
 def api_cap_lai_mat_khau():
-    """Admin reset Quản lý về 123456; Quản lý giữ luồng reset Seller/Customer."""
+    """Admin reset Quản lý; Quản lý reset Seller/Customer, với active-session guard."""
+    actor, error = _active_user()
+    if error:
+        return error
     ma_nguoi_thao_tac = session.get('user_id')
-    actor = user_bus.lay_thong_tin_user(ma_nguoi_thao_tac) if ma_nguoi_thao_tac else None
-    if not actor:
-        return jsonify({"status": False, "message": "Bạn chưa đăng nhập!", "data": None}), 403
     role_name = user_bus.lay_ten_vai_tro_theo_id(actor.get('Role_Id'))
     data = _json_body()
     if data is None:

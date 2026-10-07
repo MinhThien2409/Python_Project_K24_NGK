@@ -196,6 +196,8 @@ class GianHangDao:
                 (req.UserId,))
             if cursor.fetchone():
                 return KET_QUA_DA_CO_PENDING
+            # User row đã được FOR UPDATE ở trên, nên hai request đồng thời
+            # của cùng một UserId không thể cùng vượt qua check pending.
             cursor.execute("""
                 INSERT INTO SellerRequests
                     (UserId, ShopName, BusinessPhone, Category,
@@ -242,11 +244,16 @@ class GianHangDao:
     def _khoa_don_cho_duyet(self, cursor, request_id, reviewed_by):
         """Khóa đơn pending (guard Status), trả (đơn, mã lỗi)."""
         # 0. Xác nhận đơn tồn tại trước (phân biệt 'khong_tim_thay' với 'da_xu_ly')
+        # T63: khóa chính hàng SellerRequest trong transaction. UPDATE có WHERE
+        # Status='pending' một mình không đủ để bảo vệ các side effect phía sau;
+        # transaction phải giữ row lock từ lúc đọc trạng thái đến COMMIT.
         cursor.execute(
-            "SELECT * FROM SellerRequests WHERE RequestId=?", (request_id,))
+            "SELECT * FROM SellerRequests WHERE RequestId=? FOR UPDATE", (request_id,))
         req = cursor.fetchone()
         if not req: return None, KET_QUA_KHONG_TIM_THAY
-        # 1. Cập nhật trạng thái — guard WHERE Status='pending' (atomic, chống cạnh tranh)
+        if str(req.Status or '').lower() != 'pending':
+            return None, KET_QUA_DA_XU_LY
+        # Giữ row lock và đổi trạng thái trong cùng transaction.
         cursor.execute("""
             UPDATE SellerRequests
             SET Status='approved', ReviewedBy=?, ReviewedAt=NOW()
@@ -288,12 +295,17 @@ class GianHangDao:
         if conn is None: return KET_QUA_KHONG_TIM_THAY
         cursor = conn.cursor()
         try:
-            # 0. Xác nhận đơn tồn tại trước (phân biệt 'khong_tim_thay' với 'da_xu_ly')
+            # T63: reject và approve dùng cùng transaction/row lock để
+            # không thể đồng thời chuyển một request Pending sang hai trạng thái.
             cursor.execute(
-                "SELECT RequestId FROM SellerRequests WHERE RequestId=?", (request_id,))
-            if not cursor.fetchone(): return KET_QUA_KHONG_TIM_THAY
+                "SELECT RequestId, Status FROM SellerRequests WHERE RequestId=? FOR UPDATE",
+                (request_id,))
+            req = cursor.fetchone()
+            if not req: return KET_QUA_KHONG_TIM_THAY
+            if str(req.Status or '').lower() != 'pending':
+                return KET_QUA_DA_XU_LY
 
-            # 1. Cập nhật trạng thái — guard WHERE Status='pending' (atomic, chống cạnh tranh)
+            # 1. Cập nhật trạng thái dưới row lock.
             cursor.execute("""
                 UPDATE SellerRequests
                 SET Status='rejected', ReviewedBy=?,

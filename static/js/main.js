@@ -1447,10 +1447,15 @@ if (searchText) {
 
 
   // Sắp xếp
+    // Sắp xếp
   const sort = document.getElementById('sortSelect')?.value || 'default';
   if (sort === 'price-asc')  filtered.sort((a, b) => a.price - b.price);
   if (sort === 'price-desc') filtered.sort((a, b) => b.price - a.price);
-  if (sort === 'bestseller') filtered.sort((a, b) => (b.sold||0) - (a.sold||0));
+  // "Nổi bật nhất" = bán chạy nhất; bằng nhau thì sản phẩm mới hơn lên trước
+  if (sort === 'default' || sort === 'bestseller') {
+    filtered.sort((a, b) => (b.sold || 0) - (a.sold || 0) || b.id - a.id);
+  }
+  if (sort === 'newest') filtered.sort((a, b) => b.id - a.id);
 
   renderUserProducts(filtered);
 }
@@ -1461,7 +1466,7 @@ async function loadProducts() {
     const result = await res.json();
     if (result.status) {
       products = result.data; // Cập nhật biến global
-      renderUserProducts(products);
+      applyUserFilters();  
     }
   } catch (e) {
     console.error('Lỗi load sản phẩm:', e);

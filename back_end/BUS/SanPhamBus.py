@@ -61,6 +61,29 @@ class SanPhamBus:
             return None, {"status": False, "message": f"{ten_truong} không được âm!"}
         return so, None
 
+    def _kiem_tra_quan_he_gia(self, gia_ban, gia_goc):
+        """T96: giá gốc chỉ hợp lệ khi có giảm giá thật sự.
+
+        Không giảm giá -> OldPrice phải NULL. Có OldPrice -> OldPrice > Price > 0.
+        """
+        try:
+            ban = float(gia_ban)
+        except (TypeError, ValueError):
+            return {"status": False, "message": "Giá sản phẩm phải lớn hơn 0!"}
+        if ban <= 0:
+            return {"status": False, "message": "Giá sản phẩm phải lớn hơn 0!"}
+        if gia_goc in (None, ""):
+            return None
+        try:
+            goc = float(gia_goc)
+        except (TypeError, ValueError):
+            return {"status": False, "message": "Giá gốc không hợp lệ!"}
+        if goc <= 0:
+            return {"status": False, "message": "Giá gốc phải lớn hơn 0!"}
+        if goc <= ban:
+            return {"status": False, "message": "Giá gốc phải lớn hơn giá bán!"}
+        return None
+
     def _dao_loc_gia_duoc(self):
         """Kiểm tra DAO tim_kiem có nhận min_price/max_price không."""
         try:
@@ -247,6 +270,9 @@ class SanPhamBus:
             return {"status": False, "message": "Giá sản phẩm phải lớn hơn 0!"}
         if gia_f <= 0:
             return {"status": False, "message": "Giá sản phẩm phải lớn hơn 0!"}
+        loi_gia = self._kiem_tra_quan_he_gia(gia_f, gia_goc)
+        if loi_gia:
+            return loi_gia
         if not category_id:
             return {"status": False, "message": "Vui lòng chọn danh mục!"}
         try:
@@ -318,6 +344,9 @@ class SanPhamBus:
             return {"status": False, "message": "Giá sản phẩm phải lớn hơn 0!"}
         if gia_f <= 0:
             return {"status": False, "message": "Giá sản phẩm phải lớn hơn 0!"}
+        loi_gia = self._kiem_tra_quan_he_gia(gia_f, gia_goc)
+        if loi_gia:
+            return loi_gia
         mo_ta_sach = str(mo_ta or "").strip()
         if len(mo_ta_sach) > 1000:
             return {"status": False, "message": "Mô tả sản phẩm không được vượt quá 1000 ký tự!"}

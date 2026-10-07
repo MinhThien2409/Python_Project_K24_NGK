@@ -25,20 +25,42 @@ class DonHangDao:
             tuple(product_ids)
         )
         rows = {int(r[0]): r for r in cursor.fetchall()}
+
+        # T111: cùng một ProductId có thể xuất hiện nhiều lần trong payload
+        # (do client/tamper hoặc nhiều dòng cart). Kiểm tồn phải dựa trên
+        # tổng quantity theo ProductId, không được kiểm từng dòng riêng lẻ.
+        quantity_by_product = {}
+        first_item_by_product = {}
         for order in orders:
             for item in order.Items:
                 pid = int(item.ProductId)
-                row = rows.get(pid)
-                if not row:
-                    return {"error": "not_found", "product_name": str(item.ProductName or f"#{pid}")}
-                name, price, stock, active = row[1], float(row[2] or 0), int(row[3] or 0), bool(row[4])
-                if not active:
-                    return {"error": "inactive", "product_name": str(name or item.ProductName or f"#{pid}")}
                 qty = int(item.Quantity or 0)
                 if qty <= 0:
-                    return {"error": "invalid_quantity", "product_name": str(name or item.ProductName or f"#{pid}")}
-                if qty > stock:
-                    return {"error": "out_of_stock", "product_name": str(name or item.ProductName or f"#{pid}"), "available": stock}
+                    row = rows.get(pid)
+                    return {"error": "invalid_quantity",
+                            "product_name": str((row[1] if row else None)
+                                                 or item.ProductName or f"#{pid}")}
+                quantity_by_product[pid] = quantity_by_product.get(pid, 0) + qty
+                first_item_by_product.setdefault(pid, item)
+
+        for pid, total_qty in quantity_by_product.items():
+            row = rows.get(pid)
+            item = first_item_by_product[pid]
+            if not row:
+                return {"error": "not_found", "product_name": str(item.ProductName or f"#{pid}")}
+            name, price, stock, active = row[1], float(row[2] or 0), int(row[3] or 0), bool(row[4])
+            if not active:
+                return {"error": "inactive", "product_name": str(name or item.ProductName or f"#{pid}")}
+            if total_qty > stock:
+                return {"error": "out_of_stock", "product_name": str(name or item.ProductName or f"#{pid}"),
+                        "available": stock, "requested": total_qty}
+
+        for order in orders:
+            for item in order.Items:
+                pid = int(item.ProductId)
+                row = rows[pid]
+                name, price = row[1], float(row[2] or 0)
+                qty = int(item.Quantity or 0)
                 item.ProductName = name or f"Sản phẩm #{pid}"
                 item.UnitPrice = price
                 item.TotalPrice = qty * price
@@ -130,6 +152,16 @@ class DonHangDao:
         SET Quantity = Quantity - %s
         WHERE ProductId = %s AND Quantity >= %s
         """
+        # T111: aggregate một lần theo ProductId để lệnh trừ kho sử dụng
+        # đúng tổng quantity, dù OrderItems vẫn giữ các dòng client gửi lên.
+        quantity_by_product = {}
+        first_item_by_product = {}
+        for item in order_items:
+            pid = int(item.ProductId)
+            qty = int(item.Quantity or 0)
+            quantity_by_product[pid] = quantity_by_product.get(pid, 0) + qty
+            first_item_by_product.setdefault(pid, item)
+
         for item in order_items:
             qty = int(item.Quantity or 0)
             cursor.execute(sql_item, (
@@ -141,10 +173,11 @@ class DonHangDao:
                 float(item.UnitPrice or 0),
                 float(item.TotalPrice or 0)
             ))
-            # Trừ tồn kho ngay khi đặt hàng thành công
-            cursor.execute(sql_tru_kho, (qty, int(item.ProductId), qty))
+
+        for pid, total_qty in quantity_by_product.items():
+            cursor.execute(sql_tru_kho, (total_qty, pid, total_qty))
             if cursor.rowcount == 0:
-                return self._xu_ly_thieu_hang(cursor, conn, item)
+                return self._xu_ly_thieu_hang(cursor, conn, first_item_by_product[pid])
         return None
 
     def _xu_ly_thieu_hang(self, cursor, conn, item):
@@ -228,8 +261,11 @@ class DonHangDao:
 
         eligible_subtotal = 0.0
         order_eligible = []
+
+        # T111: duplicate ProductId trong payload phải được cộng dồn trước
+        # khi kiểm tồn cho phần hàng đủ điều kiện Voucher.
+        eligible_qty_by_product = {}
         for order in orders:
-            amount = 0.0
             for item in order.Items:
                 product = eligible.get(int(item.ProductId))
                 if not product:
@@ -237,9 +273,21 @@ class DonHangDao:
                 if not product["is_active"]:
                     return {"error": "invalid_voucher",
                             "message": "Sản phẩm áp dụng Voucher không còn kinh doanh!"}
-                if int(item.Quantity or 0) > product["quantity"]:
-                    return {"error": "invalid_voucher",
-                            "message": "Sản phẩm áp dụng Voucher không đủ tồn kho!"}
+                pid = int(item.ProductId)
+                eligible_qty_by_product[pid] = eligible_qty_by_product.get(pid, 0) + int(item.Quantity or 0)
+
+        for pid, total_qty in eligible_qty_by_product.items():
+            product = eligible[pid]
+            if total_qty > product["quantity"]:
+                return {"error": "invalid_voucher",
+                        "message": "Sản phẩm áp dụng Voucher không đủ tồn kho!"}
+
+        for order in orders:
+            amount = 0.0
+            for item in order.Items:
+                product = eligible.get(int(item.ProductId))
+                if not product:
+                    continue
                 # Reload authoritative price from DB for eligible items.
                 item.UnitPrice = product["price"]
                 item.TotalPrice = int(item.Quantity or 0) * product["price"]

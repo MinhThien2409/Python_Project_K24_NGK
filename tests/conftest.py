@@ -1145,22 +1145,32 @@ class FakeDonHangCustomerStore:
 
     def tao_don_hang(self, orders):
         """Tạo N đơn + chi tiết trong 1 giao dịch (all-or-nothing); trả list OrderId."""
-        # Kiểm tra kho TẤT CẢ đơn trước — 1 shop hết hàng thì không đơn nào được tạo
+        # T111: kiểm tồn theo tổng quantity của từng ProductId trên toàn payload.
+        quantity_by_product = {}
         for don in orders:
             for it in don.Items:
-                sp = self.san_pham.get(int(it.ProductId))
+                pid = int(it.ProductId)
+                sp = self.san_pham.get(pid)
                 if not sp:
-                    return {"error": "not_found",
-                            "product_name": f"#{it.ProductId}"}
-                if int(it.Quantity or 0) > int(sp.get("quantity", 0)):
-                    return {"error": "out_of_stock",
-                            "product_name": sp.get("name"),
-                            "available": sp.get("quantity", 0)}
+                    return {"error": "not_found", "product_name": f"#{pid}"}
+                qty = int(it.Quantity or 0)
+                if qty <= 0:
+                    return {"error": "invalid_quantity", "product_name": sp.get("name")}
+                quantity_by_product[pid] = quantity_by_product.get(pid, 0) + qty
+        for pid, total_qty in quantity_by_product.items():
+            sp = self.san_pham[pid]
+            if total_qty > int(sp.get("quantity", 0)):
+                return {"error": "out_of_stock",
+                        "product_name": sp.get("name"),
+                        "available": sp.get("quantity", 0),
+                        "requested": total_qty}
+        # Deduct stock once per ProductId, using the aggregate quantity.
+        for pid, total_qty in quantity_by_product.items():
+            sp = self.san_pham[pid]
+            sp["quantity"] = int(sp.get("quantity", 0)) - total_qty
+
         cac_id = []
         for don in orders:
-            for it in don.Items:
-                sp = self.san_pham.get(int(it.ProductId))
-                sp["quantity"] = int(sp.get("quantity", 0)) - int(it.Quantity or 0)
             nid = self.next_id
             self.next_id += 1
             self.don_hang[nid] = {"OrderId": nid, "UserId": int(don.UserId),

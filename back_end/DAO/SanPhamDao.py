@@ -687,7 +687,18 @@ class SanPhamDao:
         """Phase 4: dat truc tiep (Price, OldPrice) voi ownership.
 
         gia_goc=None → tat giam gia (xoa OldPrice).
+        T96: nếu có giá gốc thì OldPrice phải lớn hơn Price > 0.
         """
+        try:
+            gia_ban = float(gia_ban)
+            if gia_ban <= 0:
+                return False
+            if gia_goc is not None:
+                gia_goc = float(gia_goc)
+                if gia_goc <= 0 or gia_goc <= gia_ban:
+                    return False
+        except (TypeError, ValueError):
+            return False
         conn = DBconnection.get_connection()
         if conn is None: return False
         cursor = conn.cursor()

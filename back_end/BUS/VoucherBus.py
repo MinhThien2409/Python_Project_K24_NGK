@@ -159,6 +159,9 @@ class VoucherBus:
         now = datetime.now()
         if not v["IsActive"]:
             return {"status": False, "message": "Voucher đã bị vô hiệu hóa!"}
+        seller_active_check = getattr(self.dao, "seller_dang_hoat_dong", None)
+        if callable(seller_active_check) and not seller_active_check(v["SellerId"]):
+            return {"status": False, "message": "Voucher của gian hàng đang bị khóa!"}
         start = self._date(v["StartDate"])
         end = self._date(v["EndDate"])
         if start and now < start:

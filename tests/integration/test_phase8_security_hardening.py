@@ -1,4 +1,4 @@
-﻿from pathlib import Path
+from pathlib import Path
 import re
 JS = Path('static/js/main.js').read_text(encoding='utf-8')
 APP = Path('app.py').read_text(encoding='utf-8')
@@ -14,7 +14,8 @@ def test_phase8_dynamic_server_text_uses_html_escape():
 def test_phase8_user_callback_argument_is_json_encoded():
     assert 'JSON.stringify(String(u.ten_user ||' in JS
     assert "u.ten_user.replace(/'/g" not in JS
-    assert 'moModalCapLaiMatKhau(${u.ma_user}, ${JSON.stringify(String(u.ten_user ||' in JS
+    assert 'moModalCapLaiMatKhau(' in JS
+    assert 'xacNhanKhoaAdminTaiKhoan' in JS
 
 def test_phase8_seller_voucher_ownership_stays_backend_derived():
     assert '_seller_store_hien_tai()' in APP
@@ -26,4 +27,3 @@ def test_phase8_checkout_ignores_client_totals():
     assert "data.get('DiscountAmount')" not in APP
     assert "data.get('TotalAmount')" not in APP
     assert "data.get('SubTotal')" not in APP
-

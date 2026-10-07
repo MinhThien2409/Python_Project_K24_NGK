@@ -73,6 +73,21 @@ class VoucherDao:
             cur.close()
             conn.close()
 
+    def seller_dang_hoat_dong(self, seller_id):
+        conn = self._conn()
+        if conn is None:
+            return False
+        cur = conn.cursor()
+        try:
+            cur.execute("""SELECT EXISTS(
+                SELECT 1 FROM Stores s JOIN Accounts a ON a.UserId=s.UserId
+                WHERE s.StoreId=%s AND s.IsActive=1 AND a.trang_thai='active'
+            )""", (seller_id,))
+            row = cur.fetchone()
+            return bool(row[0]) if row else False
+        finally:
+            cur.close(); conn.close()
+
     def lay_gia_san_pham_theo_voucher(self, voucher_id, product_ids):
         ids = [int(x) for x in (product_ids or [])]
         if not ids:

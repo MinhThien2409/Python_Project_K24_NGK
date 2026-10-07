@@ -11,6 +11,9 @@ liên kết 1-1, thay `SELECT @@IDENTITY` cũ — xem data-model.md mục 9).
 """
 
 import logging
+import hashlib
+import hmac
+import secrets
 
 from back_end.DBconnection import DBconnection
 from back_end.Model.User import User  # Hồ sơ
@@ -54,8 +57,39 @@ class UserDao:
             LEFT JOIN Roles r ON a.Role_Id = r.RoleId
             WHERE a.Username = ? AND a.Password = ?
         """
+        # Tương thích mật khẩu cũ dạng plaintext và mật khẩu reset đã hash.
         cursor.execute(sql, (username, password))
-        return cursor.fetchone()
+        row = cursor.fetchone()
+        if row:
+            return row
+        cursor.execute(
+            """SELECT u.UserId, u.FullName, a.Role_Id, u.Address, u.Phone, u.NationalId,
+                      a.Password, COALESCE(a.trang_thai, 'active') AS trang_thai,
+                      r.RoleName
+               FROM Users u
+               JOIN Accounts a ON a.UserId = u.UserId
+               LEFT JOIN Roles r ON a.Role_Id = r.RoleId
+               WHERE a.Username = ?""",
+            (username,)
+        )
+        candidate = cursor.fetchone()
+        if not candidate:
+            return None
+        stored = str(candidate.Password or candidate[6] or "")
+        if not stored.startswith("pbkdf2_sha256$"):
+            return None
+        parts = stored.split("$")
+        if len(parts) != 4:
+            return None
+        try:
+            iterations = int(parts[1])
+            salt = parts[2]
+            expected = parts[3]
+            actual = hashlib.pbkdf2_hmac("sha256", str(password).encode("utf-8"),
+                                         salt.encode("utf-8"), iterations).hex()
+            return candidate if hmac.compare_digest(actual, expected) else None
+        except (TypeError, ValueError):
+            return None
 
     def _nap_thong_tin_dang_nhap(self, row):
         """Nạp dòng DB thành User, hoặc cờ banned/role_none khi đặc biệt.
@@ -324,9 +358,15 @@ class UserDao:
         if conn is None: return False
         cursor = conn.cursor()
         try:
+            password = str(mat_khau_moi or "")
+            salt = secrets.token_hex(16)
+            iterations = 210000
+            digest = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"),
+                                         salt.encode("utf-8"), iterations).hex()
+            password_hash = "pbkdf2_sha256$%s$%s$%s" % (iterations, salt, digest)
             cursor.execute(
                 "UPDATE Accounts SET Password=? WHERE UserId=?",
-                (mat_khau_moi, ma_user)
+                (password_hash, ma_user)
             )
             conn.commit()
             return cursor.rowcount > 0
@@ -338,16 +378,12 @@ class UserDao:
             conn.close()
 
     def cap_nhat_trang_thai(self, ma_user, trang_thai):
-        """T035: cập nhật khóa/mở khóa — `UPDATE` trên bảng `Accounts`
-        (cột trang_thai đã chuyển sang Accounts)."""
+        """Cập nhật trạng thái tài khoản đơn lẻ (luồng tương thích cũ)."""
         conn = DBconnection.get_connection()
         if conn is None: return False
         cursor = conn.cursor()
         try:
-            cursor.execute(
-                "UPDATE Accounts SET trang_thai = ? WHERE UserId = ?",
-                (trang_thai, ma_user)
-            )
+            cursor.execute("UPDATE Accounts SET trang_thai = ? WHERE UserId = ?", (trang_thai, ma_user))
             conn.commit()
             return cursor.rowcount > 0
         except Exception as e:
@@ -356,6 +392,63 @@ class UserDao:
         finally:
             cursor.close()
             conn.close()
+
+    def cap_nhat_trang_thai_admin(self, ma_user, trang_thai, role_id):
+        """Admin account policy trong transaction; lock Manager bảo toàn >=1 active Manager,
+        Seller đồng bộ Store.IsActive."""
+        conn = DBconnection.get_connection()
+        if conn is None:
+            return False, "Không thể kết nối cơ sở dữ liệu!", None
+        cursor = conn.cursor()
+        try:
+            # Với thao tác khóa Manager, lock toàn bộ active Manager trước khi lock target.
+            # Thứ tự lock cố định này tránh deadlock khi hai Admin khóa hai Manager đồng thời.
+            if int(role_id) == 2 and trang_thai == "banned":
+                cursor.execute("SELECT UserId FROM Accounts WHERE Role_Id=2 AND trang_thai='active' ORDER BY UserId FOR UPDATE")
+                active_managers = cursor.fetchall()
+                if len(active_managers) <= 1:
+                    return False, "Không thể khóa Quản lý cuối cùng. Hệ thống phải luôn có ít nhất 1 Quản lý đang hoạt động!", None
+            cursor.execute("SELECT Role_Id, trang_thai FROM Accounts WHERE UserId=? FOR UPDATE", (ma_user,))
+            target = cursor.fetchone()
+            if not target:
+                return False, "Tài khoản không tồn tại!", None
+            real_role = int(target[0]) if target[0] is not None else None
+            if real_role != int(role_id):
+                return False, "Vai trò tài khoản đã thay đổi, vui lòng tải lại trang!", None
+            if real_role == 1:
+                return False, "Admin không được khóa/mở khóa tài khoản Admin!", None
+            store_id = None
+            if real_role == 3:
+                cursor.execute("SELECT StoreId FROM Stores WHERE UserId=? FOR UPDATE", (ma_user,))
+                store = cursor.fetchone()
+                if store:
+                    store_id = int(store[0])
+            cursor.execute("UPDATE Accounts SET trang_thai=? WHERE UserId=?", (trang_thai, ma_user))
+            if cursor.rowcount != 1:
+                conn.rollback()
+                return False, "Lỗi cập nhật trạng thái.", None
+            if real_role == 3 and store_id:
+                cursor.execute("UPDATE Stores SET IsActive=? WHERE StoreId=?", (1 if trang_thai == 'active' else 0, store_id))
+            conn.commit()
+            return True, "", store_id
+        except Exception as e:
+            conn.rollback()
+            logger.exception("Lỗi cap_nhat_trang_thai_admin: %s", e)
+            return False, "Lỗi cập nhật trạng thái.", None
+        finally:
+            cursor.close()
+            conn.close()
+
+    def dem_quan_ly_dang_hoat_dong(self):
+        conn = DBconnection.get_connection()
+        if conn is None: return 0
+        cursor = conn.cursor()
+        try:
+            cursor.execute("SELECT COUNT(*) FROM Accounts WHERE Role_Id=2 AND trang_thai='active'")
+            row = cursor.fetchone()
+            return int(row[0] or 0) if row else 0
+        finally:
+            cursor.close(); conn.close()
 
     def them_quan_ly(self, ten_user, dia_chi, sdt, tendangnhap, mat_khau):
         """T036: thêm tài khoản Quản lý — chèn `Users` (hồ sơ) → `cursor.lastrowid`

@@ -33,6 +33,8 @@ class SanPhamDao:
                 LEFT JOIN Categories c ON p.CategoryId = c.CategoryId
                 LEFT JOIN Stores     s ON p.StoreId    = s.StoreId
                 WHERE p.IsActive = 1
+                  AND COALESCE(s.IsActive, 0) = 1
+                  AND EXISTS (SELECT 1 FROM Accounts a WHERE a.UserId = s.UserId AND COALESCE(a.trang_thai, 'banned') = 'active')
                 ORDER BY p.ProductId DESC
             """
             cursor.execute(sql)
@@ -62,6 +64,9 @@ class SanPhamDao:
                 LEFT JOIN Categories c ON p.CategoryId = c.CategoryId
                 LEFT JOIN Stores     s ON p.StoreId    = s.StoreId
                 WHERE p.ProductId = ?
+                  AND p.IsActive = 1
+                  AND COALESCE(s.IsActive, 0) = 1
+                  AND EXISTS (SELECT 1 FROM Accounts a WHERE a.UserId = s.UserId AND COALESCE(a.trang_thai, 'banned') = 'active')
             """
             cursor.execute(sql, (product_id,))
             row = cursor.fetchone()
@@ -90,6 +95,8 @@ class SanPhamDao:
                 LEFT JOIN Categories c ON p.CategoryId = c.CategoryId
                 LEFT JOIN Stores     s ON p.StoreId    = s.StoreId
                 WHERE p.StoreId = ? AND p.IsActive = 1
+                  AND COALESCE(s.IsActive, 0) = 1
+                  AND EXISTS (SELECT 1 FROM Accounts a WHERE a.UserId = s.UserId AND COALESCE(a.trang_thai, 'banned') = 'active')
                 ORDER BY p.ProductId DESC
             """
             cursor.execute(sql, (store_id,))
@@ -121,6 +128,8 @@ class SanPhamDao:
                 LEFT JOIN Categories c ON p.CategoryId = c.CategoryId
                 LEFT JOIN Stores     s ON p.StoreId    = s.StoreId
                 WHERE p.IsActive = 1
+                  AND COALESCE(s.IsActive, 0) = 1
+                  AND EXISTS (SELECT 1 FROM Accounts a WHERE a.UserId = s.UserId AND COALESCE(a.trang_thai, 'banned') = 'active')
                 ORDER BY p.SoldCount DESC
                 LIMIT ?
             """
@@ -199,7 +208,10 @@ class SanPhamDao:
                 FROM Products p
                 LEFT JOIN Categories c ON p.CategoryId = c.CategoryId
                 LEFT JOIN Stores     s ON p.StoreId    = s.StoreId
-                WHERE p.IsActive = 1 AND LOWER(p.ProductName) LIKE ?
+                WHERE p.IsActive = 1
+                  AND COALESCE(s.IsActive, 0) = 1
+                  AND EXISTS (SELECT 1 FROM Accounts a WHERE a.UserId = s.UserId AND COALESCE(a.trang_thai, 'banned') = 'active')
+                  AND LOWER(p.ProductName) LIKE ?
             """
             params = [kw]
             if category_id not in (None, ""):

@@ -192,11 +192,12 @@ def test_admin_cap_lai_mat_khau_quan_ly_co_dinh(client, app_voi_dao):
     body = resp.get_json()
     assert resp.status_code == 200
     assert body["status"] is True
-    assert body["data"]["mat_khau_moi"] == "123" + "456"
-    assert user_dao.mat_khau["manager1"] == "123" + "456"
+    assert isinstance(body["data"]["mat_khau_moi"], str)
+    assert len(body["data"]["mat_khau_moi"]) >= 8
+    assert user_dao.mat_khau["manager1"] == body["data"]["mat_khau_moi"]
 
 
-def test_admin_cap_lai_mat_khau_sai_target_bi_tu_choi(client, app_voi_dao):
+def test_admin_cap_lai_mat_khau_customer_duoc_phep(client, app_voi_dao):
     user_dao = conftest.FakeUserDaoBus(
         users={
             "admin1": _user(1, 1, "admin1", "Admin"),
@@ -212,5 +213,6 @@ def test_admin_cap_lai_mat_khau_sai_target_bi_tu_choi(client, app_voi_dao):
     resp = client.post("/api/cap-lai-mat-khau", json={"ma_user": 9, "mat_khau_moi": "hacker123"})
     body = resp.get_json()
     assert resp.status_code == 200
-    assert body["status"] is False
-    assert body["message"] == "Admin chỉ được cấp lại mật khẩu cho Quản lý!"
+    assert body["status"] is True
+    assert isinstance(body["data"]["mat_khau_moi"], str)
+    assert len(body["data"]["mat_khau_moi"]) >= 8

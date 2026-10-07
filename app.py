@@ -659,6 +659,9 @@ def update_user_status(ma_user):
         return jsonify({"status": False, "message": "Dữ liệu gửi lên không hợp lệ!", "data": None}), 400
     status = data.get('status')
     if role_name == "Admin":
+        admin_status = getattr(user_bus, "cap_nhat_trang_thai_admin", None)
+        if callable(admin_status):
+            return jsonify(admin_status(ma_nguoi_thao_tac, ma_user, status))
         return jsonify(user_bus.cap_nhat_trang_thai_quan_ly(ma_nguoi_thao_tac, ma_user, status))
     if role_name == "Quản lý":
         return jsonify(user_bus.cap_nhat_trang_thai(ma_nguoi_thao_tac, ma_user, status, "Quản lý"))
@@ -681,6 +684,9 @@ def api_cap_lai_mat_khau():
         return jsonify({"status": False, "message": "Dữ liệu gửi lên không hợp lệ!", "data": None}), 400
     ma_user = data.get('ma_user')
     if role_name == "Admin":
+        admin_reset = getattr(user_bus, "cap_lai_mat_khau_admin", None)
+        if callable(admin_reset):
+            return jsonify(admin_reset(ma_nguoi_thao_tac, ma_user))
         return jsonify(user_bus.cap_lai_mat_khau_quan_ly(ma_nguoi_thao_tac, ma_user))
     if role_name == "Quản lý":
         return jsonify(user_bus.cap_lai_mat_khau(

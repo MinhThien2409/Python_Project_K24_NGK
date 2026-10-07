@@ -20,8 +20,12 @@ class DonHangDao:
             return {"error": "not_found", "product_name": "giỏ hàng trống"}
         placeholders = ",".join(["%s"] * len(product_ids))
         cursor.execute(
-            f"SELECT ProductId, ProductName, Price, Quantity, IsActive "
-            f"FROM Products WHERE ProductId IN ({placeholders}) FOR UPDATE",
+            f"SELECT p.ProductId, p.ProductName, p.Price, p.Quantity, p.IsActive, "
+            f"COALESCE(s.IsActive, 0), COALESCE(a.trang_thai, 'banned') "
+            f"FROM Products p "
+            f"LEFT JOIN Stores s ON s.StoreId = p.StoreId "
+            f"LEFT JOIN Accounts a ON a.UserId = s.UserId "
+            f"WHERE p.ProductId IN ({placeholders}) FOR UPDATE",
             tuple(product_ids)
         )
         rows = {int(r[0]): r for r in cursor.fetchall()}
@@ -49,7 +53,10 @@ class DonHangDao:
             if not row:
                 return {"error": "not_found", "product_name": str(item.ProductName or f"#{pid}")}
             name, price, stock, active = row[1], float(row[2] or 0), int(row[3] or 0), bool(row[4])
-            if not active:
+            # Fake DAO tests from prior phases return the legacy 5-column row.
+            store_active = bool(row[5]) if len(row) > 5 else True
+            seller_active = (str(row[6] or "").lower() == "active") if len(row) > 6 else True
+            if not active or not store_active or not seller_active:
                 return {"error": "inactive", "product_name": str(name or item.ProductName or f"#{pid}")}
             if total_qty > stock:
                 return {"error": "out_of_stock", "product_name": str(name or item.ProductName or f"#{pid}"),
@@ -208,21 +215,29 @@ class DonHangDao:
 
         code = str(code).strip().upper()
         cursor.execute(
-            """SELECT VoucherId,SellerId,Code,Name,DiscountType,DiscountValue,
-                      MinOrderValue,MaxDiscount,StartDate,EndDate,Quantity,
-                      UsedQuantity,IsActive
-               FROM Voucher WHERE Code=%s FOR UPDATE""",
+            """SELECT v.VoucherId,v.SellerId,v.Code,v.Name,v.DiscountType,v.DiscountValue,
+                      v.MinOrderValue,v.MaxDiscount,v.StartDate,v.EndDate,v.Quantity,
+                      v.UsedQuantity,v.IsActive,
+                      COALESCE(s.IsActive,0), COALESCE(a.trang_thai,'banned')
+               FROM Voucher v
+               LEFT JOIN Stores s ON s.StoreId=v.SellerId
+               LEFT JOIN Accounts a ON a.UserId=s.UserId
+               WHERE v.Code=%s FOR UPDATE""",
             (code,)
         )
         row = cursor.fetchone()
         if not row:
             return {"error": "invalid_voucher", "message": "Voucher không tồn tại!"}
 
-        voucher_id, seller_id, real_code, _, dtype, value, min_order, max_discount,             start_dt, end_dt, quantity, used, active = row
+        voucher_id, seller_id, real_code, _, dtype, value, min_order, max_discount,             start_dt, end_dt, quantity, used, active = row[:13]
+        store_active = bool(row[13]) if len(row) > 13 else True
+        seller_active = row[14] if len(row) > 14 else "active"
 
         now = datetime.now()
         if not active:
             return {"error": "invalid_voucher", "message": "Voucher đã bị vô hiệu hóa!"}
+        if not bool(store_active) or str(seller_active or "").lower() != "active":
+            return {"error": "invalid_voucher", "message": "Voucher của gian hàng đang bị khóa!"}
         if start_dt and now < start_dt:
             return {"error": "invalid_voucher", "message": "Voucher chưa bắt đầu!"}
         if end_dt and now > end_dt:
@@ -700,6 +715,38 @@ class DonHangDao:
         finally:
             cursor.close()
             conn.close()
+
+    def huy_don_do_khoa_seller(self, store_id):
+        """Hủy các Orders của Store đang ở trạng thái còn cho phép hủy.
+        Chạy transaction riêng, lock từng Order trước khi chuyển trạng thái và hoàn kho."""
+        conn = DBconnection().get_connection()
+        if not conn:
+            return []
+        cursor = conn.cursor()
+        cancelled = []
+        try:
+            cursor.execute("""SELECT DISTINCT o.OrderId
+                FROM Orders o JOIN OrderItems oi ON oi.OrderId=o.OrderId
+                JOIN Products p ON p.ProductId=oi.ProductId
+                WHERE p.StoreId=%s AND o.Status IN ('Pending','Confirmed','Shipping')""", (store_id,))
+            order_ids = [int(r[0]) for r in cursor.fetchall()]
+            for order_id in order_ids:
+                cursor.execute("SELECT Status,UserId FROM Orders WHERE OrderId=%s FOR UPDATE", (order_id,))
+                row = cursor.fetchone()
+                if not row or row[0] not in ('Pending','Confirmed','Shipping'):
+                    continue
+                old_status, user_id = row[0], int(row[1] or 0)
+                self._ghi_trang_thai_moi(cursor, order_id, 'Cancelled')
+                self._hoan_ton_kho(cursor, order_id)
+                cancelled.append({"order_id": order_id, "user_id": user_id, "old_status": old_status})
+            conn.commit()
+            return cancelled
+        except Exception as e:
+            conn.rollback()
+            logger.exception("Lỗi huy_don_do_khoa_seller: %s", e)
+            return []
+        finally:
+            cursor.close(); conn.close()
 
     def don_thuoc_store(self, order_id, store_id):
         """Kiểm tra đơn có chứa sản phẩm của store hay không."""

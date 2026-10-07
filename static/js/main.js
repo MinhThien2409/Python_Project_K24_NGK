@@ -2435,6 +2435,12 @@ async function renderAdminUsers() {
           '<button class="admin-action-btn btn-cancel" onclick="xacNhanKhoaQuanLy(' + u.ma_user + ', ' + status + ', ' + n + ')">' + (isBanned ? '🔓 Mở khóa' : '🔒 Khóa') + '</button>' +
           '<button class="admin-action-btn btn-confirm" onclick="xacNhanResetQuanLy(' + u.ma_user + ', ' + n + ')">🔑 Reset</button>' +
           '<button class="admin-action-btn btn-cancel" onclick="xacNhanXoaQuanLy(' + u.ma_user + ', ' + n + ')">🗑️ Xóa</button>';
+      } else if (laAdmin && (u.ma_nhom_quyen === 3 || u.ma_nhom_quyen === 4)) {
+        const n = escHtml(JSON.stringify(String(u.ten_user || '')));
+        const status = escHtml(JSON.stringify(isBanned ? 'active' : 'banned'));
+        hanhDong = '<button class="admin-action-btn ' + (isBanned ? 'btn-edit' : 'btn-cancel') + '" onclick="xacNhanKhoaAdminTaiKhoan(' + u.ma_user + ', ' + status + ', ' + n + ')">' +
+          (isBanned ? '🔓 Mở khóa' : '🔒 Khóa') + '</button>' +
+          '<button class="admin-action-btn btn-confirm" onclick="moModalCapLaiMatKhau(' + u.ma_user + ', ' + n + ')">🔑 Cấp lại mật khẩu</button>';
       } else if (laQuanLy && (u.ma_nhom_quyen === 3 || u.ma_nhom_quyen === 4)) {
         const tenAnToan = escHtml(JSON.stringify(String(u.ten_user || '')));
         hanhDong = `
@@ -3444,7 +3450,12 @@ async function xacNhanXoaQuanLy(ma_user, ten_user) {
 }
 function xacNhanKhoaQuanLy(ma_user, trang_thai_moi, ten_user) {
   const hanhDong = trang_thai_moi === 'banned' ? 'Khóa' : 'Mở khóa';
-  if (!confirm(`${hanhDong} tài khoản Quản lý "${ten_user || '#' + ma_user}"?`)) return;
+  if (!confirm(hanhDong + ' tài khoản Quản lý "' + (ten_user || '#' + ma_user) + '"?')) return;
+  capNhatTrangThaiNhanh(ma_user, trang_thai_moi);
+}
+function xacNhanKhoaAdminTaiKhoan(ma_user, trang_thai_moi, ten_user) {
+  const hanhDong = trang_thai_moi === 'banned' ? 'Khóa' : 'Mở khóa';
+  if (!confirm(hanhDong + ' tài khoản "' + (ten_user || '#' + ma_user) + '"?')) return;
   capNhatTrangThaiNhanh(ma_user, trang_thai_moi);
 }
 function xacNhanResetQuanLy(ma_user, ten_user) {

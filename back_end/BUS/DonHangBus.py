@@ -257,6 +257,26 @@ class DonHangBus:
         return {"status": True,
                 "message": f"Đã hủy đơn hàng #{ma_don} thành công!"}
 
+    def huy_don_do_khoa_seller(self, store_id):
+        """System flow khi khóa Seller: chỉ hủy Pending/Confirmed/Shipping."""
+        if not store_id:
+            return []
+        try:
+            result = self.dao.huy_don_do_khoa_seller(int(store_id))
+        except Exception:
+            return []
+        # Notification failure không làm ảnh hưởng kết quả nghiệp vụ.
+        for item in result or []:
+            try:
+                tao = getattr(self.dao, "tao_thong_bao", None)
+                if callable(tao) and item.get("user_id"):
+                    tao(item["user_id"],
+                        f"Đơn hàng #{item['order_id']} đã được hủy vì gian hàng của người bán bị khóa.",
+                        item["order_id"])
+            except Exception:
+                pass
+        return result or []
+
     def _loi_huy_theo_trang_thai(self, hien_tai):
         """Tra loi tu choi huy don theo trang thai hien tai."""
         if hien_tai == "Confirmed":

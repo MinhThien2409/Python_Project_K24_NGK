@@ -455,53 +455,88 @@ class UserBus:
         }
 
     def cap_nhat_trang_thai_quan_ly(self, nguoi_thao_tac_id, ma_user, trang_thai):
-        """Admin khóa/mở khóa tài khoản Quản lý; backend xác thực target role."""
-        gate = self.kiem_tra_quyen_admin(nguoi_thao_tac_id)
-        if not gate.get("status"):
-            return gate
-        if not ma_user:
-            return {"status": False, "message": "Thiếu mã user!"}
-        if trang_thai not in ("active", "banned"):
-            return {"status": False, "message": "Trạng thái không hợp lệ!"}
-        if int(nguoi_thao_tac_id or 0) == int(ma_user or 0):
-            return {"status": False, "message": "Bạn không thể khóa/mở khóa chính tài khoản của mình!"}
+        """Tương thích API cũ: Admin quản lý tài khoản theo policy mới."""
+        return self.cap_nhat_trang_thai_admin(nguoi_thao_tac_id, ma_user, trang_thai)
 
-        thong_tin = self.dao.lay_thong_tin_user(ma_user)
-        if not thong_tin:
-            return {"status": False, "message": "Tài khoản không tồn tại!"}
-        role_id = thong_tin.get("Role_Id") or thong_tin.get("Role_id") or thong_tin.get("role_id")
-        if self.dao.lay_ten_vai_tro_theo_id(role_id) != "Quản lý":
-            return {"status": False,
-                    "message": "Admin chỉ được khóa/mở khóa tài khoản Quản lý!"}
-
-        ok = self.dao.cap_nhat_trang_thai(ma_user, trang_thai)
-        if ok:
-            label = "Đã khóa tài khoản!" if trang_thai == "banned" else "Đã mở khóa tài khoản!"
-            return {"status": True, "message": label}
-        return {"status": False, "message": "Lỗi cập nhật trạng thái."}
-
-    def cap_lai_mat_khau_quan_ly(self, nguoi_thao_tac_id, ma_user):
-        """Admin reset mật khẩu Quản lý về đúng giá trị cố định 123456."""
+    def cap_nhat_trang_thai_admin(self, nguoi_thao_tac_id, ma_user, trang_thai):
+        """Admin khóa/mở Customer, Seller, Manager; tuyệt đối không thao tác Admin."""
         gate = self.kiem_tra_quyen_admin(nguoi_thao_tac_id)
         if not gate.get("status"):
             return gate
         if not ma_user:
             return {"status": False, "message": "Thiếu mã user!", "data": None}
-
+        if trang_thai not in ("active", "banned"):
+            return {"status": False, "message": "Trạng thái không hợp lệ!", "data": None}
+        if int(nguoi_thao_tac_id or 0) == int(ma_user or 0):
+            return {"status": False, "message": "Bạn không thể khóa/mở khóa chính tài khoản của mình!", "data": None}
         thong_tin = self.dao.lay_thong_tin_user(ma_user)
         if not thong_tin:
             return {"status": False, "message": "Tài khoản không tồn tại!", "data": None}
         role_id = thong_tin.get("Role_Id") or thong_tin.get("Role_id") or thong_tin.get("role_id")
-        if self.dao.lay_ten_vai_tro_theo_id(role_id) != "Quản lý":
-            return {"status": False,
-                    "message": "Admin chỉ được cấp lại mật khẩu cho Quản lý!",
-                    "data": None}
+        ten_vai_tro = self.dao.lay_ten_vai_tro_theo_id(role_id)
+        if ten_vai_tro == "Admin":
+            return {"status": False, "message": "Admin không được khóa/mở khóa tài khoản Admin!", "data": None}
+        if ten_vai_tro not in ("Quản lý", "Seller", "Customer", "Khách hàng"):
+            return {"status": False, "message": "Vai trò tài khoản không hợp lệ!", "data": None}
 
-        if not self.dao.cap_nhat_mat_khau(ma_user, "123456"):
+        if hasattr(self.dao, "cap_nhat_trang_thai_admin"):
+            result = self.dao.cap_nhat_trang_thai_admin(ma_user, trang_thai, role_id)
+            if isinstance(result, tuple):
+                ok, message, store_id = (list(result) + [None, None, None])[:3]
+                if not ok:
+                    return {"status": False, "message": message or "Lỗi cập nhật trạng thái.", "data": None}
+            elif isinstance(result, dict):
+                if not result.get("status"):
+                    return result
+                store_id = result.get("store_id")
+            else:
+                store_id = None
+                if not result:
+                    return {"status": False, "message": "Lỗi cập nhật trạng thái.", "data": None}
+        else:
+            if ten_vai_tro == "Quản lý" and trang_thai == "banned":
+                # Mock/legacy fallback; live DAO always uses transactional invariant.
+                active_managers = getattr(self.dao, "dem_quan_ly_dang_hoat_dong", lambda: 2)()
+                if active_managers <= 1:
+                    return {"status": False, "message": "Không thể khóa Quản lý cuối cùng. Hệ thống phải luôn có ít nhất 1 Quản lý đang hoạt động!", "data": None}
+            if not self.dao.cap_nhat_trang_thai(ma_user, trang_thai):
+                return {"status": False, "message": "Lỗi cập nhật trạng thái.", "data": None}
+            store_id = None
+
+        if ten_vai_tro == "Seller" and store_id:
+            # Auto-cancel theo state machine; lỗi thông báo không làm rollback việc khóa tài khoản.
+            try:
+                from back_end.BUS.DonHangBus import DonHangBus
+                if trang_thai == "banned":
+                    DonHangBus().huy_don_do_khoa_seller(store_id)
+            except Exception:
+                pass
+        label = "Đã khóa tài khoản!" if trang_thai == "banned" else "Đã mở khóa tài khoản!"
+        return {"status": True, "message": label, "data": {"store_id": store_id} if store_id else None}
+
+    def cap_lai_mat_khau_quan_ly(self, nguoi_thao_tac_id, ma_user):
+        """Tương thích API cũ: Admin cấp lại mật khẩu cho mọi tài khoản trừ Admin."""
+        return self.cap_lai_mat_khau_admin(nguoi_thao_tac_id, ma_user)
+
+    def cap_lai_mat_khau_admin(self, nguoi_thao_tac_id, ma_user):
+        """Admin reset Customer/Seller/Manager; target Admin bị từ chối."""
+        gate = self.kiem_tra_quyen_admin(nguoi_thao_tac_id)
+        if not gate.get("status"):
+            return gate
+        if not ma_user:
+            return {"status": False, "message": "Thiếu mã user!", "data": None}
+        thong_tin = self.dao.lay_thong_tin_user(ma_user)
+        if not thong_tin:
+            return {"status": False, "message": "Tài khoản không tồn tại!", "data": None}
+        role_id = thong_tin.get("Role_Id") or thong_tin.get("Role_id") or thong_tin.get("role_id")
+        ten_vai_tro = self.dao.lay_ten_vai_tro_theo_id(role_id)
+        if ten_vai_tro == "Admin":
+            return {"status": False, "message": "Admin không được cấp lại mật khẩu cho tài khoản Admin!", "data": None}
+        if ten_vai_tro not in ("Quản lý", "Seller", "Customer", "Khách hàng"):
+            return {"status": False, "message": "Vai trò tài khoản không hợp lệ!", "data": None}
+        mat_khau_moi = secrets.token_urlsafe(9)[:12]
+        if not self.dao.cap_nhat_mat_khau(ma_user, mat_khau_moi):
             return {"status": False, "message": "Lỗi cập nhật mật khẩu!", "data": None}
-        return {
-            "status": True,
-            "message": "Đã cấp lại mật khẩu Quản lý về 123456!",
-            "data": {"ma_user": ma_user, "ten_user": thong_tin.get("FullName"),
-                     "mat_khau_moi": "123456"}
-        }
+        return {"status": True,
+                "message": "Đã cấp lại mật khẩu. Mật khẩu tạm thời chỉ hiển thị một lần.",
+                "data": {"ma_user": ma_user, "ten_user": thong_tin.get("FullName"), "mat_khau_moi": mat_khau_moi}}

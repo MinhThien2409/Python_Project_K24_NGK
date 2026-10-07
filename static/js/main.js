@@ -289,33 +289,29 @@ async function renderSellerOrders() {
 }
 
 // Hàm xử lý cập nhật trạng thái từ phía Seller
-async function sellerCapNhatDon(orderId, newStatus) {
+sellerCapNhatDon = async function (orderId, newStatus) {
   const labelMap = {
-    'Confirmed': 'Xác nhận đơn hàng',
-    'Shipping' : 'Chuyển sang Đang giao',
-    'Completed': 'Hoàn thành đơn hàng',
+    Confirmed: 'Xác nhận đơn hàng',
+    Shipping : 'Chuyển sang Đang giao',
+    Completed: 'Hoàn thành đơn hàng',
+    Cancelled: 'HỦY đơn hàng',
   };
   const label = labelMap[newStatus] || newStatus;
-  if (!confirm(`${label} cho đơn #${orderId}?`)) return;
+  if (!confirm(`${label} #${orderId}?`)) return;
 
   try {
-    const res    = await fetch(`/api/seller/don-hang/${orderId}/trang-thai`, {
-      method : 'PUT',
+    const res = await fetch(`/api/seller/don-hang/${orderId}/trang-thai`, {
+      method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body   : JSON.stringify({ status: newStatus })
+      body: JSON.stringify({ status: newStatus })
     });
     const result = await res.json();
-
-    if (result.status) {
-      showToast(`✅ ${result.message}`);
-      await renderSellerOrders(); // Reload lại bảng
-    } else {
-      showToast('❌ ' + result.message);
-    }
+    showToast((result.status ? '✅ ' : '❌ ') + (result.message || ''));
+    if (result.status) renderSellerOrders();
   } catch (e) {
     showToast('❌ Lỗi kết nối!');
   }
-}
+};
 async function renderSellerOverview() {
   const container = document.getElementById('sellerOverviewContent');
   const store = currentUser?.store;
@@ -1688,6 +1684,7 @@ async function loadCategories() {
   }
 }
 function renderUserProducts(arr) {
+   if (!arr || arr.length === 0) console.trace('renderUserProducts nhận mảng rỗng:', arr);
   const container = document.getElementById('userProductsGrid');
   if (!container) return;
 
@@ -2858,7 +2855,30 @@ function capNhatNutThanhToan(coTheDat) {
   nut.style.opacity = coTheDat ? '1' : '0.5';
   nut.style.cursor = coTheDat ? 'pointer' : 'not-allowed';
 }
-
+async function xoaToanBoGio() {
+  if (!currentUser) {
+    showToast('⚠️ Vui lòng đăng nhập!');
+    return;
+  }
+  // Giỏ rỗng vẫn gọi API để backend trả thông báo (TC-174), không hỏi xác nhận.
+  if (cart && cart.length > 0 && !confirm('Xóa toàn bộ sản phẩm trong giỏ hàng?')) return;
+  try {
+    const res    = await fetch('/api/gio-hang/xoa-tat-ca', { method: 'POST' });
+    const result = await res.json();
+    if (result.status) {
+      cart = [];
+      selectedCartIds.clear();
+      daBoChonIds.clear();
+      updateCartBadge();
+      renderCartItems();
+      showToast('🗑️ ' + (result.message || 'Đã xóa toàn bộ giỏ hàng!'));
+    } else {
+      showToast('❌ ' + (result.message || 'Không thể xóa giỏ hàng!'));
+    }
+  } catch (e) {
+    showToast('❌ Lỗi kết nối!');
+  }
+}
 // ─── Xóa 1 sản phẩm khỏi giỏ ────────────────────────────────
 async function xoaKhoiGio(productId) {
   if (!currentUser) return;
@@ -3403,9 +3423,28 @@ async function renderUserRoleFilter() {
   select.innerHTML = `<option value="all">Tất cả vai trò</option>` +
     VAI_TRO_CHUAN.map(r => `<option value="${r.RoleName}">${r.RoleName}</option>`).join('');
 }
-
+async function xacNhanXoaQuanLy(ma_user, ten_user) {
+  if (!confirm(`Xóa tài khoản Quản lý "${ten_user || '#' + ma_user}"?\nHành động này không thể hoàn tác.`)) return;
+  try {
+    const res    = await fetch('/api/quan-ly/' + ma_user, { method: 'DELETE' });
+    const result = await res.json();
+    showToast((result.status ? '✅ ' : '❌ ') + (result.message || ''));
+    if (result.status) renderAdminUsers();
+  } catch (e) {
+    showToast('❌ Lỗi kết nối!');
+  }
+}
+function xacNhanKhoaQuanLy(ma_user, trang_thai_moi, ten_user) {
+  const hanhDong = trang_thai_moi === 'banned' ? 'Khóa' : 'Mở khóa';
+  if (!confirm(`${hanhDong} tài khoản Quản lý "${ten_user || '#' + ma_user}"?`)) return;
+  capNhatTrangThaiNhanh(ma_user, trang_thai_moi);
+}
+function xacNhanResetQuanLy(ma_user, ten_user) {
+  moModalCapLaiMatKhau(ma_user, ten_user);
+}
 // ─── LƯU THAY ĐỔI TRẠNG THÁI TÀI KHOẢN ──────────────────────────────────────
 // 009 US3: nút Khóa/Mở khóa nhanh trong bảng tài khoản (chỉ Quản lý)
+
 async function capNhatTrangThaiNhanh(ma_user, trang_thai_moi) {
   if (!ma_user) { showToast('⚠️ Thiếu thông tin!'); return; }
   try {
@@ -4453,12 +4492,13 @@ renderSellerOrders = async function () {
         tdCn.appendChild(btn);
       }
       // Phase 3: seller chỉ được hủy đơn đang Chờ duyệt (backend từ chối còn lại)
-      if (o.Status === 'Pending') {
-        const btnHuy = document.createElement('button');
-        btnHuy.textContent = '✖ Hủy';
-        btnHuy.onclick = () => sellerCapNhatDon(o.OrderId, 'Cancelled');
-        tdCn.appendChild(btnHuy);
-      }
+    if (['Pending', 'Confirmed', 'Shipping'].includes(o.Status)) {
+    const btnHuy = document.createElement('button');
+     btnHuy.className = 'admin-action-btn btn-cancel';
+   btnHuy.textContent = '✖ Hủy';
+   btnHuy.onclick = () => sellerCapNhatDon(o.OrderId, 'Cancelled');
+    tdCn.appendChild(btnHuy);
+   }
       if (!tdCn.childNodes.length) tdCn.textContent = '—';
       tr.appendChild(tdCn);
       tbody.appendChild(tr);

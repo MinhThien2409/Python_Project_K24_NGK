@@ -262,9 +262,9 @@ async function renderSellerOrders() {
         <tr>
           <td style="font-weight:700; color:var(--text-muted);">#${o.OrderId}</td>
           <td>
-            <div style="font-weight:600;">${o.ReceiverName}</div>
-            <div style="font-size:11px; color:var(--text-muted);">📞 ${o.ReceiverPhone}</div>
-            <div style="font-size:11px; color:var(--text-muted);">👤 ${o.CustomerName || '—'}</div>
+            <div style="font-weight:600;">${escHtml(o.ReceiverName)}</div>
+            <div style="font-size:11px; color:var(--text-muted);">📞 ${escHtml(o.ReceiverPhone)}</div>
+            <div style="font-size:11px; color:var(--text-muted);">👤 ${escHtml(o.CustomerName || '—')}</div>
           </td>
           <td style="font-size:12px; max-width:180px;">${itemSummary || '—'}</td>
           <td style="font-weight:700; color:var(--red);">
@@ -347,8 +347,8 @@ async function renderSellerOverview() {
           🏪
         </div>
         <div>
-          <div style="font-size:20px; font-weight:800; margin-bottom:4px;">${store.store_name || 'Gian hàng của tôi'}</div>
-          <div style="opacity:0.8; font-size:13px;">📍 ${store.address || 'Chưa cập nhật địa chỉ'}</div>
+          <div style="font-size:20px; font-weight:800; margin-bottom:4px;">${escHtml(store.store_name || 'Gian hàng của tôi')}</div>
+          <div style="opacity:0.8; font-size:13px;">📍 ${escHtml(store.address || 'Chưa cập nhật địa chỉ')}</div>
           <div style="margin-top:8px;">
             <span style="background:rgba(255,255,255,0.2); padding:3px 10px; border-radius:99px; font-size:12px; font-weight:700;">
               ✅ Đang hoạt động
@@ -424,7 +424,7 @@ async function renderSellerOverview() {
                             border-radius:8px;
                             border:1px solid #ddd;
                           ">`
-                    : `<span style="font-size:32px;">${p.emoji || '📦'}</span>`
+                    : `<span style="font-size:32px;">${escHtml(p.emoji || '📦')}</span>`
                 }
               </div>
 
@@ -468,7 +468,7 @@ async function renderSellerOverview() {
           ${prods.filter(p => (p.quantity || 0) <= 5).map(p => `
             <div style="display:flex; justify-content:space-between; align-items:center;
                         padding:8px 0; border-bottom:1px solid var(--border); font-size:13px;">
-              <span>${p.emoji || '📦'} ${escHtml(p.name)}</span>
+              <span>${escHtml(p.emoji || '📦')} ${escHtml(p.name)}</span>
               <span style="color:var(--red); font-weight:700;">
                 Còn ${p.quantity || 0} sản phẩm
               </span>
@@ -709,19 +709,19 @@ async function openProfileModal() {
 
     <div class="form-group">
       <label>Họ và tên</label>
-      <input type="text" id="editName" value="${ten_user}" placeholder="Nhập họ tên..." oninput="kiemTraThayDoiProfile()">
+      <input type="text" id="editName" value="${escHtml(ten_user)}" placeholder="Nhập họ tên..." oninput="kiemTraThayDoiProfile()">
     </div>
     <div class="form-group">
       <label>Số điện thoại</label>
-      <input type="tel" id="editPhone" value="${sdt === 'Chưa có SĐT' ? '' : sdt}" placeholder="Nhập SĐT..." oninput="kiemTraThayDoiProfile()">
+      <input type="tel" id="editPhone" value="${escHtml(sdt === 'Chưa có SĐT' ? '' : sdt)}" placeholder="Nhập SĐT..." oninput="kiemTraThayDoiProfile()">
     </div>
     <div class="form-group">
       <label>Địa chỉ giao hàng</label>
-      <input type="text" id="editAddress" value="${dia_chi === 'Chưa có địa chỉ' ? '' : dia_chi}" placeholder="Nhập địa chỉ..." oninput="kiemTraThayDoiProfile()">
+      <input type="text" id="editAddress" value="${escHtml(dia_chi === 'Chưa có địa chỉ' ? '' : dia_chi)}" placeholder="Nhập địa chỉ..." oninput="kiemTraThayDoiProfile()">
     </div>
     <div class="form-group">
       <label>Số CMND/CCCD</label>
-      <input type="text" id="editCmnd" value="${cmnd === 'Chưa cập nhật CMND' ? '' : cmnd}" placeholder="Nhập số CMND/CCCD..." oninput="kiemTraThayDoiProfile()">
+      <input type="text" id="editCmnd" value="${escHtml(cmnd === 'Chưa cập nhật CMND' ? '' : cmnd)}" placeholder="Nhập số CMND/CCCD..." oninput="kiemTraThayDoiProfile()">
     </div>
 
     <button class="btn-submit" id="btnSaveProfile" style="background: var(--green); width: 100%; margin-top: 10px;" onclick="updateUserProfile()" disabled>💾 Lưu cập nhật thông tin</button>
@@ -812,7 +812,7 @@ async function renderSellerVouchers() {
     const r = await fetch('/api/voucher');
     const j = await r.json();
     if (!j.status) {
-      body.innerHTML = `<tr><td colspan="11" style="text-align:center;color:var(--red,#c0392b);">${j.message || 'Không thể tải Voucher.'}</td></tr>`;
+      body.innerHTML = `<tr><td colspan="11" style="text-align:center;color:var(--red,#c0392b);">${escHtml(j.message || 'Không thể tải Voucher.')}</td></tr>`;
       return;
     }
     const rows = j.data || [];
@@ -822,7 +822,7 @@ async function renderSellerVouchers() {
     }
     body.innerHTML = rows.map(v => `<tr>
       <td><b>${String(v.Code || '').replace(/</g,'&lt;')}</b></td>
-      <td>${v.DiscountType}</td>
+      <td>${escHtml(v.DiscountType)}</td>
       <td>${Number(v.DiscountValue).toLocaleString('vi-VN')}${v.DiscountType === 'PERCENT' ? '%' : 'đ'}</td>
       <td>${formatVoucherMoney(v.MinOrderValue)}</td>
       <td>${formatVoucherMoney(v.MaxDiscount)}</td>
@@ -1288,7 +1288,7 @@ async function initAdminDashboard() {
                         border-radius:8px;
                         border:1px solid #ddd;
                       ">`
-                : `<span style="font-size:22px;">${p.emoji || '📦'}</span>`
+                : `<span style="font-size:22px;">${escHtml(p.emoji || '📦')}</span>`
             }
           </div>
           <div style="flex:1; min-width:0;">
@@ -1331,8 +1331,8 @@ async function initAdminDashboard() {
             <td style="padding:8px; border-bottom:1px solid var(--border);
                        font-weight:700; color:var(--text-muted);">#${o.order_id}</td>
             <td style="padding:8px; border-bottom:1px solid var(--border);">
-              <div style="font-weight:600;">${o.receiver_name}</div>
-              <div style="font-size:11px; color:var(--text-muted);">${o.customer_name}</div>
+              <div style="font-weight:600;">${escHtml(o.receiver_name)}</div>
+              <div style="font-size:11px; color:var(--text-muted);">${escHtml(o.customer_name)}</div>
             </td>
             <td style="padding:8px; border-bottom:1px solid var(--border);
                        font-weight:700; color:var(--red);">
@@ -1588,7 +1588,7 @@ async function renderAdminSellers() {
           ${r.status === 'rejected' ? '<span class="badge-status status-cancelled">Từ chối</span>'   : ''}
         </td>
         <td style="max-width:160px; font-size:12px; color:var(--text-secondary);">
-          ${r.status === 'rejected' ? (r.reject_reason || '—') : '—'}
+          ${r.status === 'rejected' ? escHtml(r.reject_reason || '—') : '—'}
         </td>
         <td>
           ${r.status === 'pending' ? `
@@ -1860,7 +1860,7 @@ async function renderAdminProducts() {
                         border-radius:8px;
                         border:1px solid #ddd;
                     ">`
-              : `<span style="font-size:28px">${p.emoji || '📦'}</span>`
+              : `<span style="font-size:28px">${escHtml(p.emoji || '📦')}</span>`
           }
         </td>
         <td>
@@ -2368,7 +2368,7 @@ async function renderAdminUsers() {
     if (!result.status) {
       // 009 US3: Quản lý không có quyền xem danh sách đầy đủ (khoá/cấp lại vẫn qua endpoint riêng)
       tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;
-                         color:var(--red);">🚫 ${result.message || 'Bạn không có quyền xem danh sách tài khoản!'}</td></tr>`;
+                         color:var(--red);">🚫 ${escHtml(result.message || 'Bạn không có quyền xem danh sách tài khoản!')}</td></tr>`;
       return;
     }
 
@@ -2454,8 +2454,8 @@ async function renderAdminUsers() {
             <div style="font-size:11px; color:var(--text-muted);">@${escHtml(u.tendangnhap)}</div>
           </td>
           <td style="font-size:13px; color:var(--text-secondary);">${escHtml(u.tendangnhap)}</td>
-          <td style="font-size:13px;">${u.sdt || '—'}</td>
-          <td><span class="role-badge ${roleCls}">${roleName}</span></td>
+          <td style="font-size:13px;">${escHtml(u.sdt || '—')}</td>
+          <td><span class="role-badge ${roleCls}">${escHtml(roleName)}</span></td>
           <td>${statusHtml}</td>
           <td>${hanhDong}</td>
         </tr>
@@ -2683,10 +2683,10 @@ async function hienThiHoaDon(orderId) {
       box.innerHTML = `
         <div style="font-size:13px; line-height:1.8;">
           <div><b>Mã đơn:</b> #${d.OrderId}</div>
-          <div><b>Trạng thái:</b> ${d.Status}</div>
-          <div><b>Người nhận:</b> ${d.ReceiverName} — ${d.ReceiverPhone}</div>
-          <div><b>Địa chỉ:</b> ${d.ShippingAddress}</div>
-          <div><b>Thanh toán:</b> ${d.PaymentMethod}</div>
+          <div><b>Trạng thái:</b> ${escHtml(d.Status)}</div>
+          <div><b>Người nhận:</b> ${escHtml(d.ReceiverName)} — ${escHtml(d.ReceiverPhone)}</div>
+          <div><b>Địa chỉ:</b> ${escHtml(d.ShippingAddress)}</div>
+          <div><b>Thanh toán:</b> ${escHtml(d.PaymentMethod)}</div>
           <hr style="border:none; border-top:1px solid var(--border); margin:10px 0;">
           ${items.map(it => `
             <div style="display:flex; justify-content:space-between; margin-bottom:4px;">
@@ -3049,7 +3049,7 @@ function openCheckoutModal() {
     (nhomTheoShop[tenShop] = nhomTheoShop[tenShop] || []).push(item);
   });
   summaryEl.innerHTML = Object.entries(nhomTheoShop).map(([tenShop, nhom]) => `
-    <div style="font-weight:700; padding:6px 0 2px;">🏪 ${tenShop}</div>
+    <div style="font-weight:700; padding:6px 0 2px;">🏪 ${escHtml(tenShop)}</div>
     ${nhom.map(item => `
       <div style="display:flex; justify-content:space-between; padding:4px 0 4px 12px; border-bottom:1px solid var(--border); font-size:12px;">
         <span>${escHtml(item.ProductName)} x${item.Quantity}</span>
@@ -3190,9 +3190,9 @@ function renderOrderHistoryList(orders) {
         <div style="padding:10px 14px; border-top:1px solid var(--border);
                     display:flex; justify-content:space-between; align-items:flex-end; flex-wrap:wrap; gap:8px;">
           <div style="font-size:12px; color:var(--text-muted); max-width:380px;">
-            <div>👤 ${o.ReceiverName || '—'} · 📞 ${o.ReceiverPhone || '—'}</div>
-            <div>📍 ${o.ShippingAddress || '—'}</div>
-            <div>💳 ${PAYMENT_LABEL[o.PaymentMethod] || o.PaymentMethod || '—'}</div>
+            <div>👤 ${escHtml(o.ReceiverName || '—')} · 📞 ${escHtml(o.ReceiverPhone || '—')}</div>
+            <div>📍 ${escHtml(o.ShippingAddress || '—')}</div>
+            <div>💳 ${escHtml(PAYMENT_LABEL[o.PaymentMethod] || o.PaymentMethod || '—')}</div>
           </div>
           <div style="text-align:right; font-size:12px; color:var(--text-muted);">
             <div>Tạm tính: <b>${Number(o.SubTotal || 0).toLocaleString('vi-VN')}đ</b></div>
@@ -3363,7 +3363,7 @@ async function renderRecentOrdersPreview() {
                     display:flex; justify-content:space-between; align-items:center;
                     cursor:pointer;" onclick="openOrderHistoryModal()">
           <div style="display:flex; align-items:center; gap:10px;">
-            <div style="font-size:24px;">${firstItem?.Emoji || '📦'}</div>
+            <div style="font-size:24px;">${escHtml(firstItem?.Emoji || '📦')}</div>
             <div>
               <div style="font-weight:600; font-size:13px;">
                 ${escHtml(firstItem?.ProductName || 'Sản phẩm')}
@@ -3502,7 +3502,7 @@ function moModalCapLaiMatKhau(ma_user = null, ten_user = '') {
   document.getElementById('resetUserId').value = maUserHienTai;
   if (ten_user) {
     document.getElementById('resetUserInfo').innerHTML =
-      `<div style="font-weight:700;">${ten_user}</div>
+      `<div style="font-weight:700;">${escHtml(ten_user)}</div>
        <div style="font-size:12px; color:var(--text-muted);">ID: #${maUserHienTai}</div>`;
   } else if (document.getElementById('editUserInfo')) {
     document.getElementById('resetUserInfo').innerHTML =
@@ -3602,7 +3602,7 @@ async function openProductDetail(productId) {
                     justify-content:center;
                     font-size:90px;
                 ">
-                  ${p.emoji || '📦'}
+                  ${escHtml(p.emoji || '📦')}
                 </div>`
           }
 
@@ -3973,7 +3973,7 @@ async function renderSellerNhapHang() {
     const res = await fetch('/api/seller/san-pham');
     const result = await res.json();
     if (!result.status || !Array.isArray(result.data)) {
-      tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;">${result.message || 'Không tải được sản phẩm!'}</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;">${escHtml(result.message || 'Không tải được sản phẩm!')}</td></tr>`;
       return;
     }
 
@@ -4005,7 +4005,7 @@ async function renderSellerNhapHang() {
       return `
         <tr>
           <td>
-            <div style="font-weight:600;">${p.emoji || '📦'} ${escHtml(p.name)}</div>
+            <div style="font-weight:600;">${escHtml(p.emoji || '📦')} ${escHtml(p.name)}</div>
             <div style="font-size:11px; color:var(--text-muted);">${escHtml(p.category_name || '')}</div>
             <div style="font-size:11px; color:var(--text-muted);">Giá bán hiện tại: <b>${Number(p.price || 0).toLocaleString('vi-VN')}đ</b></div>
           </td>

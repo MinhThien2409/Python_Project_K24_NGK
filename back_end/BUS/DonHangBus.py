@@ -390,6 +390,9 @@ class DonHangBus:
         hop_le = ['Pending', 'Confirmed', 'Shipping', 'Completed', 'Cancelled']
         if trang_thai_moi not in hop_le:
             return {"status": False, "message": "Trạng thái đơn hàng không hợp lệ!"}
+        # T139: ownership must be checked before reading/validating Status.
+        if not self.dao.don_thuoc_store(order_id, store_id):
+            return {"status": False, "message": "Đơn hàng không thuộc gian hàng của bạn!"}
         hien_tai = self.dao.lay_trang_thai(order_id)
         if not hien_tai:
             return {"status": False, "message": "Không tìm thấy đơn hàng hoặc có lỗi xảy ra!"}
@@ -400,8 +403,6 @@ class DonHangBus:
             return {"status": False, "message": "Seller chỉ được hủy đơn đang ở trạng thái Chờ duyệt!"}
         if trang_thai_moi not in LUONG_TRANG_THAI.get(hien_tai, ()):
             return {"status": False, "message": "Chỉ được chuyển theo luồng trạng thái hợp lệ!"}
-        if not self.dao.don_thuoc_store(order_id, store_id):
-            return {"status": False, "message": "Đơn hàng không thuộc gian hàng của bạn!"}
         ok = self.dao.cap_nhat_trang_thai(order_id, trang_thai_moi)
         if ok:
             return {"status": True, "message": f"Đã chuyển đơn hàng sang: {trang_thai_moi}"}

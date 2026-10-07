@@ -610,11 +610,14 @@ class MockDonHangSellerDao:
         self.thong_ke = thong_ke
         self.doanh_thu_thang = doanh_thu_thang
         self.goi_cap_nhat = []
+        self.goi_dao = []
 
     def lay_trang_thai(self, order_id):
+        self.goi_dao.append(('status', order_id))
         return self.trang_thai.get(order_id)
 
     def don_thuoc_store(self, order_id, store_id):
+        self.goi_dao.append(('ownership', order_id, store_id))
         if isinstance(self.thuoc_store, dict):
             return self.thuoc_store.get(order_id, False)
         return self.thuoc_store

@@ -721,7 +721,7 @@ async function openProfileModal() {
     </div>
     <div class="form-group">
       <label>Số CMND/CCCD</label>
-      <input type="text" id="editCmnd" value="${escHtml(cmnd === 'Chưa cập nhật CMND' ? '' : cmnd)}" placeholder="Nhập số CMND/CCCD..." oninput="kiemTraThayDoiProfile()">
+      <input type="text" id="editCmnd" value="${escHtml(cmnd === 'Chưa cập nhật CMND' ? '' : cmnd)}" placeholder="Nhập số CMND/CCCD..." inputmode="numeric" maxlength="12" pattern="[0-9]{9}|[0-9]{12}" oninput="kiemTraThayDoiProfile()">
     </div>
 
     <button class="btn-submit" id="btnSaveProfile" style="background: var(--green); width: 100%; margin-top: 10px;" onclick="updateUserProfile()" disabled>💾 Lưu cập nhật thông tin</button>
@@ -1050,6 +1050,9 @@ async function updateUserProfile() {
   }
   if(newAddress && newAddress.length > 255) {
     showToast("⚠️ Địa chỉ quá dài, tối đa 255 ký tự!"); return;
+  }
+  if(newCmnd && !/^(?:\d{9}|\d{12})$/.test(newCmnd)) {
+    showToast("⚠️ CMND/CCCD phải gồm đúng 9 hoặc 12 chữ số!"); return;
   }
 
   try {

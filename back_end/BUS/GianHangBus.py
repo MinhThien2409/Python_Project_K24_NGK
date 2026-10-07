@@ -1,6 +1,7 @@
 from back_end.DAO.GianHangDao import GianHangDao
 from back_end.DAO.UserDao import UserDao
 from back_end.Model.YeuCau import YeuCau
+from back_end.BUS.validation import validate_national_id
 
 class GianHangBus:
     def __init__(self):
@@ -36,15 +37,19 @@ class GianHangBus:
         if not str(user_info.get('FullName') or '').strip(): thieu.append('Họ tên')
         if not str(user_info.get('Phone') or '').strip(): thieu.append('Số điện thoại')
         if not str(user_info.get('Address') or '').strip(): thieu.append('Địa chỉ')
-        if not str(user_info.get('NationalId') or '').strip(): thieu.append('CMND/CCCD')
+        national_id = str(user_info.get('NationalId') or '').strip()
+        if not national_id: thieu.append('CMND/CCCD')
         if thieu:
             return {"status": False,
                     "message": f"Vui lòng cập nhật đầy đủ thông tin trước khi đăng ký! Còn thiếu: {', '.join(thieu)}"}
+        valid_nid, nid_error = validate_national_id(national_id, required=True)
+        if not valid_nid:
+            return {"status": False, "message": nid_error}
         req.ShopName = shop
         req.BusinessPhone = phone
         req.Category = category
         req.Description = description or None
-        req.NationalId = str(user_info.get('NationalId')).strip()
+        req.NationalId = national_id
         ok = self.dao.gui_yeu_cau_ban_hang(req)
         if ok is True or ok == "ok":
             return {"status": True, "message": "Đã gửi yêu cầu! Quản lý sẽ xét duyệt trong 24h."}

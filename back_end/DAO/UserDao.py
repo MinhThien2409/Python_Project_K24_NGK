@@ -11,9 +11,6 @@ liên kết 1-1, thay `SELECT @@IDENTITY` cũ — xem data-model.md mục 9).
 """
 
 import logging
-import hashlib
-import hmac
-import secrets
 
 from back_end.DBconnection import DBconnection
 from back_end.Model.User import User  # Hồ sơ
@@ -57,39 +54,8 @@ class UserDao:
             LEFT JOIN Roles r ON a.Role_Id = r.RoleId
             WHERE a.Username = ? AND a.Password = ?
         """
-        # Tương thích mật khẩu cũ dạng plaintext và mật khẩu reset đã hash.
         cursor.execute(sql, (username, password))
-        row = cursor.fetchone()
-        if row:
-            return row
-        cursor.execute(
-            """SELECT u.UserId, u.FullName, a.Role_Id, u.Address, u.Phone, u.NationalId,
-                      a.Password, COALESCE(a.trang_thai, 'active') AS trang_thai,
-                      r.RoleName
-               FROM Users u
-               JOIN Accounts a ON a.UserId = u.UserId
-               LEFT JOIN Roles r ON a.Role_Id = r.RoleId
-               WHERE a.Username = ?""",
-            (username,)
-        )
-        candidate = cursor.fetchone()
-        if not candidate:
-            return None
-        stored = str(candidate.Password or candidate[6] or "")
-        if not stored.startswith("pbkdf2_sha256$"):
-            return None
-        parts = stored.split("$")
-        if len(parts) != 4:
-            return None
-        try:
-            iterations = int(parts[1])
-            salt = parts[2]
-            expected = parts[3]
-            actual = hashlib.pbkdf2_hmac("sha256", str(password).encode("utf-8"),
-                                         salt.encode("utf-8"), iterations).hex()
-            return candidate if hmac.compare_digest(actual, expected) else None
-        except (TypeError, ValueError):
-            return None
+        return cursor.fetchone()
 
     def _nap_thong_tin_dang_nhap(self, row):
         """Nạp dòng DB thành User, hoặc cờ banned/role_none khi đặc biệt.
@@ -359,14 +325,9 @@ class UserDao:
         cursor = conn.cursor()
         try:
             password = str(mat_khau_moi or "")
-            salt = secrets.token_hex(16)
-            iterations = 210000
-            digest = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"),
-                                         salt.encode("utf-8"), iterations).hex()
-            password_hash = "pbkdf2_sha256$%s$%s$%s" % (iterations, salt, digest)
             cursor.execute(
                 "UPDATE Accounts SET Password=? WHERE UserId=?",
-                (password_hash, ma_user)
+                (password, ma_user)
             )
             conn.commit()
             return cursor.rowcount > 0

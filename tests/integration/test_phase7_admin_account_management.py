@@ -167,11 +167,12 @@ def test_live_manager_last_active_invariant_under_concurrent_admin_locks():
             conn.close()
 
 
-def test_password_reset_is_hashed_and_login_supports_pbkdf2_marker():
+def test_password_storage_is_plaintext_and_hashing_is_absent():
     src = (ROOT / "back_end/DAO/UserDao.py").read_text(encoding="utf-8")
-    assert "pbkdf2_sha256" in src
-    assert "hashlib.pbkdf2_hmac" in src
-    assert "hmac.compare_digest" in src
+    assert "pbkdf2" not in src.lower()
+    assert "hashlib" not in src.lower()
+    assert "hmac" not in src.lower()
+    assert 'UPDATE Accounts SET Password=? WHERE UserId=?' in src
 
 
 def test_admin_endpoints_route_to_new_policy():

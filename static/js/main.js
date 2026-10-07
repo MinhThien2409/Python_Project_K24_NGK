@@ -121,6 +121,8 @@ function renderAdminMenuTheoVaiTro() {
   const maQuyen = currentUser ? (currentUser.ma_nhom_quyen || currentUser.Role_id) : 4;
   const laAdmin = maQuyen === 1 || currentUser?.role === 'Admin';
   const laQuanLy = maQuyen === 2 || currentUser?.role === 'Quản lý';
+  const btnThem = document.getElementById('btnThemQuanLy');
+if (btnThem) btnThem.style.display = laAdmin ? '' : 'none';
 
   const menu = {
     categories: laQuanLy,          // Quản lý: Quản lý danh mục
@@ -4649,6 +4651,9 @@ renderSellerOverview = async function () {
       + String(d.hoan_thanh || 0) + ' hoàn thành · ' + String(d.da_huy || 0) + ' đã hủy';
     cardDoanhThu.appendChild(dDon);
     container.appendChild(cardDoanhThu);
+        const cardNam = taoCardDoanhThuNam();
+    container.appendChild(cardNam);
+    await renderDoanhThuSellerTheoNam(new Date().getFullYear());
         const cardTopSp = document.createElement('div');
     cardTopSp.className = 'admin-card';
     if ((d.top_san_pham || []).length) {
@@ -4881,4 +4886,136 @@ function resetUserHome(e) {
   clearUserFilters();
   loadProducts();
   window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+function openAddQuanLyModal() {
+  ['qlTen','qlUsername','qlPass','qlPhone','qlAddress']
+    .forEach(id => { document.getElementById(id).value = ''; });
+  document.getElementById('addQuanLyModal').classList.add('show');
+}
+
+async function handleThemQuanLy() {
+  const ten_user    = document.getElementById('qlTen').value.trim();
+  const tendangnhap = document.getElementById('qlUsername').value.trim();
+  const mat_khau    = document.getElementById('qlPass').value;
+  const sdt         = document.getElementById('qlPhone').value.trim();
+  const dia_chi     = document.getElementById('qlAddress').value.trim();
+
+  if (!ten_user || !tendangnhap || !mat_khau) {
+    showToast('⚠️ Vui lòng điền đầy đủ Tên, Tên đăng nhập và Mật khẩu!'); return;
+  }
+  if (mat_khau.length < 6) {
+    showToast('⚠️ Mật khẩu phải có ít nhất 6 ký tự!'); return;
+  }
+  try {
+    const res = await fetch('/api/quan-ly', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ten_user, tendangnhap, mat_khau, sdt, dia_chi })
+    });
+    const result = await res.json();
+    showToast((result.status ? '✅ ' : '❌ ') + result.message);
+    if (result.status) {
+      closeModal('addQuanLyModal');
+      renderAdminUsers();
+    }
+  } catch (e) {
+    showToast('❌ Lỗi kết nối!');
+  }
+}
+// ============================================================
+// SELLER — DOANH THU THEO NĂM (gọi /api/seller/thong-ke/doanh-thu-theo-thang)
+// ============================================================
+function taoCardDoanhThuNam() {
+  const card = document.createElement('div');
+  card.className = 'admin-card';
+
+  const namHienTai = new Date().getFullYear();
+  let opts = '';
+  for (let y = namHienTai; y >= namHienTai - 5; y--) {
+    opts += `<option value="${y}">${y}</option>`;
+  }
+
+  card.innerHTML = `
+    <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
+      <h3 style="margin:0;">📊 Doanh thu theo năm</h3>
+      <div style="display:flex; align-items:center; gap:8px;">
+        <label for="sellerRevYear" style="font-size:13px;">Năm</label>
+        <select id="sellerRevYear"
+          style="padding:6px 10px; border:1px solid var(--border); border-radius:6px; font-family:inherit;">
+          ${opts}
+        </select>
+      </div>
+    </div>
+    <div id="sellerRevSummary" style="margin:12px 0; font-size:14px;"></div>
+    <div id="sellerRevChart"
+         style="display:flex; align-items:flex-end; gap:8px; height:180px; padding-bottom:24px; position:relative;"></div>
+  `;
+
+  card.querySelector('#sellerRevYear')
+      .addEventListener('change', e => renderDoanhThuSellerTheoNam(e.target.value));
+  return card;
+}
+
+async function renderDoanhThuSellerTheoNam(year) {
+  const chart   = document.getElementById('sellerRevChart');
+  const summary = document.getElementById('sellerRevSummary');
+  if (!chart || !summary) return;
+
+  const fmt = n => Number(n || 0).toLocaleString('vi-VN') + 'đ';
+  summary.textContent = '⏳ Đang tải...';
+  chart.innerHTML = '';
+
+  try {
+    const res    = await fetch('/api/seller/thong-ke/doanh-thu-theo-thang?year=' + encodeURIComponent(year));
+    const result = await res.json();
+
+    if (!result.status) {
+      summary.textContent = '❌ ' + (result.message || 'Không tải được doanh thu!');
+      return;
+    }
+
+    // Chuẩn hoá về đúng 12 tháng (tháng thiếu = 0)
+    const thang = Array.from({ length: 12 }, () => ({ doanh_thu: 0, so_don: 0 }));
+    (result.data || []).forEach((d, i) => {
+      const idx = (Number(d.thang ?? d.month) || (i + 1)) - 1;
+      if (idx >= 0 && idx < 12) {
+        thang[idx] = { doanh_thu: Number(d.doanh_thu) || 0, so_don: Number(d.so_don) || 0 };
+      }
+    });
+
+    const tongNam  = thang.reduce((s, m) => s + m.doanh_thu, 0);
+    const tongDon  = thang.reduce((s, m) => s + m.so_don, 0);
+    const maxRev   = Math.max(...thang.map(m => m.doanh_thu), 1);
+
+    summary.innerHTML =
+      `Tổng doanh thu năm <b>${escHtml(String(year))}</b>: ` +
+      `<b style="color:var(--red); font-size:16px;">${fmt(tongNam)}</b>` +
+      ` <span style="color:var(--text-muted);">(${tongDon} đơn)</span>`;
+
+    if (tongNam === 0) {
+      chart.innerHTML = `<div style="width:100%; text-align:center; align-self:center; color:var(--text-muted);">
+        Chưa có doanh thu trong năm ${escHtml(String(year))}</div>`;
+      return;
+    }
+
+    chart.innerHTML = thang.map((m, i) => {
+      const pct = Math.round(m.doanh_thu / maxRev * 100);
+      const co  = m.doanh_thu > 0;
+      return `
+        <div style="flex:1; display:flex; flex-direction:column; align-items:center;
+                    gap:4px; height:100%; justify-content:flex-end;">
+          ${co ? `<div style="font-size:9px; color:var(--text-muted); font-weight:600;">
+                    ${(m.doanh_thu / 1e6).toFixed(m.doanh_thu >= 1e7 ? 0 : 1)}tr</div>` : ''}
+          <div style="width:100%; background:${co ? 'var(--primary)' : 'var(--border)'};
+                      border-radius:4px 4px 0 0; height:${Math.max(pct, 3)}%;"
+               title="Tháng ${i + 1}: ${fmt(m.doanh_thu)} (${m.so_don} đơn)"></div>
+          <div style="font-size:10px; color:var(--text-muted); font-weight:600;
+                      position:absolute; bottom:0;">T${i + 1}</div>
+        </div>`;
+    }).join('');
+
+  } catch (e) {
+    summary.textContent = '❌ Lỗi kết nối!';
+    console.error('Lỗi renderDoanhThuSellerTheoNam:', e);
+  }
 }

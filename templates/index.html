@@ -246,6 +246,10 @@
         <div class="admin-card">
           <div style="display:flex; justify-content:space-between; align-items:center;">
             <h3>Quản lý tài khoản người dùng</h3>
+            <button class="checkout-btn" id="btnThemQuanLy"
+          style="padding:6px 12px; display:none;"
+          onclick="openAddQuanLyModal()">+ Thêm Quản lý</button>
+
           </div>
           <div class="filter-bar" style="margin-top:12px;">
             <div class="filter-item">
@@ -952,6 +956,23 @@
     </div>
     <button onclick="moModalCapLaiMatKhau()" class="btn-submit" style="width:100%; margin-bottom:8px;">🔑 Cấp lại mật khẩu</button>
     <button onclick="handleSaveUserRole()" class="btn-submit" style="width:100%;">Lưu thay đổi</button>
+  </div>
+</div>
+<div class="modal-overlay" id="addQuanLyModal">
+  <div class="modal-box" style="width:400px;">
+    <button class="modal-close" onclick="closeModal('addQuanLyModal')">✕</button>
+    <h3 style="margin-bottom:14px;">➕ Thêm tài khoản Quản lý</h3>
+    <div class="form-group"><label>Họ và tên *</label>
+      <input type="text" id="qlTen" maxlength="100"></div>
+    <div class="form-group"><label>Tên đăng nhập *</label>
+      <input type="text" id="qlUsername" maxlength="50"></div>
+    <div class="form-group"><label>Mật khẩu * (từ 6 ký tự)</label>
+      <input type="password" id="qlPass"></div>
+    <div class="form-group"><label>Số điện thoại</label>
+      <input type="text" id="qlPhone" maxlength="20"></div>
+    <div class="form-group"><label>Địa chỉ</label>
+      <input type="text" id="qlAddress" maxlength="255"></div>
+    <button class="btn-submit" style="width:100%;" onclick="handleThemQuanLy()">Tạo tài khoản</button>
   </div>
 </div>
 

@@ -2553,28 +2553,22 @@ async function xuLyThemVaoGio(productId, quantity, unitPrice, force) {
 async function handlePlaceOrder(e) {
   e.preventDefault();
 
-  const receiverName    = document.getElementById('chkName').value.trim();
-  const receiverPhone   = document.getElementById('chkPhone').value.trim();
-  const receiverAddress = document.getElementById('chkAddress').value.trim();
-  const paymentMethod   = document.getElementById('chkPayment').value;
+ const street       = document.getElementById('chkAddress').value.trim();
+const provinceName = getSelectedProvinceName();
+const wardName     = getSelectedWardName();
+const receiverName  = document.getElementById('chkName').value.trim();
+const receiverPhone = document.getElementById('chkPhone').value.trim();
+const paymentMethod = document.getElementById('chkPayment').value;
 
-  if (!receiverName || !receiverPhone || !receiverAddress) {
-    showToast('⚠️ Vui lòng điền đầy đủ thông tin giao hàng!');
-    return;
-  }
-  // Phase 1: validate SĐT người nhận ngay ở FE (backend vẫn là nguồn chân lý)
-  if (!/^0\d{9}$/.test(receiverPhone)) {
-    showToast('⚠️ Số điện thoại người nhận không hợp lệ! (VD: 0912345678)');
-    return;
-  }
-  if (receiverName.length > 100) {
-    showToast('⚠️ Tên người nhận quá dài, tối đa 100 ký tự!');
-    return;
-  }
-  if (receiverAddress.length > 500) {
-    showToast('⚠️ Địa chỉ giao hàng quá dài, tối đa 500 ký tự!');
-    return;
-  }
+if (!receiverName || !receiverPhone || !street) {
+  showToast('⚠️ Vui lòng điền đầy đủ thông tin giao hàng!');
+  return;
+}
+if (!provinceName || !wardName) {
+  showToast('⚠️ Vui lòng chọn Tỉnh/Thành phố và Phường/Xã!');
+  return;
+}
+const receiverAddress = `${street}, ${wardName}, ${provinceName}`;
   // Phase 2: chặn phương thức chưa được backend hỗ trợ.
   if (!CAC_PHUONG_THUC_HO_TRO.includes(paymentMethod)) {
     showToast('⚠️ Phương thức thanh toán này hiện chưa được hỗ trợ!');
@@ -2967,10 +2961,77 @@ function openCart() {
 function closeCart() {
     document.getElementById('cartOverlay').classList.remove('show');
 }
-function getShippingFee(buyerCity) {
-  return buyerCity === SELLER_CITY ? 25000 : 40000;
+function laNoiThanh(tenTinh) {
+  return /hồ chí minh/i.test(tenTinh || '');
+}
+function getShippingFee(tenTinh) {
+  if (!tenTinh) return 25000;
+  return laNoiThanh(tenTinh) ? 25000 : 40000;
 }
 
+const PROVINCE_API = 'https://provinces.open-api.vn/api/v2';
+let provincesCache = null;
+const wardsCache = {};
+
+async function loadProvinces() {
+  const sel = document.getElementById('chkBuyerCity');
+  if (!sel) return;
+  if (!provincesCache) {
+    try {
+      const res = await fetch(PROVINCE_API + '/p/');
+      provincesCache = await res.json();
+    } catch (e) {
+      showToast('❌ Không tải được danh sách tỉnh/thành!');
+      return;
+    }
+  }
+  sel.innerHTML = '<option value="">-- Chọn tỉnh/thành phố --</option>' +
+    provincesCache.map(p =>
+      `<option value="${p.code}" data-name="${escHtml(p.name)}">${escHtml(p.name)}</option>`
+    ).join('');
+  resetWardSelect();
+}
+
+function resetWardSelect() {
+  const w = document.getElementById('chkWard');
+  if (!w) return;
+  w.innerHTML = '<option value="">-- Chọn phường/xã --</option>';
+  w.disabled = true;
+}
+
+async function onProvinceChange() {
+  const code = document.getElementById('chkBuyerCity').value;
+  resetWardSelect();
+  recalcOrderTotal();               // đổi tỉnh → tính lại phí ship
+  if (!code) return;
+
+  const w = document.getElementById('chkWard');
+  w.innerHTML = '<option value="">⏳ Đang tải...</option>';
+  try {
+    if (!wardsCache[code]) {
+      const res = await fetch(`${PROVINCE_API}/p/${code}?depth=2`);
+      const data = await res.json();
+      wardsCache[code] = data.wards || [];
+    }
+    w.innerHTML = '<option value="">-- Chọn phường/xã --</option>' +
+      wardsCache[code].map(x =>
+        `<option value="${x.code}" data-name="${escHtml(x.name)}">${escHtml(x.name)}</option>`
+      ).join('');
+    w.disabled = false;
+  } catch (e) {
+    resetWardSelect();
+    showToast('❌ Không tải được danh sách phường/xã!');
+  }
+}
+
+function getSelectedProvinceName() {
+  const s = document.getElementById('chkBuyerCity');
+  return s?.selectedOptions[0]?.dataset.name || '';
+}
+function getSelectedWardName() {
+  const s = document.getElementById('chkWard');
+  return s?.selectedOptions[0]?.dataset.name || '';
+}
 function getSoShopTrongGio() {
   // Phase 2: phí ship tính theo shop của các món ĐƯỢC CHỌN.
   const cacStoreId = getSelectedCartItems()
@@ -2979,18 +3040,15 @@ function getSoShopTrongGio() {
 }
 
 function recalcOrderTotal() {
-  const buyerCity = document.getElementById('chkBuyerCity').value;
-  const phiCoBan = getShippingFee(buyerCity);
-  const soShop = Math.max(1, getSoShopTrongGio());
+  const tenTinh  = getSelectedProvinceName();
+  const phiCoBan = getShippingFee(tenTinh);
+  const soShop   = Math.max(1, getSoShopTrongGio());
   currentShippingFee = phiCoBan * soShop;
 
-  const isSame = buyerCity === SELLER_CITY;
-  document.getElementById('shippingNote').textContent = isSame
-    ? 'Phí vận chuyển nội thành:'
-    : 'Phí vận chuyển liên tỉnh:';
+  document.getElementById('shippingNote').textContent =
+    (!tenTinh || laNoiThanh(tenTinh)) ? 'Phí vận chuyển nội thành:' : 'Phí vận chuyển liên tỉnh:';
   document.getElementById('shippingFeeDisplay').textContent =
     currentShippingFee.toLocaleString('vi-VN') + 'đ';
-
   updateCheckoutSummary();
 }
 
@@ -3046,9 +3104,10 @@ function openCheckoutModal() {
   }
 
   // Điền thông tin mặc định từ user
-  document.getElementById('chkName').value    = currentUser.ten_user || '';
-  document.getElementById('chkPhone').value   = currentUser.sdt || '';
-  document.getElementById('chkAddress').value = currentUser.dia_chi || '';
+document.getElementById('chkName').value    = currentUser.ten_user || '';
+document.getElementById('chkPhone').value   = currentUser.sdt || '';
+document.getElementById('chkAddress').value = '';
+loadProvinces();
 
   // Tóm tắt giỏ hàng — Phase 2: nhóm món ĐƯỢC CHỌN theo từng shop.
   const summaryEl = document.getElementById('checkoutCartSummary');
@@ -3216,6 +3275,12 @@ function renderOrderHistoryList(orders) {
         </div>
 
         <!-- Nút hành động nếu có thể hủy -->
+        ${o.Status === 'Shipping' ? `
+  <button onclick="xacNhanDaNhanHang(${o.OrderId})"
+    style="background:var(--green); border:none; color:white; border-radius:6px;
+           padding:5px 14px; cursor:pointer; font-family:inherit; font-size:13px; margin-right:8px;">
+    ✅ Đã nhận hàng
+  </button>` : ''}
         ${o.Status === 'Pending' ? `
           <div style="padding:8px 14px; border-top:1px solid var(--border); text-align:right; display:flex; gap:8px; justify-content:flex-end;">
             <button onclick="hienThiHoaDon(${o.OrderId})"
@@ -3738,11 +3803,21 @@ document.getElementById('priceMax').dataset.rawValue = '';
   document.getElementById('chkOnSale').checked = false;
   document.getElementById('searchCategorySelect').value = 'all';
   document.getElementById('sortSelect').value = 'default';
+    const radioTatCa = document.querySelector('input[name="priceRange"]');
+  if (radioTatCa) radioTatCa.checked = true;
   applyUserFilters();
 }
 // ── DEBOUNCE: tránh gọi filter liên tục khi đang gõ ─────────
 let priceDebounceTimer = null;
-
+function chonKhoangGia(min, max) {
+  const elMin = document.getElementById('priceMin');
+  const elMax = document.getElementById('priceMax');
+  elMin.value = min;
+  elMin.dataset.rawValue = String(min);
+  elMax.value = max;
+  elMax.dataset.rawValue = String(max);   // '' = không giới hạn trên
+  applyUserFilters();
+}
 function onPriceInput() {
   clearTimeout(priceDebounceTimer);
   priceDebounceTimer = setTimeout(() => {
@@ -4441,7 +4516,7 @@ renderSellerOrders = async function () {
       Pending: 'Chờ duyệt', Confirmed: 'Đã xác nhận', Shipping: 'Đang giao',
       Completed: 'Hoàn thành', Cancelled: 'Đã hủy'
     };
-    const nutTiepTheo = { Pending: 'Confirmed', Confirmed: 'Shipping', Shipping: 'Completed' };
+    const nutTiepTheo = { Pending: 'Confirmed', Confirmed: 'Shipping' };
     const nhanNut = { Confirmed: '✅ Xác nhận', Shipping: '🚚 Giao hàng', Completed: '🏁 Hoàn thành' };
     // 015 FR-028: pill trạng thái dùng class badge-status sẵn có
     const clsTrangThai = {
@@ -4510,14 +4585,14 @@ renderSellerOrders = async function () {
         btn.onclick = () => sellerCapNhatDon(o.OrderId, tiep);
         tdCn.appendChild(btn);
       }
-      // Phase 3: seller chỉ được hủy đơn đang Chờ duyệt (backend từ chối còn lại)
-    if (['Pending', 'Confirmed', 'Shipping'].includes(o.Status)) {
-    const btnHuy = document.createElement('button');
-     btnHuy.className = 'admin-action-btn btn-cancel';
-   btnHuy.textContent = '✖ Hủy';
-   btnHuy.onclick = () => sellerCapNhatDon(o.OrderId, 'Cancelled');
-    tdCn.appendChild(btnHuy);
-   }
+
+      if (o.Status === 'Pending') {
+        const btnHuy = document.createElement('button');
+        btnHuy.className = 'admin-action-btn btn-cancel';
+        btnHuy.textContent = '✖ Hủy';
+        btnHuy.onclick = () => sellerCapNhatDon(o.OrderId, 'Cancelled');
+        tdCn.appendChild(btnHuy);
+      }
       if (!tdCn.childNodes.length) tdCn.textContent = '—';
       tr.appendChild(tdCn);
       tbody.appendChild(tr);
@@ -5076,5 +5151,17 @@ async function renderDoanhThuSellerTheoNam(year) {
   } catch (e) {
     summary.textContent = '❌ Lỗi kết nối!';
     console.error('Lỗi renderDoanhThuSellerTheoNam:', e);
+  }
+}
+async function xacNhanDaNhanHang(orderId) {
+  if (!confirm(`Xác nhận bạn đã nhận được đơn #${orderId}?`)) return;
+  try {
+    const res    = await fetch(`/api/don-hang/${orderId}/xac-nhan-da-nhan`, { method: 'PUT' });
+    const result = await res.json();
+    showToast((result.status ? '✅ ' : '❌ ') + (result.message || ''));
+    await loadUserOrders();
+    await taiThongBao();
+  } catch (e) {
+    showToast('❌ Lỗi kết nối!');
   }
 }

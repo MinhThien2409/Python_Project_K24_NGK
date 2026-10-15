@@ -90,16 +90,30 @@
             </div>
 
             <div class="filter-label" style="margin-top: 12px;">Khoảng giá</div>
-            <div class="price-range">
-                <!-- Tìm 2 dòng này và thay thế -->
-<input type="text" id="priceMin" placeholder="Từ"
-       oninput="onPriceInput()"
-       style="text-align:right;" />
-<span>—</span>
-<input type="text" id="priceMax" placeholder="Đến"
-       oninput="onPriceInput()"
-       style="text-align:right;" />
-            </div>
+           <div id="priceRangeList" style="display:flex; flex-direction:column; gap:4px;">
+             <!-- Khoảng giá -->
+  <label class="filter-option">
+    <input type="radio" name="priceRange" checked onchange="chonKhoangGia('', '')"> Tất cả
+  </label>
+  <label class="filter-option">
+    <input type="radio" name="priceRange" onchange="chonKhoangGia(0, 999999)"> Dưới 1 triệu
+  </label>
+  <label class="filter-option">
+    <input type="radio" name="priceRange" onchange="chonKhoangGia(1000000, 4999999)"> 1 triệu – 5 triệu
+  </label>
+  <label class="filter-option">
+    <input type="radio" name="priceRange" onchange="chonKhoangGia(5000000, 9999999)"> 5 triệu – 10 triệu
+  </label>
+  <label class="filter-option">
+    <input type="radio" name="priceRange" onchange="chonKhoangGia(10000000, 19999999)"> 10 triệu – 20 triệu
+  </label>
+  <label class="filter-option">
+    <input type="radio" name="priceRange" onchange="chonKhoangGia(20000000, '')"> Trên 20 triệu
+  </label>
+</div>
+<!-- Input ẩn để JS lọc giá vẫn đọc được -->
+<input type="hidden" id="priceMin">
+<input type="hidden" id="priceMax">
             <!-- Slider ẩn để code JS không bị lỗi -->
             <input type="range" id="priceSlider" min="0" max="100000000" step="100000" value="100000000" oninput="updatePriceSlider(this.value)" style="display:none;">
             <span id="priceSliderMax" style="display:none;"></span>
@@ -612,20 +626,28 @@
       <div class="form-group"><label>Số điện thoại liên hệ</label><input type="tel" id="chkPhone" required></div>
       <div class="form-group">
         <label>Địa chỉ giao hàng cụ thể</label>
-        <textarea id="chkAddress" rows="2" required></textarea>
+        <div class="form-group">
+  <label>Địa chỉ (số nhà, tên đường)</label>
+  <input type="text" id="chkAddress" required maxlength="200" placeholder="VD: 12 Nguyễn Huệ">
+</div>
+<div class="form-group">
+  <label>Tỉnh / Thành phố</label>
+  <select id="chkBuyerCity" onchange="onProvinceChange()" required
+          style="padding:10px; border:1px solid var(--border); border-radius:8px; width:100%; font-family:inherit;">
+    <option value="">-- Chọn tỉnh/thành phố --</option>
+  </select>
+</div>
+<div class="form-group">
+  <label>Phường / Xã</label>
+  <select id="chkWard" required disabled
+          style="padding:10px; border:1px solid var(--border); border-radius:8px; width:100%; font-family:inherit;">
+    <option value="">-- Chọn phường/xã --</option>
+  </select>
+</div>
+
       </div>
 
-      <!-- PHẦN TÍNH PHÍ SHIP MỚI -->
-      <div class="form-group">
-        <label>Thành phố / Tỉnh nhận hàng</label>
-        <select id="chkBuyerCity" onchange="recalcOrderTotal()" style="padding:10px; border:1px solid var(--border); border-radius:8px; width:100%; font-family:inherit;">
-          <option value="hcm">TP. Hồ Chí Minh</option>
-          <option value="hn">Hà Nội</option>
-          <option value="dn">Đà Nẵng</option>
-          <option value="ct">Cần Thơ</option>
-          <option value="other">Tỉnh / Thành phố khác</option>
-        </select>
-      </div>
+
       <div style="background:var(--bg); border-radius:8px; padding:10px 14px; margin-bottom:12px; font-size:13px; display:flex; align-items:center; gap:8px;">
         🚚
         <span id="shippingNote" style="color:#555;">Phí vận chuyển nội thành:</span>

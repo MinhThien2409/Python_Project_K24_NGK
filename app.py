@@ -580,6 +580,16 @@ def api_lay_don_hang_cua_toi(user_id):
                         "message": "Không thể thao tác trên tài khoản khác!",
                         "data": None}), 403
     return jsonify(don_hang_bus.lay_don_hang_cua_toi(user_id))
+@app.route('/api/don-hang/<int:order_id>/xac-nhan-da-nhan', methods=['PUT'])
+def api_customer_xac_nhan_da_nhan(order_id):
+    """Khách xác nhận đã nhận hàng: Shipping -> Completed."""
+    gate = user_bus.kiem_tra_nguoi_dung_hoat_dong(session.get('user_id'))
+    if not gate.get('status'):
+        return jsonify(gate), 403
+    ket_qua = don_hang_bus.xac_nhan_da_nhan_cua_customer(session.get('user_id'), order_id)
+    if not ket_qua.get('status') and "không có quyền" in ket_qua.get('message', ''):
+        return jsonify(ket_qua), 403
+    return jsonify(ket_qua)
 
 @app.route('/api/don-hang/<int:order_id>/huy', methods=['PUT'])
 def api_customer_huy_don(order_id):

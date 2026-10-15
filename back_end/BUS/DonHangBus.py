@@ -256,6 +256,57 @@ class DonHangBus:
         self._bao_huy_don(user_id, ma_don)
         return {"status": True,
                 "message": f"Đã hủy đơn hàng #{ma_don} thành công!"}
+    def xac_nhan_da_nhan_cua_customer(self, user_id, order_id):
+        """Khách xác nhận đã nhận hàng: chỉ đơn của mình và đang Shipping -> Completed."""
+        if not user_id:
+            return {"status": False, "message": "Lỗi xác thực người dùng"}
+        try:
+            ma_don = int(order_id)
+        except (TypeError, ValueError):
+            return {"status": False, "message": "Không tìm thấy đơn hàng!"}
+        chi_tiet = self.dao.lay_chi_tiet_don_hang(ma_don)
+        if not chi_tiet or not chi_tiet.get("don"):
+            return {"status": False, "message": "Không tìm thấy đơn hàng!"}
+        don = chi_tiet["don"]
+        try:
+            chu_don = int(don.get("UserId", 0))
+        except (TypeError, ValueError):
+            chu_don = 0
+        if chu_don != int(user_id):
+            return {"status": False,
+                    "message": "Bạn không có quyền xác nhận đơn hàng này!"}
+        hien_tai = don.get("Status")
+        if hien_tai != "Shipping":
+            return {"status": False,
+                    "message": self._loi_nhan_hang_theo_trang_thai(hien_tai)}
+        ok = self.dao.cap_nhat_trang_thai(ma_don, "Completed")
+        if not ok:
+            return {"status": False,
+                    "message": "Không thể xác nhận, vui lòng thử lại sau!"}
+        self._bao_da_nhan(user_id, ma_don)
+        return {"status": True,
+                "message": f"Đã xác nhận nhận hàng đơn #{ma_don}. Cảm ơn bạn!"}
+
+    def _loi_nhan_hang_theo_trang_thai(self, hien_tai):
+        """Lý do từ chối xác nhận nhận hàng theo trạng thái hiện tại."""
+        if hien_tai in ("Pending", "Confirmed"):
+            return "Đơn hàng chưa được giao, chưa thể xác nhận đã nhận!"
+        if hien_tai == "Completed":
+            return "Đơn hàng đã được xác nhận hoàn thành trước đó!"
+        if hien_tai == "Cancelled":
+            return "Đơn hàng đã bị hủy, không thể xác nhận nhận hàng!"
+        return "Chỉ xác nhận được đơn đang ở trạng thái Đang giao!"
+
+    def _bao_da_nhan(self, user_id, order_id):
+        """Lưu thông báo, lỗi thông báo không làm hỏng việc hoàn thành đơn."""
+        tao = getattr(self.dao, "tao_thong_bao", None)
+        if not callable(tao):
+            return
+        try:
+            tao(user_id, f"Bạn đã xác nhận nhận hàng đơn #{order_id}. Cảm ơn bạn đã mua sắm!",
+                order_id)
+        except Exception:
+            return
 
     def huy_don_do_khoa_seller(self, store_id):
         """System flow khi khóa Seller: chỉ hủy Pending/Confirmed/Shipping."""
@@ -414,6 +465,10 @@ class DonHangBus:
         if trang_thai_moi not in hop_le:
             return {"status": False, "message": "Trạng thái đơn hàng không hợp lệ!"}
         # T139: ownership must be checked before reading/validating Status.
+
+        if trang_thai_moi == "Completed":
+            return {"status": False,
+                    "message": "Chỉ khách hàng mới được xác nhận đã nhận hàng!"}
         if not self.dao.don_thuoc_store(order_id, store_id):
             return {"status": False, "message": "Đơn hàng không thuộc gian hàng của bạn!"}
         hien_tai = self.dao.lay_trang_thai(order_id)

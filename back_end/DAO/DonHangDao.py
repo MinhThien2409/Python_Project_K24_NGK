@@ -541,7 +541,7 @@ class DonHangDao:
             SELECT
                 COALESCE(SUM(CASE WHEN Status <> 'Cancelled' THEN TotalAmount ELSE 0 END), 0) AS doanh_thu,
                 COUNT(*) AS tong_don,
-                SUM(CASE WHEN Status='Pending'   THEN 1 ELSE 0 END) AS cho_duyet,
+                SUM(CASE WHEN o.Status IN ('Pending','Paid') THEN 1 ELSE 0 END) AS cho_duyet,
                 SUM(CASE WHEN Status='Shipping'  THEN 1 ELSE 0 END) AS dang_giao,
                 SUM(CASE WHEN Status='Completed' THEN 1 ELSE 0 END) AS hoan_thanh,
                 SUM(CASE WHEN Status='Cancelled' THEN 1 ELSE 0 END) AS da_huy
@@ -728,12 +728,12 @@ class DonHangDao:
             cursor.execute("""SELECT DISTINCT o.OrderId
                 FROM Orders o JOIN OrderItems oi ON oi.OrderId=o.OrderId
                 JOIN Products p ON p.ProductId=oi.ProductId
-                WHERE p.StoreId=%s AND o.Status IN ('Pending','Confirmed','Shipping')""", (store_id,))
+               WHERE p.StoreId=%s AND o.Status IN ('Pending','Paid','Confirmed','Shipping')""", (store_id,))
             order_ids = [int(r[0]) for r in cursor.fetchall()]
             for order_id in order_ids:
                 cursor.execute("SELECT Status,UserId FROM Orders WHERE OrderId=%s FOR UPDATE", (order_id,))
                 row = cursor.fetchone()
-                if not row or row[0] not in ('Pending','Confirmed','Shipping'):
+                if not row or row[0] not in ('Pending', 'Paid', 'Confirmed', 'Shipping'):
                     continue
                 old_status, user_id = row[0], int(row[1] or 0)
                 self._ghi_trang_thai_moi(cursor, order_id, 'Cancelled')
@@ -796,7 +796,7 @@ class DonHangDao:
                 COALESCE(SUM(CASE WHEN o.Status = 'Completed'
                     THEN oi.Quantity * oi.UnitPrice ELSE 0 END), 0) AS doanh_thu,
                 COUNT(DISTINCT o.OrderId) AS tong_don,
-                SUM(CASE WHEN o.Status = 'Pending' THEN 1 ELSE 0 END) AS cho_duyet,
+                SUM(CASE WHEN o.Status IN ('Pending','Paid') THEN 1 ELSE 0 END) AS cho_duyet,
                 SUM(CASE WHEN o.Status = 'Shipping' THEN 1 ELSE 0 END) AS dang_giao,
                 SUM(CASE WHEN o.Status = 'Completed' THEN 1 ELSE 0 END) AS hoan_thanh,
                 SUM(CASE WHEN o.Status = 'Cancelled' THEN 1 ELSE 0 END) AS da_huy
@@ -1077,6 +1077,33 @@ class DonHangDao:
             conn.rollback()
             logger.exception("Lỗi danh_dau_thong_bao_da_doc: %s", e)
             return False
+        finally:
+            cursor.close()
+            conn.close()
+
+    def huy_don_bank_het_han(self, so_gio=24):
+        """Hủy đơn Bank còn Pending quá hạn, hoàn kho, trả list để báo user."""
+        conn = DBconnection().get_connection()
+        if not conn:
+            return []
+        cursor = conn.cursor()
+        huy = []
+        try:
+            cursor.execute(
+                "SELECT OrderId, UserId FROM Orders "
+                "WHERE PaymentMethod='Bank' AND Status='Pending' "
+                "AND CreatedAt < (NOW() - INTERVAL %s HOUR) FOR UPDATE",
+                (int(so_gio),))
+            for oid, uid in cursor.fetchall():
+                self._ghi_trang_thai_moi(cursor, oid, 'Cancelled')
+                self._hoan_ton_kho(cursor, oid)
+                huy.append({"order_id": int(oid), "user_id": int(uid)})
+            conn.commit()
+            return huy
+        except Exception as e:
+            conn.rollback()
+            logger.exception("Lỗi huy_don_bank_het_han: %s", e)
+            return []
         finally:
             cursor.close()
             conn.close()

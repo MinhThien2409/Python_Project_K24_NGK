@@ -458,6 +458,7 @@
               <select id="soFilterStatus" onchange="renderSellerOrders()">
                 <option value="all">Tất cả</option>
                 <option value="Pending">Chờ duyệt</option>
+                <option value="Paid">Đã thanh toán</option>
                 <option value="Confirmed">Đã xác nhận</option>
                 <option value="Shipping">Đang giao</option>
                 <option value="Completed">Hoàn thành</option>
@@ -466,7 +467,7 @@
             </div>
           </div>
           <table>
-            <thead><tr><th>Mã đơn</th><th>Khách hàng</th><th>Sản phẩm</th><th>Tổng tiền</th><th>Trạng thái</th><th>Ngày đặt</th><th>Chi tiết</th><th>Thao tác</th></tr></thead>
+            <thead><tr><th>Mã đơn</th><th>Khách hàng</th><th>Sản phẩm</th><th>Tổng tiền</th><th>Thanh toán</th><th>Trạng thái</th><th>Ngày đặt</th><th>Chi tiết</th><th>Thao tác</th></tr></thead>
             <tbody id="tblSellerOrdersBody"></tbody>
           </table>
         </div>
@@ -665,10 +666,9 @@
       <div id="paymentUnsupportedNote" style="display:none; background:#FDECEA; border:1px solid #FFB8B8; padding:12px; border-radius:8px; font-size:12px; margin-bottom:14px;">
         ⚠️ Phương thức thanh toán này hiện chưa được hỗ trợ.
       </div>
-      <div id="bankDetailsBlock" style="display:none; background:#FFF8EC; border:1px solid #FFD4A8; padding:12px; border-radius:8px; font-size:12px; margin-bottom:14px; line-height:1.6;">
-        <strong>🏦 MB Bank:</strong> STK <b>0987654321999</b><br>
-        Nội dung CK: <span style="color:red; font-weight:bold;">POBBYPAY [Mã đơn hàng]</span>
-      </div>
+     <div id="bankDetailsBlock" style="display:none; background:#FFF8EC; border:1px solid #FFD4A8; padding:12px; border-radius:8px; font-size:12px; margin-bottom:14px; line-height:1.6;">
+  🏦 Sau khi bấm <b>Xác nhận Đặt hàng</b>, mã QR chuyển khoản (đúng số tiền và nội dung) sẽ hiện ra để bạn quét.
+</div>
       <div id="momoBlock" style="display:none; background:#FDECEA; border:1px solid #FFB8B8; padding:12px; border-radius:8px; font-size:12px; margin-bottom:14px;">
         📲 MoMo: <b>0987654321</b> – POBBY STORE
       </div>
@@ -713,6 +713,7 @@
       <select id="historyFilterStatus" onchange="filterOrderHistory()"
         style="padding:6px 10px; border-radius:6px; border:1px solid var(--border); font-family:inherit; font-size:13px; max-width:100%;">
         <option value="all">Tất cả</option>
+        <option value="Paid">Đã thanh toán</option>
         <option value="Pending">Chờ duyệt</option>
         <option value="Confirmed">Đã xác nhận</option>
         <option value="Shipping">Đang giao</option>

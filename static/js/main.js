@@ -742,8 +742,8 @@ async function openProfileModal() {
   `;
 
 
-let sellerVoucherEditingId = null;
-let sellerVoucherProducts = [];
+//let sellerVoucherEditingId = null;
+//let sellerVoucherProducts = [];
 
 function formatVoucherMoney(v) {
   return Number(v || 0).toLocaleString('vi-VN') + 'đ';
@@ -2663,7 +2663,7 @@ const receiverAddress = `${street}, ${wardName}, ${provinceName}`;
       const data = result.data || {};
       const orders = data.orders || [];
       if (orders.length > 0) {
-        hienThiHoaDonNhieuDon(orders);
+        hienThiHoaDonNhieuDon(orders, paymentMethod);
       } else if (Array.isArray(data.order_ids) && data.order_ids.length > 0) {
         hienThiHoaDon(data.order_ids[0]);
       }
@@ -2678,25 +2678,60 @@ const receiverAddress = `${street}, ${wardName}, ${provinceName}`;
 // ─── RENDER GIAO DIỆN GIỎ HÀNG ─────────────────────────────────────────────
 // ── 005 US3: hóa đơn sau thanh toán + mở lại từ lịch sử ──
 // ── 011 US2: hóa đơn NHIỀU đơn (tách theo shop) sau khi đặt hàng ──
-async function hienThiHoaDonNhieuDon(orders) {
+async function hienThiHoaDonNhieuDon(orders, paymentMethod) {
   const box = document.getElementById('invoiceContent');
   if (!box) return;
   const tongChung = orders.reduce((s, o) => s + (Number(o.total) || 0), 0);
+  const qr = paymentMethod === 'Bank'
+    ? taoKhoiQrNganHang(tongChung, orders.map(o => o.order_id)) : '';
   box.innerHTML = `
     <div style="font-size:13px; line-height:1.9;">
       <div style="font-weight:700; margin-bottom:6px;">Đơn hàng đã tách theo từng shop:</div>
       ${orders.map(o => `
         <div style="display:flex; justify-content:space-between; gap:8px;
                     border-bottom:1px solid var(--border); padding:6px 0;">
-          <span>🧾 Đơn #${o.order_id} — <b>${o.store_name || ('Shop #' + o.store_id)}</b></span>
+          <span>🧾 Đơn #${o.order_id} — <b>${escHtml(o.store_name || ('Shop #' + o.store_id))}</b></span>
           <span style="font-weight:600;">${Number(o.total || 0).toLocaleString('vi-VN')}đ</span>
         </div>`).join('')}
       <div style="display:flex; justify-content:space-between; font-weight:bold; font-size:15px; margin-top:10px;">
         <span>Tổng cộng (${orders.length} đơn):</span>
         <span style="color:var(--red);">${tongChung.toLocaleString('vi-VN')}đ</span>
       </div>
-    </div>`;
+    </div>
+    ${qr}`;
   document.getElementById('invoiceModal').classList.add('show');
+}
+// Đổi thành tài khoản thật của bạn. bankId xem tại https://api.vietqr.io/v2/banks (cột "code")
+const BANK_CONFIG = {
+  bankId: 'MB',
+  accountNo: '0523067705',
+  accountName: 'Tran Ngoc Minh Thien',
+  prefix: 'POBBY'
+};
+
+function taoKhoiQrNganHang(soTien, orderIds) {
+  const tien = Math.round(Number(soTien) || 0);
+  const noiDung = `${BANK_CONFIG.prefix} ${orderIds.join(' ')}`;
+  const url = `https://img.vietqr.io/image/${BANK_CONFIG.bankId}-${BANK_CONFIG.accountNo}-compact2.png`
+    + `?amount=${tien}`
+    + `&addInfo=${encodeURIComponent(noiDung)}`
+    + `&accountName=${encodeURIComponent(BANK_CONFIG.accountName)}`;
+  return `
+    <div style="margin-top:14px; padding:12px; border:1px dashed var(--border);
+                border-radius:10px; text-align:center;">
+      <div style="font-weight:700; margin-bottom:8px;">📲 Quét mã để chuyển khoản</div>
+      <img src="${url}" alt="QR chuyển khoản" style="max-width:260px; width:100%;">
+      <div style="font-size:12px; line-height:1.7; margin-top:8px; text-align:left;">
+        Ngân hàng: <b>${escHtml(BANK_CONFIG.bankId)}</b><br>
+        Số tài khoản: <b>${escHtml(BANK_CONFIG.accountNo)}</b><br>
+        Chủ tài khoản: <b>${escHtml(BANK_CONFIG.accountName)}</b><br>
+        Số tiền: <b style="color:var(--red);">${tien.toLocaleString('vi-VN')}đ</b><br>
+        Nội dung: <b style="color:var(--red);">${escHtml(noiDung)}</b>
+      </div>
+      <div style="font-size:11px; color:var(--text-muted); margin-top:6px;">
+        Vui lòng giữ nguyên nội dung để shop đối soát. Đơn sẽ được xác nhận sau khi nhận được tiền.
+      </div>
+    </div>`;
 }
 
 async function hienThiHoaDon(orderId) {
@@ -2728,7 +2763,11 @@ async function hienThiHoaDon(orderId) {
           <div style="display:flex; justify-content:space-between;"><span>Tạm tính:</span><span>${Number(d.SubTotal || 0).toLocaleString('vi-VN')}đ</span></div>
           <div style="display:flex; justify-content:space-between;"><span>Phí ship:</span><span>${Number(d.ShippingFee || 0).toLocaleString('vi-VN')}đ</span></div>
           <div style="display:flex; justify-content:space-between;"><span>Giảm giá:</span><span>-${Number(d.DiscountAmount || 0).toLocaleString('vi-VN')}đ</span></div>
-          <div style="display:flex; justify-content:space-between; font-weight:bold; font-size:15px; margin-top:6px;"><span>Tổng cộng:</span><span style="color:var(--red);">${Number(d.TotalAmount || 0).toLocaleString('vi-VN')}đ</span></div>
+          
+                   <div style="display:flex; justify-content:space-between; font-weight:bold; font-size:15px; margin-top:6px;"><span>Tổng cộng:</span><span style="color:var(--red);">${Number(d.TotalAmount || 0).toLocaleString('vi-VN')}đ</span></div>
+          ${d.PaymentMethod === 'Bank' && d.Status === 'Pending'
+          ? taoKhoiQrNganHang(d.TotalAmount, [d.OrderId]) : ''}
+        
         </div>`;
       document.getElementById('invoiceModal').classList.add('show');
     }
@@ -3282,6 +3321,7 @@ await taiTinhCacShop();
 let allUserOrders = []; // Cache đơn hàng của user
 
 const ORDER_STATUS_CONFIG = {
+    'Paid'     : { label: 'Đã thanh toán', cls: 'status-confirmed', icon: '💰' },
   'Pending'  : { label: 'Chờ duyệt',   cls: 'status-pending',   icon: '🕐' },
   'Confirmed': { label: 'Đã xác nhận', cls: 'status-confirmed', icon: '✅' },
   'Shipping' : { label: 'Đang giao',   cls: 'status-shipping',  icon: '🚚' },
@@ -3292,7 +3332,7 @@ const ORDER_STATUS_CONFIG = {
 // Phase 3: nhãn phương thức thanh toán hiển thị trong lịch sử đơn
 const PAYMENT_LABEL = {
   COD : 'Thanh toán khi nhận hàng (COD)',
-  BANK: 'Chuyển khoản ngân hàng',
+  Bank: 'Chuyển khoản ngân hàng',
 };
 
 // Mở modal lịch sử đơn hàng
@@ -4627,7 +4667,7 @@ renderSellerOrders = async function () {
     if (!result.status) {
       const tr = document.createElement('tr');
       const td = document.createElement('td');
-      td.colSpan = 8;
+      td.colSpan = 9;
       td.style.textAlign = 'center';
       td.textContent = result.message || 'Không tải được đơn hàng!';
       tr.appendChild(td);
@@ -4637,7 +4677,7 @@ renderSellerOrders = async function () {
     if (!result.data.length) {
       const tr = document.createElement('tr');
       const td = document.createElement('td');
-      td.colSpan = 8;
+      td.colSpan = 9;
       td.style.textAlign = 'center';
       td.textContent = 'Chưa có đơn hàng nào cho gian hàng này';
       tr.appendChild(td);
@@ -4658,19 +4698,23 @@ renderSellerOrders = async function () {
       tbody.appendChild(tr);
       return;
     }
-    const nhanTrangThai = {
-      Pending: 'Chờ duyệt', Confirmed: 'Đã xác nhận', Shipping: 'Đang giao',
-      Completed: 'Hoàn thành', Cancelled: 'Đã hủy'
-    };
-    const nutTiepTheo = { Pending: 'Confirmed', Confirmed: 'Shipping' };
-    const nhanNut = { Confirmed: '✅ Xác nhận', Shipping: '🚚 Giao hàng', Completed: '🏁 Hoàn thành' };
-    // 015 FR-028: pill trạng thái dùng class badge-status sẵn có
-    const clsTrangThai = {
-      Pending: 'status-pending', Confirmed: 'status-confirmed', Shipping: 'status-shipping',
-      Completed: 'status-done', Cancelled: 'status-cancelled'
-    };
+   const nhanTrangThai = {
+  Pending: 'Chờ duyệt', Paid: 'Đã thanh toán', Confirmed: 'Đã xác nhận', Shipping: 'Đang giao',
+  Completed: 'Hoàn thành', Cancelled: 'Đã hủy'
+};
+const nhanNut = { Paid: '💰 Đã nhận tiền', Confirmed: '✅ Xác nhận', Shipping: '🚚 Giao hàng' };
+const clsTrangThai = {
+  Pending: 'status-pending', Paid: 'status-confirmed', Confirmed: 'status-confirmed',
+  Shipping: 'status-shipping', Completed: 'status-done', Cancelled: 'status-cancelled'
+};
     listLoc.forEach((o) => {
       const tr = document.createElement('tr');
+      const laBank = o.PaymentMethod === 'Bank';
+      const nutTiepTheo = {
+        Pending: laBank ? 'Paid' : 'Confirmed',
+        Paid: 'Confirmed',
+        Confirmed: 'Shipping'
+      };
       const tdId = document.createElement('td');
       tdId.style.fontWeight = '700';
       tdId.textContent = '#' + o.OrderId;
@@ -4705,6 +4749,12 @@ renderSellerOrders = async function () {
       tdTien.style.fontWeight = '700';
       tdTien.textContent = Number(o.TotalAmount || 0).toLocaleString('vi-VN') + 'đ';
       tr.appendChild(tdTien);
+            const tdPay = document.createElement('td');
+      const pillPay = document.createElement('span');
+      pillPay.className = 'badge-status ' + (laBank ? 'status-confirmed' : 'status-pending');
+      pillPay.textContent = laBank ? '🏦 Chuyển khoản' : '💵 COD';
+      tdPay.appendChild(pillPay);
+      tr.appendChild(tdPay);
       const tdTt = document.createElement('td');   // pill trạng thái
       const pillTt = document.createElement('span');
       pillTt.className = 'badge-status ' + (clsTrangThai[o.Status] || 'status-pending');
@@ -4772,8 +4822,8 @@ function showChiTietDonHang(o) {
   if (!content) return;
   content.innerHTML = '';
   const fmtTien = (n) => Number(n || 0).toLocaleString('vi-VN') + 'đ';
-  const nhanTT = { Pending: 'Chờ duyệt', Confirmed: 'Đã xác nhận', Shipping: 'Đang giao',
-                   Completed: 'Hoàn thành', Cancelled: 'Đã hủy' };
+ const nhanTT = { Pending: 'Chờ duyệt', Paid: 'Đã thanh toán', Confirmed: 'Đã xác nhận', Shipping: 'Đang giao',
+                 Completed: 'Hoàn thành', Cancelled: 'Đã hủy' };
   const hang = (nhan, giaTri) => {
     const dong = document.createElement('div');
     dong.style.cssText = 'display:flex;justify-content:space-between;gap:16px;'
@@ -4794,7 +4844,7 @@ function showChiTietDonHang(o) {
   hang('Người nhận', String(o.ReceiverName || '—'));
   hang('SĐT', String(o.ReceiverPhone || '—'));
   hang('Địa chỉ giao', String(o.ShippingAddress || '—'));
-  hang('Thanh toán', String(o.PaymentMethod || '—'));
+hang('Thanh toán', o.PaymentMethod === 'Bank' ? 'Chuyển khoản ngân hàng' : 'COD');
   const tieuDeSp = document.createElement('div');
   tieuDeSp.textContent = 'Mặt hàng trong đơn (của shop bạn)';
   tieuDeSp.style.cssText = 'font-weight:700;font-size:13px;color:var(--text-muted);padding:8px 0;';

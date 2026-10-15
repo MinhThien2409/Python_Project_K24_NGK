@@ -1,4 +1,5 @@
 # app.py
+import threading, time
 
 import os
 from datetime import datetime
@@ -518,38 +519,38 @@ def api_dat_hang():
         return int(so)
 
     voucher_code = str(data.get('voucherCode') or data.get('VoucherCode') or '').strip()
-    # Client subtotal/discount/total are intentionally ignored. Product prices and voucher
-    # calculation are authoritative in DonHangBus/DonHangDao.
-    shipping_fee = _so(data.get('ShippingFee'), 25000)
-    if shipping_fee is None or shipping_fee < 0:
-        return jsonify({"status": False, "message": "Phí vận chuyển không hợp lệ!", "data": None}), 200
+    # Giá, voucher và phí ship đều do server quyết định (DonHangBus/DonHangDao).
+    # Mọi subtotal/discount/total/ShippingFee client gửi lên đều bị bỏ qua.
     don_hang_moi = DonHang(
         UserId=session.get('user_id'),
         ReceiverName=str(data.get('ReceiverName') or '').strip(),
         ReceiverPhone=str(data.get('ReceiverPhone') or '').strip(),
         ShippingAddress=str(data.get('ShippingAddress') or '').strip(),
         PaymentMethod=str(data.get('PaymentMethod') or 'COD').strip(),
-        ShippingFee=shipping_fee,
+        ShippingFee=0,
         VoucherCode=voucher_code or None
     )
-    items=data.get('Items')
-    if not isinstance(items,list):
-        items=[]
+    items = data.get('Items')
+    if not isinstance(items, list):
+        items = []
     for item in items:
-        if not isinstance(item,dict):
-            return jsonify({"status":False,"message":"Thông tin đơn hàng không hợp lệ!","data":None}),200
-        qty=_nguyen(item.get('Quantity'),0)
-        if qty is None or qty<=0:
-            return jsonify({"status":False,"message":"Số lượng sản phẩm không hợp lệ!","data":None}),200
-        ma_sp=_nguyen(item.get('ProductId'),0)
-        if ma_sp is None or ma_sp<=0:
-            return jsonify({"status":False,"message":"Thông tin sản phẩm không hợp lệ!","data":None}),200
-        don_hang_moi.Items.append(OrderItem(ProductId=ma_sp,ProductName=str(item.get('ProductName') or f"Sản phẩm #{ma_sp}"),
-            Emoji=str(item.get('Emoji') or '📦'),Quantity=qty,UnitPrice=0,TotalPrice=0))
-    result=don_hang_bus.tao_don_hang(don_hang_moi)
+        if not isinstance(item, dict):
+            return jsonify({"status": False, "message": "Thông tin đơn hàng không hợp lệ!", "data": None}), 200
+        qty = _nguyen(item.get('Quantity'), 0)
+        if qty is None or qty <= 0:
+            return jsonify({"status": False, "message": "Số lượng sản phẩm không hợp lệ!", "data": None}), 200
+        ma_sp = _nguyen(item.get('ProductId'), 0)
+        if ma_sp is None or ma_sp <= 0:
+            return jsonify({"status": False, "message": "Thông tin sản phẩm không hợp lệ!", "data": None}), 200
+        don_hang_moi.Items.append(OrderItem(
+            ProductId=ma_sp,
+            ProductName=str(item.get('ProductName') or f"Sản phẩm #{ma_sp}"),
+            Emoji=str(item.get('Emoji') or '📦'),
+            Quantity=qty, UnitPrice=0, TotalPrice=0))
+    result = don_hang_bus.tao_don_hang(don_hang_moi)
 
     if result.get('status'):
-        # Phase 2: chỉ xóa các món đã mua, giữ món chưa chọn trong giỏ.
+        # Chỉ xóa các món đã mua, giữ món chưa chọn trong giỏ.
         da_mua = []
         for item in don_hang_moi.Items:
             try:
@@ -972,5 +973,16 @@ def api_seller_sua_trang_shop():
         d.get('ten_shop'), d.get('gioi_thieu'), d.get('tham_nien')))
 
 
+def _vong_lap_huy_don_het_han():
+    while True:
+        try:
+            don_hang_bus.huy_don_bank_het_han()
+        except Exception:
+            app.logger.exception("Lỗi job hủy đơn hết hạn")
+        time.sleep(300)
+
 if __name__ == '__main__':
-    app.run(debug=True, port=5000)
+    debug = os.environ.get('FLASK_DEBUG') == '1'
+    if not debug or os.environ.get('WERKZEUG_RUN_MAIN') == 'true':
+        threading.Thread(target=_vong_lap_huy_don_het_han, daemon=True).start()
+    app.run(debug=debug, port=5000)

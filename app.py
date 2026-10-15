@@ -219,6 +219,13 @@ def get_store_by_user(user_id):
             "data": None
         }), 403
     return jsonify(gian_hang_bus.lay_store_theo_user(session.get('user_id')))
+@app.route('/api/stores/dia-chi', methods=['GET'])
+def api_dia_chi_cac_shop():
+    """Tỉnh/thành của các shop, dùng để tính phí ship."""
+    gate = user_bus.kiem_tra_nguoi_dung_hoat_dong(session.get('user_id'))
+    if not gate.get('status'):
+        return jsonify(gate), 403
+    return jsonify(gian_hang_bus.lay_tinh_cac_shop(request.args.get('ids', '')))
 # ==========================================
 # 7. GIAN HÀNG / SELLER
 # ==========================================
@@ -234,12 +241,13 @@ def api_dang_ky_gian_hang():
                         "message": "Dữ liệu gửi lên không hợp lệ!",
                         "data": None}), 400
     req = YeuCau(
-        UserId        = session.get('user_id'),
-        ShopName      = data.get('StoreName'),
-        BusinessPhone = data.get('Phone'),
-        Category      = data.get('Category'),
-        Description   = data.get('Description'),
-        NationalId    = None
+        UserId=session.get('user_id'),
+        ShopName=data.get('StoreName'),
+        BusinessPhone=data.get('Phone'),
+        Category=data.get('Category'),
+        Description=data.get('Description'),
+        Address=data.get('Address'),
+        NationalId=None
     )
     return jsonify(gian_hang_bus.dang_ky_gian_hang(req))
 

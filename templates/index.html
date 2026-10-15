@@ -660,8 +660,6 @@
         <select id="chkPayment" onchange="togglePaymentDetails(this.value)">
           <option value="COD">Thanh toán khi nhận hàng (COD)</option>
           <option value="Bank">Chuyển khoản ngân hàng (QR)</option>
-          <option value="Momo">Ví MoMo</option>
-          <option value="VNPay">VNPay</option>
         </select>
       </div>
       <div id="paymentUnsupportedNote" style="display:none; background:#FDECEA; border:1px solid #FFB8B8; padding:12px; border-radius:8px; font-size:12px; margin-bottom:14px;">
@@ -802,6 +800,13 @@
         <label>Danh mục hàng hóa chủ yếu</label>
         <select id="selCat"></select>
       </div>
+          <div class="form-group">
+      <label>Địa chỉ gian hàng (Tỉnh / Thành phố)</label>
+      <select id="selShopProvince" required
+        style="padding:10px; border:1px solid var(--border); border-radius:8px; width:100%; font-family:inherit;">
+        <option value="">-- Chọn tỉnh/thành phố --</option>
+      </select>
+    </div>
       <div class="form-group"><label>Mô tả gian hàng</label><textarea id="sellerDesc" rows="3"></textarea></div>
 
       <button type="submit" class="btn-submit" style="width:100%;">Gửi yêu cầu xét duyệt</button>

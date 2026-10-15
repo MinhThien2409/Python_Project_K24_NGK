@@ -45,11 +45,13 @@ class GianHangDao:
                     "category":      row.Category,
                     "description":   row.Description,
                     "national_id":   row.NationalId,
+                    "address": row.Address,
                     "status":        row.Status,
                     "created_at":    str(row.CreatedAt) if row.CreatedAt else "",
                     "reviewed_by":   row.ReviewedBy,
                     "reviewed_at":   str(row.ReviewedAt) if row.ReviewedAt else None,
                     "reject_reason": row.RejectReason
+
                 }
                 for row in rows
             ]
@@ -77,6 +79,7 @@ class GianHangDao:
             return {
                 "store_id": lay("StoreId"),
                 "store_name": lay("StoreName"),
+                "address": lay("Address"),
                 "phone": lay("Phone"),
                 "category": lay("Category"),
                 "description": lay("Description"),
@@ -201,11 +204,11 @@ class GianHangDao:
             cursor.execute("""
                 INSERT INTO SellerRequests
                     (UserId, ShopName, BusinessPhone, Category,
-                     Description, NationalId, Status)
-                VALUES (?, ?, ?, ?, ?, ?, 'pending')
+                     Description, NationalId, Address, Status)
+                VALUES (?, ?, ?, ?, ?, ?, ?, 'pending')
             """, (
                 req.UserId, req.ShopName, req.BusinessPhone,
-                req.Category, req.Description, req.NationalId
+                req.Category, req.Description, req.NationalId, req.Address
             ))
             conn.commit()
             return KET_QUA_OK
@@ -276,12 +279,10 @@ class GianHangDao:
         # 3. Tạo Stores mới từ dữ liệu đơn
         cursor.execute("""
             INSERT INTO Stores
-                (StoreName, UserId, Phone, Category, Description, IsActive)
-            VALUES (?, ?, ?, ?, ?, 1)
-        """, (req.ShopName, req.UserId, req.BusinessPhone,
+                (StoreName, Address, UserId, Phone, Category, Description, IsActive)
+            VALUES (?, ?, ?, ?, ?, ?, 1)
+        """, (req.ShopName, req.Address, req.UserId, req.BusinessPhone,
               req.Category, req.Description))
-        # 4. Đổi Role user thành Seller (3) — sửa lỗi cũ gán 13 (không tồn tại).
-        #    T039: Role_Id đã chuyển sang bảng Accounts (008-split-user-table).
         cursor.execute(
             "UPDATE Accounts SET Role_Id=3 WHERE UserId=?", (req.UserId,))
         return None
@@ -339,5 +340,23 @@ class GianHangDao:
             logger.exception("Lỗi cap_nhat_trang_shop: %s", e)
             conn.rollback()
             return False
+        finally:
+            cursor.close(); conn.close()
+    def lay_dia_chi_theo_ids(self, store_ids):
+        """Trả {store_id: address} cho danh sách StoreId."""
+        if not store_ids:
+            return {}
+        conn = DBconnection.get_connection()
+        if conn is None: return {}
+        cursor = conn.cursor()
+        try:
+            marks = ",".join("?" * len(store_ids))
+            cursor.execute(
+                f"SELECT StoreId, Address FROM Stores WHERE StoreId IN ({marks})",
+                tuple(store_ids))
+            return {str(r.StoreId): (r.Address or "") for r in cursor.fetchall()}
+        except Exception as e:
+            logger.exception("Lỗi lay_dia_chi_theo_ids: %s", e)
+            return {}
         finally:
             cursor.close(); conn.close()

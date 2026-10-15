@@ -716,8 +716,22 @@ async function openProfileModal() {
       <input type="tel" id="editPhone" value="${escHtml(sdt === 'Chưa có SĐT' ? '' : sdt)}" placeholder="Nhập SĐT..." oninput="kiemTraThayDoiProfile()">
     </div>
     <div class="form-group">
-      <label>Địa chỉ giao hàng</label>
-      <input type="text" id="editAddress" value="${escHtml(dia_chi === 'Chưa có địa chỉ' ? '' : dia_chi)}" placeholder="Nhập địa chỉ..." oninput="kiemTraThayDoiProfile()">
+      <label>Địa chỉ (số nhà, tên đường) *</label>
+      <input type="text" id="editStreet" maxlength="200" placeholder="VD: 12 Nguyễn Huệ" oninput="kiemTraThayDoiProfile()">
+    </div>
+    <div class="form-group">
+      <label>Tỉnh / Thành phố *</label>
+      <select id="editProvince" onchange="doiTinhProfile()"
+        style="padding:10px; border:1px solid var(--border); border-radius:8px; width:100%; font-family:inherit;">
+        <option value="">-- Chọn tỉnh/thành phố --</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label>Phường / Xã *</label>
+      <select id="editWard" disabled onchange="kiemTraThayDoiProfile()"
+        style="padding:10px; border:1px solid var(--border); border-radius:8px; width:100%; font-family:inherit;">
+        <option value="">-- Chọn phường/xã --</option>
+      </select>
     </div>
     <div class="form-group">
       <label>Số CMND/CCCD</label>
@@ -958,10 +972,16 @@ async function xoaSellerVoucher(id) {
 }
 
 // Phase 1 (Task 5): ghi nhớ giá trị gốc + khóa nút Lưu khi chưa có thay đổi
+    const diaChiGoc = (dia_chi === 'Chưa có địa chỉ' ? '' : (dia_chi || '')).trim();
+  const dc = tachDiaChi(diaChiGoc);
+  document.getElementById('editStreet').value = dc.street;
+  await napTinh('editProvince', 'editWard', dc.province);
+  if (dc.province) await napPhuong('editProvince', 'editWard', dc.ward);
+
   profileGoc = {
     ten_user: (ten_user || '').trim(),
     sdt: (sdt === 'Chưa có SĐT' ? '' : (sdt || '')).trim(),
-    dia_chi: (dia_chi === 'Chưa có địa chỉ' ? '' : (dia_chi || '')).trim(),
+    dia_chi: dc.province ? layDiaChiProfile() : diaChiGoc,
     cmnd: (cmnd === 'Chưa cập nhật CMND' ? '' : (cmnd || '')).trim(),
   };
   kiemTraThayDoiProfile();
@@ -1028,7 +1048,7 @@ function kiemTraThayDoiProfile() {
   const hienTai = {
     ten_user: (document.getElementById('editName')?.value || '').trim(),
     sdt: (document.getElementById('editPhone')?.value || '').trim(),
-    dia_chi: (document.getElementById('editAddress')?.value || '').trim(),
+        dia_chi: layDiaChiProfile(),
     cmnd: (document.getElementById('editCmnd')?.value || '').trim(),
   };
   const goc = profileGoc || hienTai;
@@ -1040,7 +1060,8 @@ function kiemTraThayDoiProfile() {
 async function updateUserProfile() {
   const newName = document.getElementById('editName').value.trim();
   const newPhone = document.getElementById('editPhone').value.trim();
-  const newAddress = document.getElementById('editAddress').value.trim();
+  const street = document.getElementById('editStreet').value.trim();
+  const newAddress = layDiaChiProfile();
   const newCmnd = document.getElementById('editCmnd').value.trim();
 
   if(!newName) { showToast("⚠️ Họ tên không được để trống!"); return; }
@@ -1048,9 +1069,10 @@ async function updateUserProfile() {
   if(newPhone && !/^0\d{9}$/.test(newPhone)) {
     showToast("⚠️ Số điện thoại không hợp lệ! (VD: 0912345678)"); return;
   }
-  if(newAddress && newAddress.length > 255) {
-    showToast("⚠️ Địa chỉ quá dài, tối đa 255 ký tự!"); return;
-  }
+  if (!street) { showToast("⚠️ Vui lòng nhập số nhà, tên đường!"); return; }
+  if (!tenDaChon('editProvince')) { showToast("⚠️ Vui lòng chọn Tỉnh/Thành phố!"); return; }
+  if (!tenDaChon('editWard')) { showToast("⚠️ Vui lòng chọn Phường/Xã!"); return; }
+  if (newAddress.length > 255) { showToast("⚠️ Địa chỉ quá dài, tối đa 255 ký tự!"); return; }
   if(newCmnd && !/^(?:\d{9}|\d{12})$/.test(newCmnd)) {
     showToast("⚠️ CMND/CCCD phải gồm đúng 9 hoặc 12 chữ số!"); return;
   }
@@ -1524,14 +1546,18 @@ async function handleSellerRegister(e) {
   e.preventDefault();
   if (!currentUser) { showToast('⚠️ Vui lòng đăng nhập trước!'); return; }
 
+  const tinhShop = tenDaChon('selShopProvince');
+  if (!tinhShop) { showToast('⚠️ Vui lòng chọn Tỉnh/Thành phố của gian hàng!'); return; }
+
   const body = {
     UserId     : currentUser.ma_user,
     StoreName  : document.getElementById('selShopName').value.trim(),
     Phone      : document.getElementById('selPhone').value.trim(),
     Category   : document.getElementById('selCat').value,
-    Description: document.getElementById('sellerDesc').value.trim()
-    // ✅ Không cần gửi NationalId — backend tự lấy từ hồ sơ user
+    Description: document.getElementById('sellerDesc').value.trim(),
+    Address    : tinhShop
   };
+
 
   try {
     const res    = await fetch('/api/dang-ky-gian-hang', {
@@ -1800,6 +1826,7 @@ function openSellerRegisterModal() {
   if (!currentUser) {
     showToast('⚠️ Vui lòng đăng nhập trước khi đăng ký bán hàng!');
     openAuthModal();
+
     return;
   }
 
@@ -1815,6 +1842,7 @@ function openSellerRegisterModal() {
     openProfileModal(); // Đưa thẳng vào trang cập nhật thông tin
     return;
   }
+  napTinh('selShopProvince');
 
   loadCategories();
   document.getElementById('sellerModal').classList.add('show');
@@ -2961,18 +2989,138 @@ function openCart() {
 function closeCart() {
     document.getElementById('cartOverlay').classList.remove('show');
 }
-function laNoiThanh(tenTinh) {
-  return /hồ chí minh/i.test(tenTinh || '');
+let storeTinhMap = {};   // { storeId: "Tên tỉnh của shop" }
+const PHI_SHIP_CUNG_TINH = 25000;
+const PHI_SHIP_KHAC_TINH = 40000;
+const chuanHoaTinh = s => {
+  let t = String(s || '').toLowerCase().trim();
+  t = t.replace(/\./g, ' ')                       // "tp. hcm" → "tp  hcm"
+       .replace(/^(thành phố|thanh pho|tỉnh|tinh|tp)\s+/, '')
+       .replace(/\s+/g, ' ').trim();
+  if (t === 'hcm' || t === 'hồ chí minh' || t === 'sài gòn') return 'hồ chí minh';
+  if (t === 'hn' || t === 'hà nội') return 'hà nội';
+  return t;
+};
+
+function layStoreIdsDaChon() {
+  return [...new Set(getSelectedCartItems()
+    .map(i => i.StoreId).filter(id => id !== undefined && id !== null))];
 }
-function getShippingFee(tenTinh) {
-  if (!tenTinh) return 25000;
-  return laNoiThanh(tenTinh) ? 25000 : 40000;
+
+async function taiTinhCacShop() {
+  const ids = layStoreIdsDaChon();
+  if (!ids.length) return;
+  try {
+    const res = await fetch('/api/stores/dia-chi?ids=' + ids.join(','));
+    const r = await res.json();
+    if (r.status) storeTinhMap = r.data || {};
+  } catch (e) {
+    console.error('Lỗi tải tỉnh của shop:', e);
+  }
+}
+
+// Mỗi shop: cùng tỉnh người nhận = 25k, khác tỉnh (hoặc shop chưa có địa chỉ) = 40k
+function tinhPhiShip(tenTinh) {
+  const ids = layStoreIdsDaChon();
+  if (!ids.length) return PHI_SHIP_CUNG_TINH;
+  if (!tenTinh) return PHI_SHIP_CUNG_TINH * ids.length; // chưa chọn tỉnh
+  return ids.reduce((tong, id) =>
+    tong + (chuanHoaTinh(storeTinhMap[id]) === chuanHoaTinh(tenTinh)
+      ? PHI_SHIP_CUNG_TINH : PHI_SHIP_KHAC_TINH), 0);
+}
+
+function moTaPhiShip(tenTinh) {
+  if (!tenTinh) return 'Phí vận chuyển (chọn tỉnh để tính):';
+  const ids = layStoreIdsDaChon();
+  const soCung = ids.filter(id =>
+    chuanHoaTinh(storeTinhMap[id]) === chuanHoaTinh(tenTinh)).length;
+  if (soCung === ids.length) return 'Phí vận chuyển cùng tỉnh:';
+  if (soCung === 0) return 'Phí vận chuyển khác tỉnh:';
+  return 'Phí vận chuyển (theo từng shop):';
 }
 
 const PROVINCE_API = 'https://provinces.open-api.vn/api/v2';
 let provincesCache = null;
 const wardsCache = {};
+async function layDanhSachTinh() {
+  if (!provincesCache) {
+    const res = await fetch(PROVINCE_API + '/p/');
+    provincesCache = await res.json();
+  }
+  return provincesCache;
+}
 
+async function layDanhSachPhuong(code) {
+  if (!wardsCache[code]) {
+    const res = await fetch(`${PROVINCE_API}/p/${code}?depth=2`);
+    const data = await res.json();
+    wardsCache[code] = data.wards || [];
+  }
+  return wardsCache[code];
+}
+
+// Nạp tỉnh vào <select>, chọn sẵn theo TÊN (nếu có)
+async function napTinh(selId, wardId = null, tenChon = '') {
+  const sel = document.getElementById(selId);
+  if (!sel) return;
+  try {
+    const ds = await layDanhSachTinh();
+    sel.innerHTML = '<option value="">-- Chọn tỉnh/thành phố --</option>' +
+      ds.map(p => `<option value="${p.code}" data-name="${escHtml(p.name)}"
+        ${p.name === tenChon ? 'selected' : ''}>${escHtml(p.name)}</option>`).join('');
+  } catch (e) {
+    showToast('❌ Không tải được danh sách tỉnh/thành!');
+  }
+  if (wardId) {
+    const w = document.getElementById(wardId);
+    if (w) { w.innerHTML = '<option value="">-- Chọn phường/xã --</option>'; w.disabled = true; }
+  }
+}
+
+// Nạp phường theo tỉnh đang chọn trong <select> tỉnh
+async function napPhuong(provId, wardId, tenChon = '') {
+  const code = document.getElementById(provId)?.value;
+  const w = document.getElementById(wardId);
+  if (!w) return;
+  w.innerHTML = '<option value="">-- Chọn phường/xã --</option>';
+  w.disabled = true;
+  if (!code) return;
+  w.innerHTML = '<option value="">⏳ Đang tải...</option>';
+  try {
+    const ds = await layDanhSachPhuong(code);
+    w.innerHTML = '<option value="">-- Chọn phường/xã --</option>' +
+      ds.map(x => `<option value="${x.code}" data-name="${escHtml(x.name)}"
+        ${x.name === tenChon ? 'selected' : ''}>${escHtml(x.name)}</option>`).join('');
+    w.disabled = false;
+  } catch (e) {
+    w.innerHTML = '<option value="">-- Chọn phường/xã --</option>';
+    showToast('❌ Không tải được danh sách phường/xã!');
+  }
+}
+
+function tenDaChon(selId) {
+  return document.getElementById(selId)?.selectedOptions[0]?.dataset.name || '';
+}
+
+// Tách "12 Nguyễn Huệ, Bến Nghé, TP Hồ Chí Minh" → {street, ward, province}
+function tachDiaChi(s) {
+  const p = (s || '').split(',').map(x => x.trim()).filter(Boolean);
+  if (p.length >= 3) {
+    return { street: p.slice(0, -2).join(', '), ward: p[p.length - 2], province: p[p.length - 1] };
+  }
+  return { street: s || '', ward: '', province: '' };
+}
+
+// Ghép địa chỉ từ 3 ô trong hồ sơ
+function layDiaChiProfile() {
+  const street = (document.getElementById('editStreet')?.value || '').trim();
+  return [street, tenDaChon('editWard'), tenDaChon('editProvince')].filter(Boolean).join(', ');
+}
+
+async function doiTinhProfile() {
+  await napPhuong('editProvince', 'editWard');
+  kiemTraThayDoiProfile();
+}
 async function loadProvinces() {
   const sel = document.getElementById('chkBuyerCity');
   if (!sel) return;
@@ -3040,13 +3188,10 @@ function getSoShopTrongGio() {
 }
 
 function recalcOrderTotal() {
-  const tenTinh  = getSelectedProvinceName();
-  const phiCoBan = getShippingFee(tenTinh);
-  const soShop   = Math.max(1, getSoShopTrongGio());
-  currentShippingFee = phiCoBan * soShop;
+  const tenTinh = getSelectedProvinceName();
+  currentShippingFee = tinhPhiShip(tenTinh);
 
-  document.getElementById('shippingNote').textContent =
-    (!tenTinh || laNoiThanh(tenTinh)) ? 'Phí vận chuyển nội thành:' : 'Phí vận chuyển liên tỉnh:';
+  document.getElementById('shippingNote').textContent = moTaPhiShip(tenTinh);
   document.getElementById('shippingFeeDisplay').textContent =
     currentShippingFee.toLocaleString('vi-VN') + 'đ';
   updateCheckoutSummary();
@@ -3086,7 +3231,7 @@ function togglePaymentDetails(val) {
   document.getElementById('zalopayBlock').style.display     = (laHoTro && val === 'VNPay') ? 'block' : 'none';
 }
 
-function openCheckoutModal() {
+async function openCheckoutModal() {
   if (!currentUser) {
     showToast('⚠️ Vui lòng đăng nhập để đặt hàng!');
     openAuthModal();
@@ -3125,11 +3270,12 @@ loadProvinces();
       </div>`).join('')}
   `).join('');
 
-  // Tính phí ship ban đầu & cập nhật tổng
-  currentShippingFee = 25000; // mặc định nội thành
+await taiTinhCacShop();
   recalcOrderTotal();
 
   document.getElementById('checkoutModal').classList.add('show');
+
+
 }
 // ==========================================\r\n// LỊCH SỬ ĐƠN HÀNG\r\n// ==========================================
 

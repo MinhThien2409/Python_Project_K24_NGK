@@ -16,6 +16,7 @@ class GianHangBus:
         phone = str(req.BusinessPhone or "").strip()
         category = str(req.Category or "").strip()
         description = str(req.Description or "").strip()
+        address = str(req.Address or "").strip()
         if not shop:
             return {"status": False, "message": "Tên cửa hàng không được để trống!"}
         if len(shop) > 150:
@@ -28,6 +29,10 @@ class GianHangBus:
             return {"status": False, "message": "Danh mục không được vượt quá 50 ký tự!"}
         if len(description) > 500:
             return {"status": False, "message": "Mô tả không được vượt quá 500 ký tự!"}
+        if not address:
+            return {"status": False, "message": "Vui lòng chọn Tỉnh/Thành phố của gian hàng!"}
+        if len(address) > 255:
+            return {"status": False, "message": "Địa chỉ gian hàng quá dài!"}
         if not req.UserId:
             return {"status": False, "message": "Tài khoản đăng ký không hợp lệ!"}
         user_info = self.user_dao.lay_thong_tin_user(req.UserId)
@@ -50,6 +55,7 @@ class GianHangBus:
         req.Category = category
         req.Description = description or None
         req.NationalId = national_id
+        req.Address = address
         ok = self.dao.gui_yeu_cau_ban_hang(req)
         if ok is True or ok == "ok":
             return {"status": True, "message": "Đã gửi yêu cầu! Quản lý sẽ xét duyệt trong 24h."}
@@ -134,3 +140,12 @@ class GianHangBus:
         sach = text.replace("<script", "&lt;script").replace("</script", "&lt;/script")
         sach = sach.replace("javascript:", "").replace("onerror=", "").replace("onclick=", "")
         return sach.strip()
+    def lay_tinh_cac_shop(self, ids_raw):
+        """Nhận chuỗi '1,2,3' → {store_id: tỉnh/thành của shop}."""
+        ids = []
+        for s in str(ids_raw or "").split(","):
+            s = s.strip()
+            if s.isdigit():
+                ids.append(int(s))
+        ids = list(dict.fromkeys(ids))[:50]
+        return {"status": True, "data": self.dao.lay_dia_chi_theo_ids(ids)}

@@ -229,7 +229,7 @@ class DonHangDao:
         if not row:
             return {"error": "invalid_voucher", "message": "Voucher không tồn tại!"}
 
-        voucher_id, seller_id, real_code, _, dtype, value, min_order, max_discount,             start_dt, end_dt, quantity, used, active = row[:13]
+        voucher_id, seller_id, real_code, _, dtype, value, min_order, max_discount, start_dt, end_dt, quantity, used, active = row[:13]
         store_active = bool(row[13]) if len(row) > 13 else True
         seller_active = row[14] if len(row) > 14 else "active"
 
@@ -399,8 +399,14 @@ class DonHangDao:
             cursor2.close()
 
     # ─── GHI ───
-    def cap_nhat_trang_thai(self, order_id, new_status):
-        """Cập nhật trạng thái đơn (luồng đã được BUS validate)."""
+    def cap_nhat_trang_thai(self, order_id, new_status, expected_status=None):
+        """Cập nhật trạng thái đơn (luồng đã được BUS validate).
+
+        Khóa dòng đơn bằng SELECT ... FOR UPDATE nên hai thao tác đồng thời
+        (khách hủy + seller xác nhận, hủy hai lần...) được xử lý tuần tự: tồn
+        kho không bị hoàn hai lần. Nếu `expected_status` được truyền và trạng
+        thái hiện tại đã khác → không ghi gì và trả False.
+        """
         conn = DBconnection().get_connection()
         if not conn:
             return False
@@ -408,10 +414,18 @@ class DonHangDao:
         try:
             current_status = self._doc_trang_thai_hien_tai(cursor, order_id)
             if current_status is None:
+                conn.rollback()
+                return False
+            if expected_status is not None and current_status != expected_status:
+                conn.rollback()
+                logger.warning("Đơn #%s: trạng thái đã đổi (%s != kỳ vọng %s), bỏ qua",
+                               order_id, current_status, expected_status)
                 return False
             logger.warning("Đơn #%s: %s → %s", order_id, current_status, new_status)
             rows_affected = self._ghi_trang_thai_moi(cursor, order_id, new_status)
             self._dong_bo_kho_theo_trang_thai(cursor, order_id, current_status, new_status)
+            if new_status == "Cancelled" and current_status == "Paid":
+                self._ghi_chu_hoan_tien(cursor, order_id)
             conn.commit()
             return rows_affected > 0
         except Exception as e:
@@ -423,8 +437,8 @@ class DonHangDao:
             conn.close()
 
     def _doc_trang_thai_hien_tai(self, cursor, order_id):
-        """Đọc Status hiện tại của đơn, thiếu thì trả None."""
-        cursor.execute("SELECT Status FROM Orders WHERE OrderId = %s", (order_id,))
+        """Đọc và KHÓA dòng Status hiện tại của đơn, thiếu thì trả None."""
+        cursor.execute("SELECT Status FROM Orders WHERE OrderId = %s FOR UPDATE", (order_id,))
         row = cursor.fetchone()
         return row[0] if row else None
 
@@ -435,6 +449,23 @@ class DonHangDao:
             (new_status, order_id)
         )
         return cursor.rowcount
+
+    def _ghi_chu_hoan_tien(self, cursor, order_id):
+        """Đơn đã thanh toán bị hủy: ghi chú số tiền cần hoàn vào Orders.Note.
+
+        Lỗi ghi chú (vd Note quá ngắn) chỉ log, không làm hỏng việc hủy đơn.
+        """
+        try:
+            cursor.execute("SELECT TotalAmount FROM Orders WHERE OrderId = %s", (order_id,))
+            row = cursor.fetchone()
+            tong = float(row[0] or 0) if row else 0.0
+            ghi = f" [Cần hoàn tiền {tong:,.0f}đ cho khách]".replace(",", ".")
+            cursor.execute(
+                "UPDATE Orders SET Note = CONCAT(COALESCE(Note, ''), %s) WHERE OrderId = %s",
+                (ghi, order_id)
+            )
+        except Exception as e:
+            logger.exception("Không ghi được ghi chú hoàn tiền đơn #%s: %s", order_id, e)
 
     def _dong_bo_kho_theo_trang_thai(self, cursor, order_id, current_status, new_status):
         """Cộng SoldCount khi Completed, hoàn Quantity khi Cancelled."""
@@ -537,15 +568,16 @@ class DonHangDao:
 
     def _thong_ke_don_chinh(self, cursor):
         """Tổng doanh thu và đếm đơn theo từng trạng thái."""
+        # FIX: bảng phải có alias `o` vì câu lệnh dùng o.Status
         cursor.execute("""
             SELECT
-                COALESCE(SUM(CASE WHEN Status <> 'Cancelled' THEN TotalAmount ELSE 0 END), 0) AS doanh_thu,
+                COALESCE(SUM(CASE WHEN o.Status <> 'Cancelled' THEN o.TotalAmount ELSE 0 END), 0) AS doanh_thu,
                 COUNT(*) AS tong_don,
                 SUM(CASE WHEN o.Status IN ('Pending','Paid') THEN 1 ELSE 0 END) AS cho_duyet,
-                SUM(CASE WHEN Status='Shipping'  THEN 1 ELSE 0 END) AS dang_giao,
-                SUM(CASE WHEN Status='Completed' THEN 1 ELSE 0 END) AS hoan_thanh,
-                SUM(CASE WHEN Status='Cancelled' THEN 1 ELSE 0 END) AS da_huy
-            FROM Orders
+                SUM(CASE WHEN o.Status = 'Shipping'  THEN 1 ELSE 0 END) AS dang_giao,
+                SUM(CASE WHEN o.Status = 'Completed' THEN 1 ELSE 0 END) AS hoan_thanh,
+                SUM(CASE WHEN o.Status = 'Cancelled' THEN 1 ELSE 0 END) AS da_huy
+            FROM Orders o
         """)
         row = cursor.fetchone()
         # MySQL: SUM() trả Decimal (hoặc NULL nếu bảng rỗng) → ép kiểu tường minh
@@ -725,10 +757,11 @@ class DonHangDao:
         cursor = conn.cursor()
         cancelled = []
         try:
+            # FIX: bản cũ thừa 1 dấu nháy trước Pending → SQL syntax error, khóa seller không hủy được đơn nào.
             cursor.execute("""SELECT DISTINCT o.OrderId
                 FROM Orders o JOIN OrderItems oi ON oi.OrderId=o.OrderId
                 JOIN Products p ON p.ProductId=oi.ProductId
-               WHERE p.StoreId=%s AND o.Status IN ('Pending','Paid','Confirmed','Shipping')""", (store_id,))
+                WHERE p.StoreId=%s AND o.Status IN ('Pending','Paid','Confirmed','Shipping')""", (store_id,))
             order_ids = [int(r[0]) for r in cursor.fetchall()]
             for order_id in order_ids:
                 cursor.execute("SELECT Status,UserId FROM Orders WHERE OrderId=%s FOR UPDATE", (order_id,))
@@ -738,6 +771,8 @@ class DonHangDao:
                 old_status, user_id = row[0], int(row[1] or 0)
                 self._ghi_trang_thai_moi(cursor, order_id, 'Cancelled')
                 self._hoan_ton_kho(cursor, order_id)
+                if old_status == 'Paid':
+                    self._ghi_chu_hoan_tien(cursor, order_id)
                 cancelled.append({"order_id": order_id, "user_id": user_id, "old_status": old_status})
             conn.commit()
             return cancelled
@@ -747,6 +782,44 @@ class DonHangDao:
             return []
         finally:
             cursor.close(); conn.close()
+
+    def huy_don_bank_het_han(self, phut):
+        """Hủy đơn chuyển khoản còn Pending quá `phut` phút và hoàn tồn kho.
+
+        Lock từng đơn trước khi đổi trạng thái; nếu trong lúc đó đơn đã được
+        đánh dấu Paid/hủy thì bỏ qua. Trả list {order_id, user_id}.
+        """
+        conn = DBconnection().get_connection()
+        if not conn:
+            return []
+        cursor = conn.cursor()
+        da_huy = []
+        try:
+            cursor.execute(
+                "SELECT OrderId FROM Orders "
+                "WHERE Status = 'Pending' AND PaymentMethod = 'Bank' "
+                "AND CreatedAt < (NOW() - INTERVAL %s MINUTE) ORDER BY OrderId",
+                (int(phut),)
+            )
+            order_ids = [int(r[0]) for r in cursor.fetchall()]
+            for order_id in order_ids:
+                cursor.execute("SELECT Status, UserId FROM Orders WHERE OrderId = %s FOR UPDATE",
+                               (order_id,))
+                row = cursor.fetchone()
+                if not row or row[0] != 'Pending':
+                    continue
+                self._ghi_trang_thai_moi(cursor, order_id, 'Cancelled')
+                self._hoan_ton_kho(cursor, order_id)
+                da_huy.append({"order_id": order_id, "user_id": int(row[1] or 0)})
+            conn.commit()
+            return da_huy
+        except Exception as e:
+            conn.rollback()
+            logger.exception("Lỗi huy_don_bank_het_han: %s", e)
+            return []
+        finally:
+            cursor.close()
+            conn.close()
 
     def don_thuoc_store(self, order_id, store_id):
         """Kiểm tra đơn có chứa sản phẩm của store hay không."""
@@ -790,16 +863,20 @@ class DonHangDao:
             conn.close()
 
     def _thong_ke_chinh_cua_store(self, cursor, store_id):
-        """Doanh thu Completed theo items cua store, nhat quan voi bao cao thang."""
+        """Doanh thu Completed theo items cua store, nhat quan voi bao cao thang.
+
+        FIX: JOIN OrderItems nhân dòng theo số món → SUM(CASE ... THEN 1) đếm trùng.
+        Dùng COUNT(DISTINCT CASE ... THEN o.OrderId END) để mỗi đơn chỉ đếm một lần.
+        """
         cursor.execute("""
             SELECT
                 COALESCE(SUM(CASE WHEN o.Status = 'Completed'
                     THEN oi.Quantity * oi.UnitPrice ELSE 0 END), 0) AS doanh_thu,
                 COUNT(DISTINCT o.OrderId) AS tong_don,
-                SUM(CASE WHEN o.Status IN ('Pending','Paid') THEN 1 ELSE 0 END) AS cho_duyet,
-                SUM(CASE WHEN o.Status = 'Shipping' THEN 1 ELSE 0 END) AS dang_giao,
-                SUM(CASE WHEN o.Status = 'Completed' THEN 1 ELSE 0 END) AS hoan_thanh,
-                SUM(CASE WHEN o.Status = 'Cancelled' THEN 1 ELSE 0 END) AS da_huy
+                COUNT(DISTINCT CASE WHEN o.Status IN ('Pending','Paid') THEN o.OrderId END) AS cho_duyet,
+                COUNT(DISTINCT CASE WHEN o.Status = 'Shipping' THEN o.OrderId END) AS dang_giao,
+                COUNT(DISTINCT CASE WHEN o.Status = 'Completed' THEN o.OrderId END) AS hoan_thanh,
+                COUNT(DISTINCT CASE WHEN o.Status = 'Cancelled' THEN o.OrderId END) AS da_huy
             FROM Orders o
             JOIN OrderItems oi ON o.OrderId = oi.OrderId
             JOIN Products p ON oi.ProductId = p.ProductId
@@ -1077,33 +1154,6 @@ class DonHangDao:
             conn.rollback()
             logger.exception("Lỗi danh_dau_thong_bao_da_doc: %s", e)
             return False
-        finally:
-            cursor.close()
-            conn.close()
-
-    def huy_don_bank_het_han(self, so_gio=24):
-        """Hủy đơn Bank còn Pending quá hạn, hoàn kho, trả list để báo user."""
-        conn = DBconnection().get_connection()
-        if not conn:
-            return []
-        cursor = conn.cursor()
-        huy = []
-        try:
-            cursor.execute(
-                "SELECT OrderId, UserId FROM Orders "
-                "WHERE PaymentMethod='Bank' AND Status='Pending' "
-                "AND CreatedAt < (NOW() - INTERVAL %s HOUR) FOR UPDATE",
-                (int(so_gio),))
-            for oid, uid in cursor.fetchall():
-                self._ghi_trang_thai_moi(cursor, oid, 'Cancelled')
-                self._hoan_ton_kho(cursor, oid)
-                huy.append({"order_id": int(oid), "user_id": int(uid)})
-            conn.commit()
-            return huy
-        except Exception as e:
-            conn.rollback()
-            logger.exception("Lỗi huy_don_bank_het_han: %s", e)
-            return []
         finally:
             cursor.close()
             conn.close()

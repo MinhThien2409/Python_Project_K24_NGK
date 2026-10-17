@@ -1,21 +1,16 @@
-
-import logging
-import re
-from datetime import datetime
-
 from back_end.DAO.DonHangDao import DonHangDao
 from back_end.Model.DonHang import DonHang
-
-logger = logging.getLogger(__name__)
-import os
-from flask import app
-import threading,time
-
+from datetime import datetime
+import re
+import unicodedata
 
 # Ma tran luong trang thai seller (004 US2) — terminal khong doi duoc
+# Bank:  Pending -> Paid -> Shipping -> Completed  (xac nhan da nhan tien thay cho buoc "Xac nhan")
+# COD:   Pending -> Confirmed -> Shipping -> Completed
+# Paid -> Cancelled: seller huy don da thanh toan (shop co trach nhiem hoan tien cho khach).
 LUONG_TRANG_THAI = {
     "Pending": ("Paid", "Confirmed", "Cancelled"),
-    "Paid": ("Confirmed",),
+    "Paid": ("Shipping", "Cancelled"),
     "Confirmed": ("Shipping", "Cancelled"),
     "Shipping": ("Completed", "Cancelled"),
     "Completed": (),
@@ -23,39 +18,114 @@ LUONG_TRANG_THAI = {
 }
 
 # ── 005 US3: hằng số validate thanh toán (đầu file, G6) ──
-
 SDT_REGEX = r"^0\d{9}$"
 PHUONG_THUC_HOP_LE = ("COD", "Bank", "Momo", "VNPay")
 
+# Phí ship tính ở SERVER (phải khớp PHI_SHIP_* ở main.js để số hiển thị = số thu)
 PHI_SHIP_CUNG_TINH = 25000
 PHI_SHIP_KHAC_TINH = 40000
-HAN_THANH_TOAN_BANK_GIO = 24
+
+# Đơn chuyển khoản chưa thanh toán sau ngần này phút sẽ bị tự hủy (hoàn kho)
+THOI_HAN_THANH_TOAN_BANK_PHUT = 30
+
+
+def chuan_hoa_tinh(ten):
+    """Chuẩn hóa tên tỉnh/thành để so sánh (khớp chuanHoaTinh ở main.js)."""
+    t = unicodedata.normalize("NFC", str(ten or "")).lower().strip()
+    t = t.replace(".", " ")
+    t = re.sub(r"^(thành phố|thanh pho|tỉnh|tinh|tp)\s+", "", t)
+    t = re.sub(r"\s+", " ", t).strip()
+    if t in ("hcm", "hồ chí minh", "sài gòn"):
+        return "hồ chí minh"
+    if t in ("hn", "hà nội"):
+        return "hà nội"
+    return t
+
+
+def tach_tinh_tu_dia_chi(dia_chi):
+    """'12 Nguyễn Huệ, Bến Nghé, TP Hồ Chí Minh' -> 'TP Hồ Chí Minh' ('' nếu thiếu)."""
+    phan = [p.strip() for p in str(dia_chi or "").split(",") if p.strip()]
+    return phan[-1] if len(phan) >= 3 else ""
+
+
+def _tien_vn(so):
+    """Định dạng tiền kiểu Việt Nam: 1.250.000đ."""
+    return f"{float(so or 0):,.0f}".replace(",", ".") + "đ"
 
 
 class DonHangBus:
     def __init__(self):
         """Khởi tạo BUS đơn hàng với DAO mặc định."""
         self.dao = DonHangDao()
+        # Hook do app.py gắn vào: nhận list store_id, trả
+        # {"status": True, "data": {store_id: "Tên tỉnh"}} (cùng dữ liệu /api/stores/dia-chi).
+        # Chưa gắn hook (test/mock cũ) -> giữ phí ship client gửi như trước.
+        # Mặc định tự dùng GianHangBus (không cần app.py gắn hook); không có module → None.
+        self.tinh_cac_shop = self._hook_tinh_mac_dinh()
 
-    def _tinh_phi_ship_theo_shop(self, store_ids, dia_chi):
-        """Mỗi shop: cùng tỉnh người nhận = 25k, khác tỉnh/chưa có địa chỉ = 40k."""
-        tinh_nhan = chuan_hoa_tinh(tinh_cua_dia_chi(dia_chi))
+    @staticmethod
+    def _hook_tinh_mac_dinh():
         try:
-            from back_end.BUS.GianHangBus import GianHangBus  # import trong hàm để tránh vòng import
-            kq = GianHangBus().lay_tinh_cac_shop(",".join(str(s) for s in store_ids))
-            tinh_shop = (kq.get("data") or {}) if isinstance(kq, dict) else {}
+            import sys
+            import importlib.util
+            if ("back_end.BUS.GianHangBus" not in sys.modules
+                    and importlib.util.find_spec("back_end.BUS.GianHangBus") is None):
+                return None
         except Exception:
-            logger.exception("Không lấy được tỉnh của shop")
-            tinh_shop = {}
-        tinh_shop = {str(k): v for k, v in tinh_shop.items()}
-        return {
-            sid: (PHI_SHIP_CUNG_TINH
-                  if tinh_nhan and chuan_hoa_tinh(tinh_shop.get(str(sid))) == tinh_nhan
-                  else PHI_SHIP_KHAC_TINH)
-            for sid in store_ids
-        }
-    def _nhom_items_theo_shop(self, dh: DonHang):
-        """Nhóm Items theo StoreId; phí ship tính ở server theo từng shop."""
+            return None
+
+        def _lay(store_ids):
+            from back_end.BUS.GianHangBus import GianHangBus  # import muộn, tránh vòng import
+            return GianHangBus().lay_tinh_cac_shop(",".join(str(int(s)) for s in store_ids))
+        return _lay
+
+    # ─── PHÍ SHIP (server là nguồn sự thật) ───
+    def _lay_tinh_cac_shop(self, store_ids):
+        """Gọi hook lấy tỉnh của shop; lỗi/thiếu -> {} (shop đó tính khác tỉnh)."""
+        hook = self.tinh_cac_shop
+        if not callable(hook):
+            return {}
+        try:
+            kq = hook(list(store_ids))
+        except Exception:
+            return {}
+        data = kq.get("data") if isinstance(kq, dict) and kq.get("status") else None
+        if not isinstance(data, dict):
+            return {}
+        ket_qua = {}
+        for k, v in data.items():
+            try:
+                ket_qua[int(k)] = v
+            except (TypeError, ValueError):
+                continue
+        return ket_qua
+
+    def _tinh_phi_ship_theo_store(self, dh: DonHang, store_map):
+        """Trả (dict {store_id: phí}, None) hoặc (None, dict lỗi).
+
+        Mỗi shop: cùng tỉnh người nhận = 25k, khác tỉnh/chưa có địa chỉ = 40k.
+        """
+        store_ids = []
+        for item in dh.Items:
+            sid = store_map.get(int(item.ProductId))
+            if sid is None:
+                return None, {"status": False,
+                              "message": f"Không tìm thấy StoreId của sản phẩm '{item.ProductName}'!"}
+            if int(sid) not in store_ids:
+                store_ids.append(int(sid))
+        tinh_nhan = chuan_hoa_tinh(tach_tinh_tu_dia_chi(dh.ShippingAddress))
+        if not tinh_nhan:
+            return None, {"status": False,
+                          "message": "Địa chỉ giao hàng phải gồm số nhà, phường/xã và tỉnh/thành phố!"}
+        tinh_shop = self._lay_tinh_cac_shop(store_ids)
+        phi = {}
+        for sid in store_ids:
+            cung_tinh = chuan_hoa_tinh(tinh_shop.get(sid)) == tinh_nhan
+            phi[sid] = PHI_SHIP_CUNG_TINH if cung_tinh else PHI_SHIP_KHAC_TINH
+        return phi, None
+
+    def _nhom_items_theo_shop(self, dh: DonHang, phi_theo_store=None):
+        """Nhóm Items theo StoreId; trả (ds_don, ds_store_tong) hoặc dict lỗi."""
         product_ids = [item.ProductId for item in dh.Items]
         store_map = self.dao.lay_store_ids_cua_san_pham(product_ids)
 
@@ -69,15 +139,20 @@ class DonHangBus:
 
         if not nhom:
             return {"status": False, "message": "Giỏ hàng trống, vui lòng thêm sản phẩm!"}
-
-        ship_theo_shop = self._tinh_phi_ship_theo_shop(list(nhom.keys()), dh.ShippingAddress)
+        tong_ship = float(dh.ShippingFee or 0)
+        if tong_ship < 0:
+            return {"status": False, "message": "Phí vận chuyển không hợp lệ!"}
+        ship_moi_don = tong_ship / len(nhom)
 
         ds_don = []
         ds_store_tong = []
         for store_id in sorted(nhom):
             items = nhom[store_id]
-            ship_don = float(ship_theo_shop[store_id])
             sub_total = float(sum(float(i.TotalPrice or 0) for i in items))
+            if phi_theo_store and store_id in phi_theo_store:
+                ship_don = float(phi_theo_store[store_id])
+            else:
+                ship_don = ship_moi_don
             tong_don = sub_total + ship_don
             don = DonHang(
                 UserId=dh.UserId, ReceiverName=dh.ReceiverName,
@@ -142,6 +217,16 @@ class DonHangBus:
                 return {"status": False,
                         "message": "Đơn giá sản phẩm không hợp lệ!"}
 
+        # Phí ship: server tự tính, bỏ qua giá trị client gửi (client chỉ để hiển thị).
+        phi_theo_store = None
+        if callable(self.tinh_cac_shop):
+            store_map = self.dao.lay_store_ids_cua_san_pham(
+                [int(i.ProductId) for i in dh.Items])
+            phi_theo_store, loi_ship = self._tinh_phi_ship_theo_store(dh, store_map)
+            if loi_ship:
+                return loi_ship
+            dh.ShippingFee = float(sum(phi_theo_store.values()))
+
         loi_db = self._doi_chieu_gia_va_kho(dh)
         if loi_db:
             return loi_db
@@ -151,7 +236,7 @@ class DonHangBus:
         if float(dh.ShippingFee or 0) < 0:
             return {"status": False, "message": "Phí vận chuyển không hợp lệ!"}
 
-        nhom = self._nhom_items_theo_shop(dh)
+        nhom = self._nhom_items_theo_shop(dh, phi_theo_store)
         if isinstance(nhom, dict):
             return nhom
         ds_don, ds_store_tong = nhom
@@ -236,7 +321,26 @@ class DonHangBus:
         ]
         return {"status": True,
                 "message": f"Đặt hàng thành công! {len(result)} đơn hàng đã được tạo.",
-                "data": {"order_ids": result, "orders": orders}}
+                "data": {"order_ids": result, "orders": orders,
+                         "bank_expire_minutes": THOI_HAN_THANH_TOAN_BANK_PHUT}}
+
+    # ─── CẬP NHẬT TRẠNG THÁI (khóa dòng + so sánh trạng thái kỳ vọng) ───
+    def _ghi_trang_thai(self, order_id, trang_thai_moi, ky_vong):
+        """Ghi trạng thái, DAO khóa dòng và chỉ ghi nếu trạng thái hiện tại == ky_vong."""
+        try:
+            return self.dao.cap_nhat_trang_thai(order_id, trang_thai_moi,
+                                                expected_status=ky_vong)
+        except TypeError:
+            # DAO/mock cũ chưa có tham số expected_status
+            return self.dao.cap_nhat_trang_thai(order_id, trang_thai_moi)
+
+    def _loi_ghi_trang_thai(self, order_id, ky_vong, mac_dinh):
+        """Phân biệt 'đơn vừa bị đổi trạng thái' với các lỗi ghi khác."""
+        hien_tai = self.dao.lay_trang_thai(order_id)
+        if hien_tai and hien_tai != ky_vong:
+            return {"status": False,
+                    "message": "Trạng thái đơn hàng vừa được thay đổi, vui lòng tải lại trang!"}
+        return {"status": False, "message": mac_dinh}
 
     def lay_don_hang_cua_toi(self, user_id):
         """Lấy danh sách đơn hàng của chính khách đang đăng nhập."""
@@ -258,7 +362,7 @@ class DonHangBus:
         return {"status": True, "data": {**don, "Items": chi_tiet.get("items", [])}}
 
     def huy_don_hang_cua_customer(self, user_id, order_id):
-        """Khach tu huy don cua minh, chi Pending moi duoc huy."""
+        """Khach tu huy don cua minh khi con Pending hoac Paid (chua giao hang)."""
         if not user_id:
             return {"status": False, "message": "Lỗi xác thực người dùng"}
         try:
@@ -277,16 +381,21 @@ class DonHangBus:
             return {"status": False,
                     "message": "Bạn không có quyền hủy đơn hàng này!"}
         hien_tai = don.get("Status")
-        if hien_tai != "Pending":
+        if hien_tai not in ("Pending", "Paid"):
             return {"status": False,
                     "message": self._loi_huy_theo_trang_thai(hien_tai)}
-        ok = self.dao.cap_nhat_trang_thai(ma_don, "Cancelled")
+        ok = self._ghi_trang_thai(ma_don, "Cancelled", hien_tai)
         if not ok:
-            return {"status": False,
-                    "message": "Không thể hủy đơn hàng, vui lòng thử lại sau!"}
-        self._bao_huy_don(user_id, ma_don)
+            return self._loi_ghi_trang_thai(
+                ma_don, hien_tai, "Không thể hủy đơn hàng, vui lòng thử lại sau!")
+        da_thanh_toan = hien_tai == "Paid"
+        self._bao_huy_don(user_id, ma_don, da_thanh_toan)
+        if da_thanh_toan:
+            return {"status": True,
+                    "message": "Đã huỷ thành công đơn hàng và hoàn tiền vào tài khoản"}
         return {"status": True,
                 "message": f"Đã hủy đơn hàng #{ma_don} thành công!"}
+
     def xac_nhan_da_nhan_cua_customer(self, user_id, order_id):
         """Khách xác nhận đã nhận hàng: chỉ đơn của mình và đang Shipping -> Completed."""
         if not user_id:
@@ -310,10 +419,10 @@ class DonHangBus:
         if hien_tai != "Shipping":
             return {"status": False,
                     "message": self._loi_nhan_hang_theo_trang_thai(hien_tai)}
-        ok = self.dao.cap_nhat_trang_thai(ma_don, "Completed")
+        ok = self._ghi_trang_thai(ma_don, "Completed", "Shipping")
         if not ok:
-            return {"status": False,
-                    "message": "Không thể xác nhận, vui lòng thử lại sau!"}
+            return self._loi_ghi_trang_thai(
+                ma_don, "Shipping", "Không thể xác nhận, vui lòng thử lại sau!")
         self._bao_da_nhan(user_id, ma_don)
         return {"status": True,
                 "message": f"Đã xác nhận nhận hàng đơn #{ma_don}. Cảm ơn bạn!"}
@@ -329,19 +438,35 @@ class DonHangBus:
             return "Đơn hàng đã bị hủy, không thể xác nhận nhận hàng!"
         return "Chỉ xác nhận được đơn đang ở trạng thái Đang giao!"
 
-    def _bao_da_nhan(self, user_id, order_id):
-        """Lưu thông báo, lỗi thông báo không làm hỏng việc hoàn thành đơn."""
+    def _gui_thong_bao(self, user_id, noi_dung, order_id):
+        """Lưu thông báo; lỗi thông báo không bao giờ làm hỏng nghiệp vụ chính."""
         tao = getattr(self.dao, "tao_thong_bao", None)
-        if not callable(tao):
+        if not callable(tao) or not user_id:
             return
         try:
-            tao(user_id, f"Bạn đã xác nhận nhận hàng đơn #{order_id}. Cảm ơn bạn đã mua sắm!",
-                order_id)
+            tao(user_id, noi_dung, order_id)
         except Exception:
             return
 
+    def _bao_da_nhan(self, user_id, order_id):
+        """Lưu thông báo, lỗi thông báo không làm hỏng việc hoàn thành đơn."""
+        self._gui_thong_bao(
+            user_id,
+            f"Bạn đã xác nhận nhận hàng đơn #{order_id}. Cảm ơn bạn đã mua sắm!",
+            order_id)
+
+    def _bao_seller_huy(self, don, trang_thai_cu):
+        """Báo khách khi gian hàng hủy đơn; đơn đã thanh toán thì nhắc hoàn tiền."""
+        order_id = don.get("OrderId")
+        if trang_thai_cu == "Paid":
+            noi_dung = (f"Đơn hàng #{order_id} đã bị gian hàng hủy. Bạn đã thanh toán "
+                        f"{_tien_vn(don.get('TotalAmount'))}, shop sẽ hoàn tiền lại cho bạn.")
+        else:
+            noi_dung = f"Đơn hàng #{order_id} đã bị gian hàng hủy."
+        self._gui_thong_bao(don.get("UserId"), noi_dung, order_id)
+
     def huy_don_do_khoa_seller(self, store_id):
-        """System flow khi khóa Seller: chỉ hủy Pending/Confirmed/Shipping."""
+        """System flow khi khóa Seller: chỉ hủy Pending/Paid/Confirmed/Shipping."""
         if not store_id:
             return []
         try:
@@ -350,15 +475,26 @@ class DonHangBus:
             return []
         # Notification failure không làm ảnh hưởng kết quả nghiệp vụ.
         for item in result or []:
-            try:
-                tao = getattr(self.dao, "tao_thong_bao", None)
-                if callable(tao) and item.get("user_id"):
-                    tao(item["user_id"],
-                        f"Đơn hàng #{item['order_id']} đã được hủy vì gian hàng của người bán bị khóa.",
-                        item["order_id"])
-            except Exception:
-                pass
+            noi_dung = (f"Đơn hàng #{item['order_id']} đã được hủy vì gian hàng "
+                        f"của người bán bị khóa.")
+            if item.get("old_status") == "Paid":
+                noi_dung += " Bạn đã thanh toán trước đó, shop sẽ hoàn tiền lại cho bạn."
+            self._gui_thong_bao(item.get("user_id"), noi_dung, item["order_id"])
         return result or []
+
+    def huy_don_bank_het_han(self, phut=THOI_HAN_THANH_TOAN_BANK_PHUT):
+        """Tự hủy đơn Bank còn Pending quá `phut` phút (hoàn kho) và báo khách."""
+        try:
+            ds = self.dao.huy_don_bank_het_han(int(phut))
+        except Exception:
+            return []
+        for item in ds or []:
+            self._gui_thong_bao(
+                item.get("user_id"),
+                f"Đơn hàng #{item['order_id']} đã tự động hủy vì quá {int(phut)} phút "
+                f"chưa thanh toán chuyển khoản.",
+                item["order_id"])
+        return ds or []
 
     def _loi_huy_theo_trang_thai(self, hien_tai):
         """Tra loi tu choi huy don theo trang thai hien tai."""
@@ -366,24 +502,19 @@ class DonHangBus:
             return "Đơn hàng đã được xác nhận, không thể hủy!"
         if hien_tai == "Shipping":
             return "Đơn hàng đang được giao, không thể hủy!"
-        if hien_tai == "Paid":
-            return "Đơn hàng đã thanh toán, không thể hủy!"
         if hien_tai == "Completed":
             return "Đơn hàng đã hoàn thành, không thể hủy!"
         if hien_tai == "Cancelled":
             return "Đơn hàng đã được hủy trước đó!"
         return "Chỉ được hủy đơn ở trạng thái Chờ duyệt!"
 
-    def _bao_huy_don(self, user_id, order_id):
+    def _bao_huy_don(self, user_id, order_id, da_thanh_toan=False):
         """Luu thong bao huy don, loi thong bao khong lam hong huy don."""
-        tao = getattr(self.dao, "tao_thong_bao", None)
-        if not callable(tao):
-            return
-        try:
-            tao(user_id, f"Bạn đã hủy đơn hàng #{order_id} thành công!",
-                order_id)
-        except Exception:
-            return
+        if da_thanh_toan:
+            noi_dung = f"Đơn hàng #{order_id}: đã huỷ thành công và hoàn tiền vào tài khoản."
+        else:
+            noi_dung = f"Bạn đã hủy đơn hàng #{order_id} thành công!"
+        self._gui_thong_bao(user_id, noi_dung, order_id)
 
     def lay_thong_bao_cua_user(self, user_id):
         """Lay thong bao da luu cua khach, chua co kho thi tra rong."""
@@ -433,10 +564,11 @@ class DonHangBus:
             return {"status": False, "message": "Đơn hàng đã ở trạng thái cuối, không thể thay đổi!"}
         if new_status not in LUONG_TRANG_THAI.get(hien_tai, ()):
             return {"status": False, "message": "Chỉ được chuyển theo luồng trạng thái hợp lệ!"}
-        is_success = self.dao.cap_nhat_trang_thai(order_id, new_status)
+        is_success = self._ghi_trang_thai(order_id, new_status, hien_tai)
         if is_success:
             return {"status": True, "message": f"Đã chuyển đơn hàng sang: {new_status}"}
-        return {"status": False, "message": "Không tìm thấy đơn hàng hoặc có lỗi xảy ra!"}
+        return self._loi_ghi_trang_thai(
+            order_id, hien_tai, "Không tìm thấy đơn hàng hoặc có lỗi xảy ra!")
 
     def lay_tat_ca_don_hang(self):
         """Lấy toàn bộ đơn hàng cho trang quản trị."""
@@ -510,43 +642,24 @@ class DonHangBus:
             return {"status": False, "message": "Không tìm thấy đơn hàng hoặc có lỗi xảy ra!"}
         if hien_tai in ("Completed", "Cancelled"):
             return {"status": False, "message": "Trạng thái cuối không thể thay đổi!"}
-        # Phase 3: seller chi duoc huy don dang cho duyet; da Confirmed thi khong duoc huy.
-        if trang_thai_moi == "Cancelled" and hien_tai != "Pending":
-            return {"status": False, "message": "Seller chỉ được hủy đơn đang ở trạng thái Chờ duyệt!"}
+        # Seller được hủy đơn Chờ duyệt hoặc Đã thanh toán (đơn Paid: shop hoàn tiền cho khách);
+        # đã Confirmed/Shipping thì không được hủy.
+        if trang_thai_moi == "Cancelled" and hien_tai not in ("Pending", "Paid"):
+            return {"status": False,
+                    "message": "Seller chỉ được hủy đơn đang ở trạng thái Chờ duyệt hoặc Đã thanh toán!"}
         chi_tiet = self.dao.lay_chi_tiet_don_hang(order_id)
-        phuong_thuc = ((chi_tiet or {}).get("don") or {}).get("PaymentMethod")
+        don = (chi_tiet or {}).get("don") or {}
+        phuong_thuc = don.get("PaymentMethod")
         if trang_thai_moi == "Paid" and phuong_thuc != "Bank":
             return {"status": False, "message": "Chỉ đơn chuyển khoản mới có trạng thái Đã thanh toán!"}
         if trang_thai_moi == "Confirmed" and hien_tai == "Pending" and phuong_thuc == "Bank":
             return {"status": False, "message": "Đơn chuyển khoản cần xác nhận đã nhận tiền trước!"}
         if trang_thai_moi not in LUONG_TRANG_THAI.get(hien_tai, ()):
             return {"status": False, "message": "Chỉ được chuyển theo luồng trạng thái hợp lệ!"}
-        ok = self.dao.cap_nhat_trang_thai(order_id, trang_thai_moi)
+        ok = self._ghi_trang_thai(order_id, trang_thai_moi, hien_tai)
         if ok:
+            if trang_thai_moi == "Cancelled":
+                self._bao_seller_huy(don, hien_tai)
             return {"status": True, "message": f"Đã chuyển đơn hàng sang: {trang_thai_moi}"}
-        return {"status": False, "message": "Không tìm thấy đơn hàng hoặc có lỗi xảy ra!"}
-    def huy_don_bank_het_han(self):
-        ket_qua = self.dao.huy_don_bank_het_han(HAN_THANH_TOAN_BANK_GIO)
-        for it in ket_qua:
-            try:
-                self.dao.tao_thong_bao(it["user_id"],
-                                       f"Đơn #{it['order_id']} đã tự hủy do quá hạn chuyển khoản.",
-                                       it["order_id"])
-            except Exception:
-                pass
-        return ket_qua
-
-def chuan_hoa_tinh(s):
-        t = str(s or "").lower().strip().replace(".", " ")
-        t = re.sub(r"^(thành phố|thanh pho|tỉnh|tinh|tp)\s+", "", t)
-        t = re.sub(r"\s+", " ", t).strip()
-        if t in ("hcm", "hồ chí minh", "sài gòn"):
-            return "hồ chí minh"
-        if t in ("hn", "hà nội"):
-            return "hà nội"
-        return t
-
-def tinh_cua_dia_chi(dia_chi):
-        """ShippingAddress dạng 'số nhà, phường/xã, tỉnh' → phần tỉnh cuối."""
-        parts = [p.strip() for p in str(dia_chi or "").split(",") if p.strip()]
-        return parts[-1] if parts else ""
+        return self._loi_ghi_trang_thai(
+            order_id, hien_tai, "Không tìm thấy đơn hàng hoặc có lỗi xảy ra!")

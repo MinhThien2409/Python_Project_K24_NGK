@@ -226,7 +226,7 @@ async function renderSellerOrders() {
     tbody.innerHTML = result.data.map(o => {
       const s = statusMap[o.Status] || { label: o.Status, cls: '' };
       const itemSummary = (o.Items || [])
-        .map(i => `${i.Emoji || '📦'} ${escHtml(i.ProductName)} x${i.Quantity}`)
+        .map(i => `${escHtml(i.Emoji || '📦')} ${escHtml(i.ProductName)} x${i.Quantity}`)
         .join('<br>');
       const createdAt = o.CreatedAt
         ? new Date(o.CreatedAt).toLocaleDateString('vi-VN', {
@@ -699,9 +699,9 @@ async function openProfileModal() {
   let ma_nhom_quyen = currentUser.ma_nhom_quyen || currentUser.Role_id;
 
   let role = "Khách hàng";
-  if (ma_nhom_quyen === 20) role = "Quản trị viên (Admin)";
-  else if (ma_nhom_quyen === 13) role = "Đối tác Bán hàng";
-  else if (ma_nhom_quyen === 5) role = "Nhân viên Kế toán";
+  if (ma_nhom_quyen === 1) role = "Quản trị viên (Admin)";
+  else if (ma_nhom_quyen === 3) role = "Đối tác Bán hàng";
+  else if (ma_nhom_quyen === 2) role = "Quản lý";
   else if (currentUser.ten_nhom_quyen) role = currentUser.ten_nhom_quyen;
 
   document.getElementById('profileInfoRows').innerHTML = `
@@ -741,235 +741,6 @@ async function openProfileModal() {
     <button class="btn-submit" id="btnSaveProfile" style="background: var(--green); width: 100%; margin-top: 10px;" onclick="updateUserProfile()" disabled>💾 Lưu cập nhật thông tin</button>
   `;
 
-
-//let sellerVoucherEditingId = null;
-//let sellerVoucherProducts = [];
-
-function formatVoucherMoney(v) {
-  return Number(v || 0).toLocaleString('vi-VN') + 'đ';
-}
-
-function showSellerVoucherMessage(message, ok=false) {
-  const el = document.getElementById('sellerVoucherMessage');
-  if (!el) return;
-  el.style.display = 'block';
-  el.style.color = ok ? 'var(--green, #16803c)' : 'var(--red, #c0392b)';
-  el.textContent = message || '';
-}
-
-function clearSellerVoucherMessage() {
-  const el = document.getElementById('sellerVoucherMessage');
-  if (el) { el.style.display = 'none'; el.textContent = ''; }
-}
-
-function validateSellerVoucherForm() {
-  const code = (document.getElementById('sellerVoucherCode')?.value || '').trim();
-  const name = (document.getElementById('sellerVoucherName')?.value || '').trim();
-  const type = document.getElementById('sellerVoucherType')?.value;
-  const value = Number(document.getElementById('sellerVoucherValue')?.value);
-  const min = Number(document.getElementById('sellerVoucherMin')?.value);
-  const max = Number(document.getElementById('sellerVoucherMax')?.value || 0);
-  const qty = Number(document.getElementById('sellerVoucherQty')?.value);
-  const start = document.getElementById('sellerVoucherStart')?.value;
-  const end = document.getElementById('sellerVoucherEnd')?.value;
-  const selected = [...document.querySelectorAll('#sellerVoucherProducts input[type="checkbox"]:checked')].map(e => Number(e.value));
-
-  if (!code) return 'Mã Voucher không được để trống.';
-  if (!name) return 'Tên Voucher không được để trống.';
-  if (!['PERCENT','FIXED'].includes(type)) return 'Loại giảm giá không hợp lệ.';
-  if (!Number.isFinite(value) || value <= 0 || (type === 'PERCENT' && value > 100)) {
-    return type === 'PERCENT' ? 'PERCENT phải lớn hơn 0 và không quá 100%.' : 'FIXED phải lớn hơn 0.';
-  }
-  if (!Number.isFinite(min) || min < 0) return 'MinOrderValue phải >= 0.';
-  if (!Number.isFinite(max) || max < 0) return 'MaxDiscount phải >= 0.';
-  if (!Number.isInteger(qty) || qty < 0) return 'Quantity phải là số nguyên >= 0.';
-  if (!start || !end) return 'Vui lòng nhập đầy đủ thời gian hiệu lực.';
-  if (new Date(start) > new Date(end)) return 'StartAt phải nhỏ hơn hoặc bằng EndAt.';
-  if (!selected.length) return 'Vui lòng chọn ít nhất một sản phẩm áp dụng Voucher.';
-  return null;
-}
-
-async function loadSellerVoucherProducts(selectedIds=[]) {
-  const box = document.getElementById('sellerVoucherProducts');
-  if (!box) return;
-  box.innerHTML = '<span style="color:var(--text-muted);font-size:13px;">⏳ Đang tải sản phẩm...</span>';
-  try {
-    const r = await fetch('/api/seller/san-pham');
-    const j = await r.json();
-    if (!j.status) throw new Error(j.message || 'Không thể tải sản phẩm.');
-    sellerVoucherProducts = j.data || [];
-    if (!sellerVoucherProducts.length) {
-      box.innerHTML = '<span style="color:var(--text-muted);font-size:13px;">Chưa có sản phẩm trong gian hàng.</span>';
-      return;
-    }
-    const selected = new Set((selectedIds || []).map(Number));
-    box.innerHTML = sellerVoucherProducts.map(p => {
-      const id = Number(p.id ?? p.ProductId);
-      const name = p.name ?? p.ProductName ?? ('Sản phẩm #' + id);
-      const price = p.price ?? p.Price ?? 0;
-      return `<label style="display:flex;gap:8px;align-items:center;padding:9px;border:1px solid var(--border);border-radius:8px;">
-        <input type="checkbox" value="${id}" ${selected.has(id) ? 'checked' : ''}>
-        <span><b>${String(name).replace(/</g,'&lt;')}</b><br><small>${formatVoucherMoney(price)}</small></span>
-      </label>`;
-    }).join('');
-  } catch (e) {
-    box.innerHTML = '<span style="color:var(--red,#c0392b);font-size:13px;">Không thể tải danh sách sản phẩm.</span>';
-  }
-}
-
-async function renderSellerVouchers() {
-  const body = document.getElementById('tblSellerVouchersBody');
-  if (!body) return;
-  body.innerHTML = '<tr><td colspan="11" style="text-align:center;padding:20px;">⏳ Đang tải Voucher...</td></tr>';
-  await loadSellerVoucherProducts();
-  try {
-    const r = await fetch('/api/voucher');
-    const j = await r.json();
-    if (!j.status) {
-      body.innerHTML = `<tr><td colspan="11" style="text-align:center;color:var(--red,#c0392b);">${escHtml(j.message || 'Không thể tải Voucher.')}</td></tr>`;
-      return;
-    }
-    const rows = j.data || [];
-    if (!rows.length) {
-      body.innerHTML = '<tr><td colspan="11" style="text-align:center;padding:24px;color:var(--text-muted);">Chưa có Voucher. Tạo Voucher đầu tiên để áp dụng cho sản phẩm của bạn.</td></tr>';
-      return;
-    }
-    body.innerHTML = rows.map(v => `<tr>
-      <td><b>${String(v.Code || '').replace(/</g,'&lt;')}</b></td>
-      <td>${escHtml(v.DiscountType)}</td>
-      <td>${Number(v.DiscountValue).toLocaleString('vi-VN')}${v.DiscountType === 'PERCENT' ? '%' : 'đ'}</td>
-      <td>${formatVoucherMoney(v.MinOrderValue)}</td>
-      <td>${formatVoucherMoney(v.MaxDiscount)}</td>
-      <td>${v.StartDate || '—'}</td>
-      <td>${v.EndDate || '—'}</td>
-      <td>${v.Quantity}</td>
-      <td>${v.UsedQuantity}</td>
-      <td>${v.IsActive ? 'Đang bật' : 'Đã tắt'}</td>
-      <td style="white-space:nowrap;">
-        <button class="admin-action-btn btn-edit" onclick="suaSellerVoucher(${v.VoucherId})">Sửa</button>
-        <button class="admin-action-btn" onclick="toggleSellerVoucher(${v.VoucherId})">${v.IsActive ? 'Tắt' : 'Bật'}</button>
-        <button class="admin-action-btn btn-delete" onclick="xoaSellerVoucher(${v.VoucherId})">Xóa</button>
-      </td>
-    </tr>`).join('');
-  } catch (e) {
-    body.innerHTML = '<tr><td colspan="11" style="text-align:center;color:var(--red,#c0392b);">Không thể tải danh sách Voucher.</td></tr>';
-  }
-}
-
-function resetSellerVoucherForm() {
-  sellerVoucherEditingId = null;
-  clearSellerVoucherMessage();
-  ['sellerVoucherCode','sellerVoucherName','sellerVoucherValue','sellerVoucherMin','sellerVoucherMax','sellerVoucherStart','sellerVoucherEnd','sellerVoucherQty']
-    .forEach(id => { const e=document.getElementById(id); if(e) e.value=''; });
-  const type = document.getElementById('sellerVoucherType');
-  if (type) type.value = 'PERCENT';
-  const active = document.getElementById('sellerVoucherActive');
-  if (active) active.value = '1';
-  const btn = document.getElementById('btnSaveSellerVoucher');
-  if (btn) btn.textContent = 'Lưu Voucher';
-  loadSellerVoucherProducts();
-}
-
-function updateSellerVoucherTypeHint() {}
-
-function buildSellerVoucherPayload() {
-  return {
-    Code: document.getElementById('sellerVoucherCode').value.trim(),
-    Name: document.getElementById('sellerVoucherName').value.trim(),
-    DiscountType: document.getElementById('sellerVoucherType').value,
-    DiscountValue: document.getElementById('sellerVoucherValue').value,
-    MinOrderValue: document.getElementById('sellerVoucherMin').value,
-    MaxDiscount: document.getElementById('sellerVoucherMax').value || 0,
-    StartDate: document.getElementById('sellerVoucherStart').value,
-    EndDate: document.getElementById('sellerVoucherEnd').value,
-    Quantity: document.getElementById('sellerVoucherQty').value,
-    ProductIds: [...document.querySelectorAll('#sellerVoucherProducts input[type="checkbox"]:checked')].map(e => Number(e.value))
-  };
-}
-
-async function saveSellerVoucher() {
-  clearSellerVoucherMessage();
-  const error = validateSellerVoucherForm();
-  if (error) { showSellerVoucherMessage(error); return; }
-  const payload = buildSellerVoucherPayload();
-  const desiredActive = document.getElementById('sellerVoucherActive')?.value === '1';
-  const id = sellerVoucherEditingId;
-  const btn = document.getElementById('btnSaveSellerVoucher');
-  if (btn) { btn.disabled = true; btn.textContent = '⏳ Đang lưu...'; }
-  try {
-    const r = await fetch(id ? '/api/voucher/' + id : '/api/voucher', {
-      method: id ? 'PUT' : 'POST',
-      headers: {'Content-Type':'application/json'},
-      body: JSON.stringify(payload)
-    });
-    const j = await r.json();
-    if (!j.status) { showSellerVoucherMessage(j.message || 'Không thể lưu Voucher.'); return; }
-    let savedId = id || j.data?.VoucherId;
-    if (!savedId && !desiredActive) {
-      const lr = await fetch('/api/voucher');
-      const lj = await lr.json();
-      const saved = (lj.data || []).find(v => String(v.Code || '').toUpperCase() === payload.Code.toUpperCase());
-      savedId = saved?.VoucherId;
-    }
-    if (savedId && desiredActive === false) {
-      const tr = await fetch('/api/voucher/' + savedId + '/toggle', {method:'POST'});
-      const tj = await tr.json();
-      if (!tj.status) { showSellerVoucherMessage(tj.message || 'Voucher đã lưu nhưng không thể tắt.'); return; }
-    }
-    showSellerVoucherMessage(j.message || 'Đã lưu Voucher.', true);
-    resetSellerVoucherForm();
-    await renderSellerVouchers();
-  } catch (e) {
-    showSellerVoucherMessage('Không thể kết nối tới máy chủ.');
-  } finally {
-    if (btn) { btn.disabled = false; btn.textContent = 'Lưu Voucher'; }
-  }
-}
-
-async function suaSellerVoucher(id) {
-  try {
-    const r = await fetch('/api/voucher/' + id);
-    const j = await r.json();
-    if (!j.status) { showSellerVoucherMessage(j.message || 'Không thể tải Voucher.'); return; }
-    const v = j.data;
-    sellerVoucherEditingId = v.VoucherId;
-    document.getElementById('sellerVoucherCode').value = v.Code || '';
-    document.getElementById('sellerVoucherName').value = v.Name || '';
-    document.getElementById('sellerVoucherType').value = v.DiscountType || 'PERCENT';
-    document.getElementById('sellerVoucherValue').value = v.DiscountValue ?? '';
-    document.getElementById('sellerVoucherMin').value = v.MinOrderValue ?? 0;
-    document.getElementById('sellerVoucherMax').value = v.MaxDiscount ?? 0;
-    document.getElementById('sellerVoucherStart').value = (v.StartDate || '').replace(' ','T').slice(0,16);
-    document.getElementById('sellerVoucherEnd').value = (v.EndDate || '').replace(' ','T').slice(0,16);
-    document.getElementById('sellerVoucherQty').value = v.Quantity ?? 0;
-    document.getElementById('sellerVoucherActive').value = v.IsActive ? '1' : '0';
-    await loadSellerVoucherProducts(v.ProductIds || []);
-    const btn = document.getElementById('btnSaveSellerVoucher');
-    if (btn) btn.textContent = 'Cập nhật Voucher';
-    document.getElementById('spane-vouchers')?.scrollIntoView({behavior:'smooth', block:'start'});
-  } catch (e) {
-    showSellerVoucherMessage('Không thể tải Voucher.');
-  }
-}
-
-async function toggleSellerVoucher(id) {
-  try {
-    const r = await fetch('/api/voucher/' + id + '/toggle', {method:'POST'});
-    const j = await r.json();
-    showSellerVoucherMessage(j.message || 'Đã cập nhật trạng thái.', !!j.status);
-    if (j.status) await renderSellerVouchers();
-  } catch (e) { showSellerVoucherMessage('Không thể cập nhật trạng thái Voucher.'); }
-}
-
-async function xoaSellerVoucher(id) {
-  if (!confirm('Xóa Voucher này? Voucher đã được sử dụng sẽ không thể xóa.')) return;
-  try {
-    const r = await fetch('/api/voucher/' + id, {method:'DELETE'});
-    const j = await r.json();
-    showSellerVoucherMessage(j.message || 'Đã xóa Voucher.', !!j.status);
-    if (j.status) await renderSellerVouchers();
-  } catch (e) { showSellerVoucherMessage('Không thể xóa Voucher.'); }
-}
 
 // Phase 1 (Task 5): ghi nhớ giá trị gốc + khóa nút Lưu khi chưa có thay đổi
     const diaChiGoc = (dia_chi === 'Chưa có địa chỉ' ? '' : (dia_chi || '')).trim();
@@ -1491,7 +1262,7 @@ async function loadProducts() {
     const result = await res.json();
     if (result.status) {
       products = result.data; // Cập nhật biến global
-      applyUserFilters();  
+      applyUserFilters();
     }
   } catch (e) {
     console.error('Lỗi load sản phẩm:', e);
@@ -1751,7 +1522,7 @@ function renderUserProducts(arr) {
             ? `<img src="/static/${escHtml(p.image_url)}"
                     alt="${escHtml(p.name)}"
                     style="width:100%;height:100%;object-fit:cover;">`
-            : (p.emoji || '📦')
+            : escHtml(p.emoji || '📦')
         }
       </div>
       <div class="card-body">
@@ -2242,7 +2013,7 @@ async function loadCategoriesForProductModal(selectedName = null) {
       const name = c.name ?? c.category_name;
       const fee  = c.platform_fee_percent ?? c.phi_san ?? 0;
       const sel  = (selectedName !== null && selectedName === name) ? 'selected' : '';
-      return `<option value="${id}" data-fee="${fee}" ${sel}>${name}</option>`;
+      return `<option value="${id}" data-fee="${fee}" ${sel}>${escHtml(name)}</option>`;
     }).join('');
 
     // Tính phí ngay sau khi có danh mục (kể cả khi mở modal SỬA:
@@ -2702,6 +2473,7 @@ async function hienThiHoaDonNhieuDon(orders, paymentMethod) {
   document.getElementById('invoiceModal').classList.add('show');
 }
 // Đổi thành tài khoản thật của bạn. bankId xem tại https://api.vietqr.io/v2/banks (cột "code")
+const BANK_HET_HAN_PHUT = 30; // phải khớp POBBY_BANK_TTL_MINUTES ở server
 const BANK_CONFIG = {
   bankId: 'MB',
   accountNo: '0523067705',
@@ -2729,7 +2501,7 @@ function taoKhoiQrNganHang(soTien, orderIds) {
         Nội dung: <b style="color:var(--red);">${escHtml(noiDung)}</b>
       </div>
       <div style="font-size:11px; color:var(--text-muted); margin-top:6px;">
-        Vui lòng giữ nguyên nội dung để shop đối soát. Đơn sẽ được xác nhận sau khi nhận được tiền.
+        Vui lòng giữ nguyên nội dung để shop đối soát. Đơn sẽ được xác nhận sau khi nhận được tiền. Đơn chưa thanh toán sẽ tự hủy sau ${BANK_HET_HAN_PHUT} phút.
       </div>
     </div>`;
 }
@@ -2823,7 +2595,7 @@ function renderCartItems() {
                           height:60px;
                           object-fit:cover;
                           border-radius:8px;">`
-            : (item.Emoji || '📦')
+            : escHtml(item.Emoji || '📦')
         }
       </div>
       <!-- Tên + điều chỉnh số lượng -->
@@ -3409,7 +3181,7 @@ function renderOrderHistoryList(orders) {
     const itemList = (o.Items || []).map(i => `
       <div style="display:flex; justify-content:space-between; align-items:center; gap:8px;
                   padding:6px 0; border-bottom:1px solid var(--border); font-size:13px; flex-wrap:wrap;">
-        <span style="flex:1 1 180px;">${i.Emoji || '📦'} ${escHtml(i.ProductName || 'Sản phẩm')}</span>
+        <span style="flex:1 1 180px;">${escHtml(i.Emoji || '📦')} ${escHtml(i.ProductName || 'Sản phẩm')}</span>
         <span style="color:var(--text-muted); white-space:nowrap;">
           ${Number(i.UnitPrice || 0).toLocaleString('vi-VN')}đ x${i.Quantity}
         </span>
@@ -3467,7 +3239,7 @@ function renderOrderHistoryList(orders) {
            padding:5px 14px; cursor:pointer; font-family:inherit; font-size:13px; margin-right:8px;">
     ✅ Đã nhận hàng
   </button>` : ''}
-        ${o.Status === 'Pending' ? `
+        ${(o.Status === 'Pending' || o.Status === 'Paid') ? `
           <div style="padding:8px 14px; border-top:1px solid var(--border); text-align:right; display:flex; gap:8px; justify-content:flex-end;">
             <button onclick="hienThiHoaDon(${o.OrderId})"
               style="background:var(--primary); border:none; color:white;
@@ -3507,7 +3279,7 @@ function moXacNhanHuyDon(orderId) {
   document.getElementById('confirmCancelContent').innerHTML =
     `Bạn có chắc muốn hủy <b>đơn #${orderId}</b> không?<br>` +
     `<span style="font-size:12px; color:var(--text-muted);">` +
-    `Chỉ hủy được đơn đang Chờ duyệt. Tồn kho sẽ được hoàn lại và bạn nhận thông báo xác nhận.` +
+    `Chỉ hủy được khi đơn chưa giao hàng. Đơn đã thanh toán sẽ được hoàn tiền vào tài khoản, tồn kho được hoàn lại và bạn nhận thông báo xác nhận.` +
     `</span>`;
   document.getElementById('confirmCancelModal').classList.add('show');
 }
@@ -3674,7 +3446,7 @@ function getRoleCls(roleId) {
 async function openEditUserModal(ma_user, ten_user, ma_nhom_quyen, currentStatus = 'active', sdt = '', dia_chi = '') {
   document.getElementById('editUserId').value = ma_user;
   document.getElementById('editUserInfo').innerHTML =
-    '<div style="font-weight:700;">' + (ten_user || '') + '</div><div style="font-size:12px;color:var(--text-muted);">ID: #' + ma_user + '</div>';
+    '<div style="font-weight:700;">' + escHtml(ten_user || '') + '</div><div style="font-size:12px;color:var(--text-muted);">ID: #' + ma_user + '</div>';
   document.getElementById('editUserName').value = ten_user || '';
   document.getElementById('editUserAddress').value = dia_chi || '';
   document.getElementById('editUserPhone').value = sdt || '';
@@ -4396,7 +4168,7 @@ async function renderLichSuNhapHang() {
     tbody.innerHTML = result.data.map(r => `
       <tr>
         <td style="font-weight:700;color:var(--text-muted);">#${r.receipt_id}</td>
-        <td>${r.emoji} ${escHtml(r.product_name)}</td>
+        <td>${escHtml(r.emoji || '')} ${escHtml(r.product_name)}</td>
         <td style="text-align:center;">${r.quantity}</td>
         <td>${r.unit_cost != null ? Number(r.unit_cost).toLocaleString('vi-VN') + 'đ' : '—'}</td>
         <td style="font-weight:700;color:var(--red);">${Number(r.total_cost).toLocaleString('vi-VN')}đ</td>
@@ -4712,8 +4484,7 @@ const clsTrangThai = {
       const laBank = o.PaymentMethod === 'Bank';
       const nutTiepTheo = {
         Pending: laBank ? 'Paid' : 'Confirmed',
-        Paid: 'Confirmed',
-        Confirmed: 'Shipping'
+        Paid: 'Shipping', Confirmed: 'Shipping'
       };
       const tdId = document.createElement('td');
       tdId.style.fontWeight = '700';
@@ -4782,8 +4553,7 @@ const clsTrangThai = {
         tdCn.appendChild(btn);
       }
 
-      if (o.Status === 'Pending') {
-        const btnHuy = document.createElement('button');
+      if (o.Status === 'Pending' || o.Status === 'Paid') { const btnHuy = document.createElement('button');
         btnHuy.className = 'admin-action-btn btn-cancel';
         btnHuy.textContent = '✖ Hủy';
         btnHuy.onclick = () => sellerCapNhatDon(o.OrderId, 'Cancelled');
@@ -4799,7 +4569,8 @@ const clsTrangThai = {
 };
 
 sellerCapNhatDon = async function (orderId, newStatus) {
-  if (!confirm(`Cập nhật đơn #${orderId} sang ${newStatus}?`)) return;
+  const canhBao = newStatus === 'Cancelled' ? '\nNếu khách đã thanh toán chuyển khoản, bạn cần hoàn tiền lại cho khách.' : '';
+  if (!confirm(`Cập nhật đơn #${orderId} sang ${newStatus}?` + canhBao)) return;
   try {
     const res = await fetch(`/api/seller/don-hang/${orderId}/trang-thai`, {
       method: 'PUT',
@@ -5360,4 +5131,235 @@ async function xacNhanDaNhanHang(orderId) {
   } catch (e) {
     showToast('❌ Lỗi kết nối!');
   }
+}
+
+// ============================================================
+// VOUCHER SELLER — chuyển ra phạm vi toàn cục (trước đây nằm trong openProfileModal)
+// ============================================================
+let sellerVoucherEditingId = null;
+let sellerVoucherProducts = [];
+function formatVoucherMoney(v) {
+  return Number(v || 0).toLocaleString('vi-VN') + 'đ';
+}
+
+function showSellerVoucherMessage(message, ok=false) {
+  const el = document.getElementById('sellerVoucherMessage');
+  if (!el) return;
+  el.style.display = 'block';
+  el.style.color = ok ? 'var(--green, #16803c)' : 'var(--red, #c0392b)';
+  el.textContent = message || '';
+}
+
+function clearSellerVoucherMessage() {
+  const el = document.getElementById('sellerVoucherMessage');
+  if (el) { el.style.display = 'none'; el.textContent = ''; }
+}
+
+function validateSellerVoucherForm() {
+  const code = (document.getElementById('sellerVoucherCode')?.value || '').trim();
+  const name = (document.getElementById('sellerVoucherName')?.value || '').trim();
+  const type = document.getElementById('sellerVoucherType')?.value;
+  const value = Number(document.getElementById('sellerVoucherValue')?.value);
+  const min = Number(document.getElementById('sellerVoucherMin')?.value);
+  const max = Number(document.getElementById('sellerVoucherMax')?.value || 0);
+  const qty = Number(document.getElementById('sellerVoucherQty')?.value);
+  const start = document.getElementById('sellerVoucherStart')?.value;
+  const end = document.getElementById('sellerVoucherEnd')?.value;
+  const selected = [...document.querySelectorAll('#sellerVoucherProducts input[type="checkbox"]:checked')].map(e => Number(e.value));
+
+  if (!code) return 'Mã Voucher không được để trống.';
+  if (!name) return 'Tên Voucher không được để trống.';
+  if (!['PERCENT','FIXED'].includes(type)) return 'Loại giảm giá không hợp lệ.';
+  if (!Number.isFinite(value) || value <= 0 || (type === 'PERCENT' && value > 100)) {
+    return type === 'PERCENT' ? 'PERCENT phải lớn hơn 0 và không quá 100%.' : 'FIXED phải lớn hơn 0.';
+  }
+  if (!Number.isFinite(min) || min < 0) return 'MinOrderValue phải >= 0.';
+  if (!Number.isFinite(max) || max < 0) return 'MaxDiscount phải >= 0.';
+  if (!Number.isInteger(qty) || qty < 0) return 'Quantity phải là số nguyên >= 0.';
+  if (!start || !end) return 'Vui lòng nhập đầy đủ thời gian hiệu lực.';
+  if (new Date(start) > new Date(end)) return 'StartAt phải nhỏ hơn hoặc bằng EndAt.';
+  if (!selected.length) return 'Vui lòng chọn ít nhất một sản phẩm áp dụng Voucher.';
+  return null;
+}
+
+async function loadSellerVoucherProducts(selectedIds=[]) {
+  const box = document.getElementById('sellerVoucherProducts');
+  if (!box) return;
+  box.innerHTML = '<span style="color:var(--text-muted);font-size:13px;">⏳ Đang tải sản phẩm...</span>';
+  try {
+    const r = await fetch('/api/seller/san-pham');
+    const j = await r.json();
+    if (!j.status) throw new Error(j.message || 'Không thể tải sản phẩm.');
+    sellerVoucherProducts = j.data || [];
+    if (!sellerVoucherProducts.length) {
+      box.innerHTML = '<span style="color:var(--text-muted);font-size:13px;">Chưa có sản phẩm trong gian hàng.</span>';
+      return;
+    }
+    const selected = new Set((selectedIds || []).map(Number));
+    box.innerHTML = sellerVoucherProducts.map(p => {
+      const id = Number(p.id ?? p.ProductId);
+      const name = p.name ?? p.ProductName ?? ('Sản phẩm #' + id);
+      const price = p.price ?? p.Price ?? 0;
+      return `<label style="display:flex;gap:8px;align-items:center;padding:9px;border:1px solid var(--border);border-radius:8px;">
+        <input type="checkbox" value="${id}" ${selected.has(id) ? 'checked' : ''}>
+        <span><b>${escHtml(name)}</b><br><small>${formatVoucherMoney(price)}</small></span>
+      </label>`;
+    }).join('');
+  } catch (e) {
+    box.innerHTML = '<span style="color:var(--red,#c0392b);font-size:13px;">Không thể tải danh sách sản phẩm.</span>';
+  }
+}
+
+async function renderSellerVouchers() {
+  const body = document.getElementById('tblSellerVouchersBody');
+  if (!body) return;
+  body.innerHTML = '<tr><td colspan="11" style="text-align:center;padding:20px;">⏳ Đang tải Voucher...</td></tr>';
+  await loadSellerVoucherProducts();
+  try {
+    const r = await fetch('/api/voucher');
+    const j = await r.json();
+    if (!j.status) {
+      body.innerHTML = `<tr><td colspan="11" style="text-align:center;color:var(--red,#c0392b);">${escHtml(j.message || 'Không thể tải Voucher.')}</td></tr>`;
+      return;
+    }
+    const rows = j.data || [];
+    if (!rows.length) {
+      body.innerHTML = '<tr><td colspan="11" style="text-align:center;padding:24px;color:var(--text-muted);">Chưa có Voucher. Tạo Voucher đầu tiên để áp dụng cho sản phẩm của bạn.</td></tr>';
+      return;
+    }
+    body.innerHTML = rows.map(v => `<tr>
+      <td><b>${escHtml(v.Code || '')}</b></td>
+      <td>${escHtml(v.DiscountType)}</td>
+      <td>${Number(v.DiscountValue).toLocaleString('vi-VN')}${v.DiscountType === 'PERCENT' ? '%' : 'đ'}</td>
+      <td>${formatVoucherMoney(v.MinOrderValue)}</td>
+      <td>${formatVoucherMoney(v.MaxDiscount)}</td>
+      <td>${v.StartDate || '—'}</td>
+      <td>${v.EndDate || '—'}</td>
+      <td>${v.Quantity}</td>
+      <td>${v.UsedQuantity}</td>
+      <td>${v.IsActive ? 'Đang bật' : 'Đã tắt'}</td>
+      <td style="white-space:nowrap;">
+        <button class="admin-action-btn btn-edit" onclick="suaSellerVoucher(${v.VoucherId})">Sửa</button>
+        <button class="admin-action-btn" onclick="toggleSellerVoucher(${v.VoucherId})">${v.IsActive ? 'Tắt' : 'Bật'}</button>
+        <button class="admin-action-btn btn-delete" onclick="xoaSellerVoucher(${v.VoucherId})">Xóa</button>
+      </td>
+    </tr>`).join('');
+  } catch (e) {
+    body.innerHTML = '<tr><td colspan="11" style="text-align:center;color:var(--red,#c0392b);">Không thể tải danh sách Voucher.</td></tr>';
+  }
+}
+
+function resetSellerVoucherForm() {
+  sellerVoucherEditingId = null;
+  clearSellerVoucherMessage();
+  ['sellerVoucherCode','sellerVoucherName','sellerVoucherValue','sellerVoucherMin','sellerVoucherMax','sellerVoucherStart','sellerVoucherEnd','sellerVoucherQty']
+    .forEach(id => { const e=document.getElementById(id); if(e) e.value=''; });
+  const type = document.getElementById('sellerVoucherType');
+  if (type) type.value = 'PERCENT';
+  const active = document.getElementById('sellerVoucherActive');
+  if (active) active.value = '1';
+  const btn = document.getElementById('btnSaveSellerVoucher');
+  if (btn) btn.textContent = 'Lưu Voucher';
+  loadSellerVoucherProducts();
+}
+
+function updateSellerVoucherTypeHint() {}
+
+function buildSellerVoucherPayload() {
+  return {
+    Code: document.getElementById('sellerVoucherCode').value.trim(),
+    Name: document.getElementById('sellerVoucherName').value.trim(),
+    DiscountType: document.getElementById('sellerVoucherType').value,
+    DiscountValue: document.getElementById('sellerVoucherValue').value,
+    MinOrderValue: document.getElementById('sellerVoucherMin').value,
+    MaxDiscount: document.getElementById('sellerVoucherMax').value || 0,
+    StartDate: document.getElementById('sellerVoucherStart').value,
+    EndDate: document.getElementById('sellerVoucherEnd').value,
+    Quantity: document.getElementById('sellerVoucherQty').value,
+    ProductIds: [...document.querySelectorAll('#sellerVoucherProducts input[type="checkbox"]:checked')].map(e => Number(e.value))
+  };
+}
+
+async function saveSellerVoucher() {
+  clearSellerVoucherMessage();
+  const error = validateSellerVoucherForm();
+  if (error) { showSellerVoucherMessage(error); return; }
+  const payload = buildSellerVoucherPayload();
+  const desiredActive = document.getElementById('sellerVoucherActive')?.value === '1';
+  const id = sellerVoucherEditingId;
+  const btn = document.getElementById('btnSaveSellerVoucher');
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Đang lưu...'; }
+  try {
+    const r = await fetch(id ? '/api/voucher/' + id : '/api/voucher', {
+      method: id ? 'PUT' : 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify(payload)
+    });
+    const j = await r.json();
+    if (!j.status) { showSellerVoucherMessage(j.message || 'Không thể lưu Voucher.'); return; }
+    let savedId = id || j.data?.VoucherId;
+    if (!savedId && !desiredActive) {
+      const lr = await fetch('/api/voucher');
+      const lj = await lr.json();
+      const saved = (lj.data || []).find(v => String(v.Code || '').toUpperCase() === payload.Code.toUpperCase());
+      savedId = saved?.VoucherId;
+    }
+    if (savedId && desiredActive === false) {
+      const tr = await fetch('/api/voucher/' + savedId + '/toggle', {method:'POST'});
+      const tj = await tr.json();
+      if (!tj.status) { showSellerVoucherMessage(tj.message || 'Voucher đã lưu nhưng không thể tắt.'); return; }
+    }
+    showSellerVoucherMessage(j.message || 'Đã lưu Voucher.', true);
+    resetSellerVoucherForm();
+    await renderSellerVouchers();
+  } catch (e) {
+    showSellerVoucherMessage('Không thể kết nối tới máy chủ.');
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = 'Lưu Voucher'; }
+  }
+}
+
+async function suaSellerVoucher(id) {
+  try {
+    const r = await fetch('/api/voucher/' + id);
+    const j = await r.json();
+    if (!j.status) { showSellerVoucherMessage(j.message || 'Không thể tải Voucher.'); return; }
+    const v = j.data;
+    sellerVoucherEditingId = v.VoucherId;
+    document.getElementById('sellerVoucherCode').value = v.Code || '';
+    document.getElementById('sellerVoucherName').value = v.Name || '';
+    document.getElementById('sellerVoucherType').value = v.DiscountType || 'PERCENT';
+    document.getElementById('sellerVoucherValue').value = v.DiscountValue ?? '';
+    document.getElementById('sellerVoucherMin').value = v.MinOrderValue ?? 0;
+    document.getElementById('sellerVoucherMax').value = v.MaxDiscount ?? 0;
+    document.getElementById('sellerVoucherStart').value = (v.StartDate || '').replace(' ','T').slice(0,16);
+    document.getElementById('sellerVoucherEnd').value = (v.EndDate || '').replace(' ','T').slice(0,16);
+    document.getElementById('sellerVoucherQty').value = v.Quantity ?? 0;
+    document.getElementById('sellerVoucherActive').value = v.IsActive ? '1' : '0';
+    await loadSellerVoucherProducts(v.ProductIds || []);
+    const btn = document.getElementById('btnSaveSellerVoucher');
+    if (btn) btn.textContent = 'Cập nhật Voucher';
+    document.getElementById('spane-vouchers')?.scrollIntoView({behavior:'smooth', block:'start'});
+  } catch (e) {
+    showSellerVoucherMessage('Không thể tải Voucher.');
+  }
+}
+
+async function toggleSellerVoucher(id) {
+  try {
+    const r = await fetch('/api/voucher/' + id + '/toggle', {method:'POST'});
+    const j = await r.json();
+    showSellerVoucherMessage(j.message || 'Đã cập nhật trạng thái.', !!j.status);
+    if (j.status) await renderSellerVouchers();
+  } catch (e) { showSellerVoucherMessage('Không thể cập nhật trạng thái Voucher.'); }
+}
+
+async function xoaSellerVoucher(id) {
+  if (!confirm('Xóa Voucher này? Voucher đã được sử dụng sẽ không thể xóa.')) return;
+  try {
+    const r = await fetch('/api/voucher/' + id, {method:'DELETE'});
+    const j = await r.json();
+    showSellerVoucherMessage(j.message || 'Đã xóa Voucher.', !!j.status);
+    if (j.status) await renderSellerVouchers();
+  } catch (e) { showSellerVoucherMessage('Không thể xóa Voucher.'); }
 }
